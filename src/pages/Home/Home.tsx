@@ -1,101 +1,218 @@
-import SearchBar from "../../components/SearchBar"
-import PromoBanner from "../../components/PromoBanner"
-import ProductCard from "../../components/ProductCard"
+import { useEffect, useState } from "react";
 
-import categories from "../../data/categories"
-import products from "../../data/products"
+import CategoryCard from "../../components/CategoryCard";
+
+import {
+  getCategories
+} from "../../api/storelandApi";
+
+
+
+type Category = {
+
+  "@_id": string;
+
+  "#text": string;
+
+};
+
+
+
+
 
 function Home() {
+
+
+  const [
+    categories,
+    setCategories
+  ] = useState<Category[]>([]);
+
+
+
+  const [
+    loading,
+    setLoading
+  ] = useState(true);
+
+
+
+
+
+  useEffect(()=>{
+
+
+    getCategories()
+
+      .then((data)=>{
+
+
+        const mainCategories =
+          data.filter(
+            (category:Category)=>{
+
+              return [
+
+                "Бонги и Водники",
+                "Запчасти и Тюнинг",
+                "Сувенирные трубки",
+                "Гриндеры и Прессы",
+                "Для самокруток",
+                "Аксессуары для Wax"
+
+              ].includes(
+                category["#text"]
+              );
+
+
+            }
+          );
+
+
+        setCategories(
+          mainCategories
+        );
+
+
+      })
+
+      .catch((error)=>{
+
+
+        console.log(
+          "Ошибка загрузки категорий",
+          error
+        );
+
+
+      })
+
+      .finally(()=>{
+
+
+        setLoading(false);
+
+
+      });
+
+
+
+  },[]);
+
+
+
+
+
+
+  if(loading){
+
+
+    return (
+
+      <div className="p-5 text-white">
+
+        Загрузка...
+
+      </div>
+
+    );
+
+
+  }
+
+
+
+
+
+
+
   return (
-    <div className="px-5">
 
-      <SearchBar />
+    <div
 
-      <PromoBanner />
+      className="
+      p-5
+      text-white
+      "
 
-      {/* Категории */}
-      <section className="mt-8">
+    >
 
-        <h2 className="text-2xl font-bold">
-          Категории
-        </h2>
 
-        <div className="mt-4 space-y-3">
 
-          {categories.map((category) => (
+      <h1
 
-            <div
-              key={category.name}
-              className="
-                bg-[#111113]
-                rounded-2xl
-                px-5
-                py-4
-                flex
-                justify-between
-                items-center
-                border
-                border-white/5
-                hover:border-[#58BB43]
-                hover:bg-[#151518]
-                transition-all
-                duration-200
-                cursor-pointer
-              "
-            >
+        className="
+        text-3xl
+        font-bold
+        mb-6
+        "
 
-              <span className="font-medium">
-                {category.name}
-              </span>
+      >
 
-              {category.count && (
-                <span className="text-gray-400">
-                  {category.count}
-                </span>
-              )}
+        Cosmo Bong
 
-            </div>
+      </h1>
 
-          ))}
 
-        </div>
 
-      </section>
 
-      {/* Хиты продаж */}
-      <section className="mt-10 pb-10">
 
-        <div className="flex items-center justify-between">
+      <div
 
-          <h2 className="text-2xl font-bold">
-            ⭐ Хиты продаж
-          </h2>
+        className="
+        grid
+        grid-cols-2
+        gap-4
+        "
 
-          <button className="text-[#58BB43] font-semibold">
-            Все →
-          </button>
+      >
 
-        </div>
 
-        <div className="grid grid-cols-2 gap-4 mt-5">
+        {
+          categories.map(
+            (category)=>(
 
-          {products.map((product) => (
 
-            <ProductCard
-              key={product.id}
-              name={product.name}
-              price={product.price}
-              image={product.image}
-            />
+              <CategoryCard
 
-          ))}
+                key={
+                  category["@_id"]
+                }
 
-        </div>
 
-      </section>
+                image="/category.png"
+
+
+                name={
+                  category["#text"]
+                }
+
+
+                count=""
+
+
+              />
+
+
+            )
+
+          )
+        }
+
+
+      </div>
+
+
+
 
     </div>
-  )
+
+
+  );
+
+
 }
 
-export default Home
+
+
+export default Home;

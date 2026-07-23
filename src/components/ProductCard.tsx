@@ -1,39 +1,156 @@
-type ProductCardProps = {
-  name: string
-  price: string
-  image: string
-}
+import { useNavigate } from "react-router-dom";
 
-function ProductCard({ name, price, image }: ProductCardProps) {
+
+type Product = {
+
+  id: string;
+
+  name: string;
+
+  price: number;
+
+  images?: string[];
+
+};
+
+
+
+type Props = {
+
+  product: Product;
+
+};
+
+
+
+
+function ProductCard({
+  product
+}: Props) {
+
+
+  const navigate =
+    useNavigate();
+
+
+
+  const image =
+    product.images &&
+    product.images.length > 0
+      ? product.images[0]
+      : "";
+
+
+
+
   return (
-    <div className="bg-[#111113] rounded-3xl overflow-hidden border border-white/5">
 
-      <div className="h-56 bg-white/5 flex items-center justify-center rounded-t-3xl overflow-hidden">
-  <img
-    src={image}
-    alt={name}
-    className="w-full h-full object-contain p-4"
-  />
-</div>
 
-      <div className="p-4">
+    <div
 
-        <h3 className="font-bold text-lg">
-          {name}
-        </h3>
+      onClick={() =>
+        navigate(
+          `/product/${product.id}`
+        )
+      }
 
-        <p className="mt-2 text-[#58BB43] font-bold">
-          {price}
-        </p>
 
-        <button className="mt-4 w-full bg-[#FFBA00] text-black rounded-full py-3 font-bold">
-          В корзину
-        </button>
+      className="
+      bg-[#111113]
+      rounded-3xl
+      p-4
+      cursor-pointer
+      border
+      border-white/5
+      hover:border-[#58BB43]
+      transition
+      "
+
+    >
+
+
+
+      <div
+        className="
+        h-40
+        flex
+        items-center
+        justify-center
+        "
+
+      >
+
+
+        {
+          image && (
+
+            <img
+
+              src={image}
+
+              alt={product.name}
+
+              className="
+              max-h-36
+              object-contain
+              "
+
+            />
+
+          )
+
+        }
+
 
       </div>
 
+
+
+
+      <h3
+
+        className="
+        mt-3
+        text-sm
+        font-bold
+        "
+
+      >
+
+        {product.name}
+
+      </h3>
+
+
+
+
+      <p
+
+        className="
+        mt-2
+        text-[#58BB43]
+        font-bold
+        "
+
+      >
+
+        {product.price.toLocaleString()}
+        {" "}
+        ₽
+
+
+      </p>
+
+
+
     </div>
-  )
+
+
+  );
+
+
 }
 
-export default ProductCard
+
+
+export default ProductCard;

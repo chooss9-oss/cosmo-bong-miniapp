@@ -6,28 +6,32 @@ function SearchBar() {
 
       <div
         className="
+          bg-[#111113]
+          border
+          border-white/10
+          rounded-2xl
+          h-14
+          px-4
           flex
           items-center
           gap-3
-          bg-[#111113]
-          rounded-2xl
-          px-4
-          py-4
-          border
-          border-white/5
-          focus-within:border-[#58BB43]
+          hover:border-[#58BB43]
           transition
+          cursor-text
         "
       >
 
-        <Search size={20} className="text-gray-500" />
+        <Search
+          size={20}
+          className="text-gray-500"
+        />
 
         <input
           type="text"
           placeholder="Поиск товаров..."
           className="
+            flex-1
             bg-transparent
-            w-full
             outline-none
             text-white
             placeholder:text-gray-500
