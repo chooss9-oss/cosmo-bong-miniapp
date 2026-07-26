@@ -1,4 +1,5 @@
-const API_URL = "/api";
+const API_URL =
+  "https://cosmo-bong-miniapp.onrender.com/api";
 
 
 export async function getProducts() {
