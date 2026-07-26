@@ -2,7 +2,6 @@ import {
   useState
 } from "react";
 
-
 import {
   useCart
 } from "../../context/CartContext";
@@ -68,6 +67,7 @@ setOrderTotal
 
 
 
+
 const savedTotal =
 
 localStorage.getItem("finalTotal");
@@ -105,15 +105,18 @@ item.quantity,
 
 
 
+
 async function sendOrder(){
 
 
 
 if(cart.length===0){
 
+alert(
+"Корзина пустая"
+);
 
 return;
-
 
 }
 
@@ -133,7 +136,7 @@ try{
 
 const response = await fetch(
 
-"http://localhost:3001/api/order",
+"/api/order",
 
 {
 
@@ -179,6 +182,18 @@ total
 
 
 
+if(!response.ok){
+
+throw new Error(
+"Ошибка сервера"
+);
+
+}
+
+
+
+
+
 const data =
 
 await response.json();
@@ -202,8 +217,23 @@ clearCart();
 
 
 
+localStorage.removeItem(
+"finalTotal"
+);
+
+
+
 setSuccess(true);
 
+
+
+}
+else{
+
+
+throw new Error(
+"Заказ не принят"
+);
 
 
 }
@@ -401,8 +431,6 @@ mt-2
 
 
 </div>
-
-
 
 </div>
 
