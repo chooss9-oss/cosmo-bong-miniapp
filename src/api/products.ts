@@ -2,7 +2,7 @@
 
 
 const API_URL =
-  "http://localhost:3001";
+  "https://cosmo-bong-miniapp.onrender.com";
 
 
 
