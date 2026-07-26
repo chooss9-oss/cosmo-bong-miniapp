@@ -12,214 +12,381 @@ import {
   useCart
 } from "../../context/CartContext";
 
+
+
 interface Variant {
+
   id:string;
+
   name:string;
+
   price:number;
+
   image:string;
+
   available:boolean;
+
 }
 
+
+
 interface Product {
+
   id:string;
+
   name:string;
+
   price:number;
+
   image?:string;
+
   images?:string[];
+
   description?:string;
+
   variants?:Variant[];
+
 }
+
+
+
+
 
 export default function ProductPage(){
 
-  const {
-    productId
-  } = useParams();
 
-  const navigate =
-    useNavigate();
+const {
+  productId
+}=useParams();
 
-  const {
-    addToCart
-  } = useCart();
 
-  const [
-    loading,
-    setLoading
-  ] = useState(true);
 
-  const [
-    product,
-    setProduct
-  ] = useState<Product|null>(null);
+const navigate =
+useNavigate();
 
-  const [
-    selectedVariant,
-    setSelectedVariant
-  ] = useState<Variant|null>(null);
 
-  const [
-    currentImage,
-    setCurrentImage
-  ] = useState(0);
 
-  useEffect(()=>{
+const {
+ addToCart
+}=useCart();
 
-    if(!productId)
-      return;
 
-    fetch(
-  `https://cosmo-bong-miniapp.onrender.com/api/product/${productId}`
+
+
+const [
+loading,
+setLoading
+]=useState(true);
+
+
+
+const [
+product,
+setProduct
+]=useState<Product|null>(null);
+
+
+
+const [
+selectedVariant,
+setSelectedVariant
+]=useState<Variant|null>(null);
+
+
+
+const [
+currentImage,
+setCurrentImage
+]=useState(0);
+
+
+
+
+
+
+
+
+
+useEffect(()=>{
+
+
+if(!productId)
+return;
+
+
+
+
+fetch(
+
+`https://cosmo-bong-miniapp.onrender.com/api/product/${productId}`,
+
+{
+cache:"no-store"
+}
+
 )
 
-    .then(response=>
-      response.json()
-    )
+.then(async response=>{
 
-    .then(data=>{
 
-      setProduct(data);
+if(!response.ok){
 
-      if(data.variants?.length){
-
-        setSelectedVariant(
-          data.variants[0]
-        );
-
-      }
-
-    })
-
-    .catch(error=>{
-
-      console.log(
-        "PRODUCT ERROR",
-        error
-      );
-
-    })
-
-    .finally(()=>{
-
-      setLoading(false);
-
-    });
-
-  },[productId]);
-
-  if(loading){
-
-    return (
-
-      <div className="p-6 text-white">
-
-        Загрузка...
-
-      </div>
-
-    );
-
-  }
-
-  if(!product){
-
-    return (
-
-      <div className="p-6 text-white">
-
-        Товар не найден
-
-      </div>
-
-    );
-
-  }
-
-  const images =
-
-    product.images &&
-    product.images.length
-
-    ?
-
-    product.images
-
-    :
-
-    product.image
-
-    ?
-
-    [product.image]
-
-    :
-
-    [];
-
-  const image =
-
-    selectedVariant?.image
-
-    ||
-
-    images[currentImage]
-
-    ||
-
-    "";
-
-  const price =
-
-    selectedVariant?.price
-
-    ||
-
-    product.price;
-
-  function vibrate(){
-
-    const tg =
-      (window as any)
-      .Telegram
-      ?.WebApp;
-
-    if(
-      tg?.HapticFeedback
-    ){
-
-      tg.HapticFeedback.notificationOccurred(
-        "success"
-      );
-
-    }
-
-  }
-
-  function addProduct(){
-
-  if (!product) return;
-
-  addToCart({
-
-    id: String(product.id),
-
-    name: product.name || "",
-
-    price: price,
-
-    images:
-      product.images ||
-      (product.image ? [product.image] : [])
-
-  });
-
-  vibrate();
+throw new Error(
+"Товар не найден"
+);
 
 }
 
-  return (
 
-    <div
+return response.json();
+
+
+})
+
+
+.then(data=>{
+
+
+setProduct(data);
+
+
+
+if(
+data.variants &&
+data.variants.length
+){
+
+setSelectedVariant(
+data.variants[0]
+);
+
+}
+
+
+})
+
+
+.catch(error=>{
+
+
+console.log(
+"PRODUCT ERROR:",
+error
+);
+
+
+})
+
+
+.finally(()=>{
+
+
+setLoading(false);
+
+
+});
+
+
+
+},[productId]);
+
+
+
+
+
+
+
+
+
+if(loading){
+
+
+return(
+
+<div className="p-6 text-white">
+
+Загрузка...
+
+</div>
+
+);
+
+
+}
+
+
+
+
+
+
+
+if(!product){
+
+
+return(
+
+<div className="p-6 text-white">
+
+Товар не найден
+
+</div>
+
+);
+
+
+}
+
+
+
+
+
+
+
+
+
+const images =
+
+
+product.images &&
+product.images.length
+
+?
+
+product.images
+
+:
+
+product.image
+
+?
+
+[product.image]
+
+:
+
+[];
+
+
+
+
+
+
+
+
+
+const image =
+
+
+selectedVariant?.image
+
+||
+
+images[currentImage]
+
+||
+
+"/logo.png";
+
+
+
+
+
+
+
+
+
+const price =
+
+
+selectedVariant?.price
+
+||
+
+product.price;
+
+
+
+
+
+
+
+
+
+function vibrate(){
+
+
+const tg =
+(window as any)
+.Telegram
+?.WebApp;
+
+
+
+if(
+tg?.HapticFeedback
+){
+
+
+tg.HapticFeedback.notificationOccurred(
+"success"
+);
+
+
+}
+
+
+}
+
+
+
+
+
+
+
+
+
+function addProduct(){
+
+
+
+addToCart({
+
+
+id:String(product.id),
+
+
+name:product.name,
+
+
+price:price,
+
+
+images:images
+
+
+});
+
+
+
+vibrate();
+
+
+}
+
+
+
+
+
+
+
+
+
+return(
+
+
+
+<div
+
 
 className="
 min-h-screen
@@ -227,15 +394,30 @@ bg-[#080808]
 text-white
 px-4
 pt-28
-pb-24
+pb-28
 "
+
 
 >
 
-      <div
+
+
+
+
+
+
+
+
+{/* STICKY BACK BUTTON */}
+
+
+
+<div
+
+
 className="
 fixed
-top-[72px]
+top-[60px]
 left-0
 right-0
 z-40
@@ -244,21 +426,27 @@ py-2
 bg-[#080808]/95
 backdrop-blur
 "
+
+
 >
+
 
 <button
 
+
 onClick={()=>navigate(-1)}
+
+
 
 className="
 flex
 items-center
-gap-1.5
+gap-1
 bg-[#151515]
 border
 border-white/10
 px-3
-py-1.5
+py-1
 rounded-full
 text-xs
 font-semibold
@@ -267,289 +455,445 @@ active:scale-95
 transition
 "
 
+
 >
 
-<span className="text-sm">
+<span>
+
 ←
+
 </span>
 
+
 Назад
+
 
 </button>
 
 
-</div>      <div
+</div>
 
-        className="
-        bg-[#151515]
-        rounded-3xl
-        border
-        border-white/10
-        overflow-hidden
-        "
 
-      >
 
-        <div
 
-          className="
-          h-80
-          flex
-          items-center
-          justify-center
-          "
 
-        >
 
-          {
-            image && (
 
-              <img
 
-                src={image}
 
-                alt={product.name}
+{/* PRODUCT CARD */}
 
-                className="
-                max-h-72
-                object-contain
-                "
 
-              />
 
-            )
+<div
 
-          }
 
-        </div>
+className="
+bg-[#151515]
+rounded-3xl
+border
+border-white/10
+overflow-hidden
+"
 
-        {
-          images.length > 1 && (
-
-            <div
-
-              className="
-              flex
-              justify-center
-              gap-2
-              pb-4
-              "
-
-            >
-
-              {
-                images.map((_,index)=>(
-
-                  <button
-
-                    key={index}
-
-                    onClick={()=>setCurrentImage(index)}
-
-                    className={
-
-                      `
-                      w-2
-                      h-2
-                      rounded-full
-
-                      ${
-                        currentImage===index
-
-                        ?
-
-                        "bg-[#58BB43]"
-
-                        :
-
-                        "bg-white/30"
-
-                      }
-
-                      `
-
-                    }
-
-                  />
-
-                ))
-
-              }
-
-            </div>
-
-          )
-
-        }
-
-        <div className="p-4">
-
-          <h1
-
-  className="
-  text-lg
-  font-bold
-  leading-snug
-  "
 
 >
-  {product.name}
+
+
+
+
+
+
+
+
+
+<div
+
+
+className="
+h-72
+flex
+items-center
+justify-center
+"
+
+
+>
+
+
+<img
+
+
+src={image}
+
+alt={product.name}
+
+
+className="
+max-h-64
+object-contain
+"
+
+
+/>
+
+
+</div>
+
+
+
+
+
+
+
+
+
+{
+images.length > 1 && (
+
+
+<div
+
+
+className="
+flex
+justify-center
+gap-2
+pb-4
+"
+
+
+>
+
+
+{
+
+images.map((_,index)=>(
+
+
+<button
+
+
+key={index}
+
+
+onClick={()=>setCurrentImage(index)}
+
+
+
+className={
+
+`
+
+w-2
+h-2
+rounded-full
+
+${
+currentImage===index
+
+?
+
+"bg-[#58BB43]"
+
+:
+
+"bg-white/30"
+
+}
+
+`
+
+}
+
+
+/>
+
+
+))
+
+
+}
+
+
+
+</div>
+
+
+)
+
+}
+
+
+
+
+
+
+
+
+
+<div
+
+
+className="
+p-4
+"
+
+
+>
+
+
+<h1
+
+
+className="
+text-lg
+font-bold
+leading-snug
+"
+
+
+>
+
+{product.name}
+
+
 </h1>
 
-          <div
 
-  className="
-  text-[#58BB43]
-  text-2xl
-  font-bold
-  mt-3
-  "
+
+
+
+
+
+
+
+<div
+
+
+className="
+text-[#58BB43]
+text-2xl
+font-bold
+mt-3
+"
+
 
 >
 
-            {price.toLocaleString(
-              "ru-RU"
-            )}
 
-            {" "}₽
+{price.toLocaleString(
+"ru-RU"
+)}
 
-          </div>
+ ₽
 
-          {
-            product.variants &&
-            product.variants.length > 1 && (
 
-              <div className="mt-8">
+</div>
 
-                <h2 className="font-bold mb-3">
 
-                  Выберите вариант
 
-                </h2>
 
-                <div className="space-y-3">
 
-                {
 
-                  product.variants.map(v=>(
 
-                    <button
 
-                      key={v.id}
 
-                      onClick={()=>{
+{
+product.variants &&
+product.variants.length>1 && (
 
-                        setSelectedVariant(v);
 
-                      }}
+<div className="mt-6">
 
-                      className={
 
-                        `
-                        w-full
-                        text-left
-                        p-4
-                        rounded-2xl
-                        border
+<h2 className="font-bold mb-3">
 
-                        ${
-                          selectedVariant?.id===v.id
+Выберите вариант
 
-                          ?
+</h2>
 
-                          "border-[#58BB43] bg-[#202020]"
 
-                          :
 
-                          "border-white/10 bg-[#111]"
 
-                        }
+<div className="space-y-3">
 
-                        `
 
-                      }
+{
 
-                    >
+product.variants.map(v=>(
 
-                      <div className="font-bold">
 
-                        {v.name}
+<button
 
-                      </div>
 
-                      <div className="text-[#58BB43] mt-1">
+key={v.id}
 
-                        {v.price.toLocaleString()}
-                        {" "}₽
 
-                      </div>
+onClick={()=>setSelectedVariant(v)}
 
-                    </button>
 
-                  ))
 
-                }
+className={
 
-                </div>
+`
 
-              </div>
+w-full
+text-left
+p-3
+rounded-xl
+border
 
-            )
+${
+selectedVariant?.id===v.id
 
-          }
+?
 
-          {
-            product.description && (
+"border-[#58BB43] bg-[#202020]"
 
-              <div
+:
 
-                className="
-                mt-8
-                text-sm
-                text-gray-300
-                leading-relaxed
-                "
+"border-white/10 bg-[#111]"
 
-                dangerouslySetInnerHTML={{
+}
 
-                  __html:
-                  product.description
+`
 
-                }}
+}
 
-              />
 
-            )
+>
 
-          }
 
-          <button
+<div className="font-bold text-sm">
 
-            onClick={addProduct}
+{v.name}
 
-            className="
-            w-full
-            mt-8
-            bg-[#58BB43]
-            text-black
-            font-black
-            py-4
-            rounded-2xl
-            text-lg
-            "
+</div>
 
-          >
 
-            Добавить в корзину
+<div className="text-[#58BB43] mt-1">
 
-          </button>
+{v.price.toLocaleString()} ₽
 
-        </div>
+</div>
 
-      </div>
 
-    </div>
 
-  );
+</button>
+
+
+))
+
+
+}
+
+
+</div>
+
+
+</div>
+
+
+)
+
+}
+
+
+
+
+
+
+
+
+
+{
+product.description && (
+
+
+<div
+
+
+className="
+mt-6
+text-sm
+text-gray-300
+leading-relaxed
+"
+
+
+dangerouslySetInnerHTML={{
+
+__html:
+product.description
+
+}}
+
+
+/>
+
+
+)
+
+}
+
+
+
+
+
+
+
+
+
+<button
+
+
+onClick={addProduct}
+
+
+
+className="
+w-full
+mt-8
+bg-[#58BB43]
+text-black
+font-bold
+py-3
+rounded-xl
+text-base
+active:scale-95
+transition
+"
+
+
+>
+
+
+Добавить в корзину
+
+
+</button>
+
+
+
+
+
+
+
+
+
+</div>
+
+
+
+</div>
+
+
+
+</div>
+
+
+);
+
 
 }
