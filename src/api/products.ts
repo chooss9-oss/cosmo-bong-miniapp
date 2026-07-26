@@ -59,9 +59,7 @@ async function request(
 
 export async function getSaleProducts(){
 
-  return await request(
-    `${API_URL}/api/sale`
-  );
+  return [];
 
 }
 
@@ -79,64 +77,19 @@ export async function getProducts(){
 
 
 
-  const saleProducts =
-    await request(
-      `${API_URL}/api/sale`
-    );
-
-
-
-  const saleMap =
-    new Map();
-
-
-
-  saleProducts.forEach(
-    (sale:any)=>{
-
-
-      saleMap.set(
-        String(sale.id),
-        {
-          oldPrice:
-            sale.oldPrice,
-
-          discount:
-            sale.discount
-        }
-      );
-
-
-    }
-  );
-
-
-
-
-
   return products.map(
     (product:any)=>{
-
-
-      const sale =
-        saleMap.get(
-          String(product.id)
-        );
-
 
 
       return {
 
         ...product,
 
-
         oldPrice:
-          sale?.oldPrice,
-
+          undefined,
 
         discount:
-          sale?.discount
-
+          undefined
 
       };
 
