@@ -1,151 +1,225 @@
-import { useNavigate } from "react-router-dom"
+import {
+  useState
+} from "react";
 
-import { useCart } from "../context/CartContext"
 
+import {
+  useNavigate
+} from "react-router-dom";
 
 
-function Header() {
 
 
-  const navigate = useNavigate()
 
+function Header(){
 
 
-  const { cart } = useCart()
 
+const navigate =
 
+useNavigate();
 
 
 
-  const cartCount = cart.reduce(
+const [
+search,
+setSearch
+]=useState("");
 
-    (sum, item) =>
 
-      sum + item.quantity,
 
-    0
 
-  )
 
 
 
+function handleSearch(
+e:React.FormEvent
+){
 
 
+e.preventDefault();
 
-  return (
 
-    <header
 
-      className="
-        sticky
-        top-0
-        z-50
-        bg-[#09090B]/90
-        backdrop-blur
-        border-b
-        border-white/5
-        px-5
-        py-4
-        flex
-        items-center
-        justify-between
-      "
+const value =
 
-    >
+search.trim();
 
 
 
+if(value){
 
-      <div
 
-        onClick={() => navigate("/")}
+navigate(
 
-        className="
-          cursor-pointer
-          font-bold
-          text-xl
-        "
+`/catalog?search=${encodeURIComponent(value)}`
 
-      >
+);
 
-        Cosmo Bong
 
 
-      </div>
+setSearch("");
 
 
-
-
-
-
-
-      <button
-
-        type="button"
-
-        onClick={() => navigate("/cart")}
-
-        className="
-          relative
-          cursor-pointer
-          text-2xl
-        "
-
-      >
-
-        🛒
-
-
-
-
-
-        {cartCount > 0 && (
-
-
-          <span
-
-            className="
-              absolute
-              -top-2
-              -right-3
-              bg-[#58BB43]
-              text-black
-              text-xs
-              font-bold
-              rounded-full
-              min-w-[20px]
-              h-[20px]
-              flex
-              items-center
-              justify-center
-              px-1
-            "
-
-          >
-
-            {cartCount}
-
-
-          </span>
-
-
-        )}
-
-
-
-
-      </button>
-
-
-
-
-
-    </header>
-
-  )
 
 }
 
 
 
-export default Header
+}
+
+
+
+
+
+
+
+
+return(
+
+
+
+<header
+
+className="
+fixed
+top-0
+left-0
+right-0
+z-50
+h-20
+bg-[#080808]/95
+backdrop-blur
+border-b
+border-white/10
+"
+
+>
+
+
+
+<form
+
+
+onSubmit={handleSearch}
+
+
+className="
+h-full
+flex
+items-center
+px-5
+"
+
+>
+
+
+
+<div
+
+className="
+relative
+w-full
+"
+
+>
+
+
+
+<span
+
+className="
+absolute
+left-4
+top-1/2
+-translate-y-1/2
+text-gray-400
+"
+
+>
+
+🔍
+
+</span>
+
+
+
+
+
+
+
+<input
+
+
+value={search}
+
+
+onChange={
+
+e=>
+
+setSearch(
+e.target.value
+)
+
+}
+
+
+
+placeholder="
+Поиск по товарам...
+"
+
+
+
+className="
+w-full
+h-12
+bg-[#151515]
+border
+border-white/10
+rounded-2xl
+pl-12
+pr-5
+text-white
+outline-none
+focus:border-[#58BB43]
+transition
+"
+
+
+
+/>
+
+
+
+
+
+</div>
+
+
+
+
+
+
+
+</form>
+
+
+
+
+
+</header>
+
+
+
+);
+
+
+}
+
+
+
+
+
+export default Header;

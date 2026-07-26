@@ -5,15 +5,16 @@ import {
 } from "react";
 
 
+
 type Product = {
 
-  id: string;
+  id:string;
 
-  name: string;
+  name:string;
 
-  price: number;
+  price:number;
 
-  images?: string[];
+  images?:string[];
 
 };
 
@@ -29,197 +30,510 @@ type CartItem = Product & {
 
 type CartContextType = {
 
-  cart: CartItem[];
+
+  cart:CartItem[];
+
 
   addToCart:
-    (product:Product)=>void;
+  (product:Product)=>void;
+
 
   removeFromCart:
-    (id:string)=>void;
+  (id:string)=>void;
+
+
+  updateQuantity:
+  (id:string, quantity:number)=>void;
+
+
+  clearCart:
+  ()=>void;
+
+
+  getTotal:
+  ()=>number;
+
 
 };
 
 
 
 
+
 const CartContext =
-  createContext<CartContextType | null>(null);
+
+createContext<CartContextType|null>(null);
 
 
 
 
 
-function getSavedCart(){
-
-  const saved =
-    localStorage.getItem(
-      "cart"
-    );
 
 
-  return saved
-    ? JSON.parse(saved)
-    : [];
+function getSavedCart():CartItem[]{
+
+
+const saved =
+
+localStorage.getItem("cart");
+
+
+
+if(!saved)
+
+return [];
+
+
+
+try{
+
+return JSON.parse(saved);
 
 }
+
+catch{
+
+return [];
+
+}
+
+
+}
+
+
+
+
+
 
 
 
 
 export function CartProvider({
-  children
+
+children
+
 }:{
-  children:React.ReactNode
+
+children:React.ReactNode
+
 }){
 
 
-  const [
-    cart,
-    setCart
-  ] = useState<CartItem[]>(
-    getSavedCart()
-  );
 
+const [
 
+cart,
 
+setCart
 
+]=useState<CartItem[]>(
 
-  function updateCart(
-    newCart:CartItem[]
-  ){
+getSavedCart()
 
-    setCart(newCart);
+);
 
-    localStorage.setItem(
-      "cart",
-      JSON.stringify(newCart)
-    );
 
-  }
 
 
 
+const [
 
+toast,
 
-  function addToCart(
-    product:Product
-  ){
+setToast
 
+]=useState("");
 
-    const exists =
-      cart.find(
-        item =>
-          item.id === product.id
-      );
 
 
 
-    let newCart;
 
 
 
-    if(exists){
 
 
-      newCart =
-        cart.map(
-          item =>
+function saveCart(
 
-            item.id === product.id
+newCart:CartItem[]
 
-            ?
+){
 
-            {
-              ...item,
-              quantity:
-              item.quantity + 1
-            }
 
-            :
+setCart(newCart);
 
-            item
 
-        );
+localStorage.setItem(
 
+"cart",
 
-    }
+JSON.stringify(newCart)
 
-    else {
-
-
-      newCart = [
-
-        ...cart,
-
-        {
-          ...product,
-          quantity:1
-        }
-
-      ];
-
-
-    }
-
-
-
-    updateCart(
-      newCart
-    );
-
-
-  }
-
-
-
-
-
-
-  function removeFromCart(
-    id:string
-  ){
-
-    updateCart(
-
-      cart.filter(
-        item =>
-          item.id !== id
-      )
-
-    );
-
-  }
-
-
-
-
-
-
-
-  return (
-
-    <CartContext.Provider
-
-      value={{
-
-        cart,
-
-        addToCart,
-
-        removeFromCart
-
-      }}
-
-    >
-
-      {children}
-
-    </CartContext.Provider>
-
-  );
+);
 
 
 }
+
+
+
+
+
+
+
+
+function showToast(
+
+text:string
+
+){
+
+
+setToast(text);
+
+
+
+setTimeout(()=>{
+
+
+setToast("");
+
+
+},2500);
+
+
+}
+
+
+
+
+
+
+
+
+function addToCart(
+
+product:Product
+
+){
+
+
+
+const existing =
+
+cart.find(
+
+item=>
+
+item.id===product.id
+
+);
+
+
+
+
+let newCart:CartItem[];
+
+
+
+
+
+if(existing){
+
+
+newCart =
+
+cart.map(item=>
+
+item.id===product.id
+
+?
+
+{
+
+...item,
+
+quantity:item.quantity+1
+
+}
+
+:
+
+item
+
+);
+
+
+}
+
+else{
+
+
+newCart=[
+
+...cart,
+
+{
+
+...product,
+
+quantity:1
+
+}
+
+];
+
+
+}
+
+
+
+
+
+saveCart(newCart);
+
+
+
+showToast(
+
+`✅ ${product.name} добавлен в корзину`
+
+);
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+function removeFromCart(
+
+id:string
+
+){
+
+
+const newCart =
+
+cart.filter(
+
+item=>
+
+item.id!==id
+
+);
+
+
+
+saveCart(newCart);
+
+
+}
+
+
+
+
+
+
+
+
+function updateQuantity(
+
+id:string,
+
+quantity:number
+
+){
+
+
+
+if(quantity<=0){
+
+
+removeFromCart(id);
+
+
+return;
+
+
+}
+
+
+
+
+
+const newCart =
+
+cart.map(item=>
+
+
+
+item.id===id
+
+?
+
+{
+
+...item,
+
+quantity
+
+}
+
+:
+
+item
+
+
+
+);
+
+
+
+saveCart(newCart);
+
+
+
+}
+
+
+
+
+
+
+
+
+
+function clearCart(){
+
+
+saveCart([]);
+
+
+}
+
+
+
+
+
+
+
+
+
+function getTotal(){
+
+
+return cart.reduce(
+
+(sum,item)=>
+
+sum +
+
+Number(item.price) *
+
+item.quantity,
+
+0
+
+);
+
+
+}
+
+
+
+
+
+
+
+
+
+return(
+
+
+
+<CartContext.Provider
+
+value={{
+
+cart,
+
+addToCart,
+
+removeFromCart,
+
+updateQuantity,
+
+clearCart,
+
+getTotal
+
+}}
+
+>
+
+
+
+{
+
+toast && (
+
+
+<div
+
+className="
+fixed
+top-5
+left-1/2
+-translate-x-1/2
+z-[9999]
+bg-[#111113]
+border
+border-[#58BB43]
+px-5
+py-4
+rounded-2xl
+text-white
+font-bold
+shadow-2xl
+"
+
+>
+
+{toast}
+
+</div>
+
+
+)
+
+
+}
+
+
+
+
+
+{children}
+
+
+
+</CartContext.Provider>
+
+
+
+);
+
+
+}
+
+
+
 
 
 
@@ -227,21 +541,30 @@ export function CartProvider({
 
 export function useCart(){
 
-  const context =
-    useContext(
-      CartContext
-    );
 
 
-  if(!context){
+const context =
 
-    throw new Error(
-      "useCart outside provider"
-    );
-
-  }
+useContext(CartContext);
 
 
-  return context;
+
+if(!context){
+
+
+throw new Error(
+
+"useCart must be inside CartProvider"
+
+);
+
+
+}
+
+
+
+return context;
+
+
 
 }

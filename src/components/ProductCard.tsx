@@ -9,6 +9,10 @@ type Product = {
 
   price: number;
 
+  oldPrice?: number;
+
+  discount?: number;
+
   images?: string[];
 
 };
@@ -23,14 +27,12 @@ type Props = {
 
 
 
-
 function ProductCard({
   product
 }: Props) {
 
 
-  const navigate =
-    useNavigate();
+  const navigate = useNavigate();
 
 
 
@@ -38,8 +40,14 @@ function ProductCard({
     product.images &&
     product.images.length > 0
       ? product.images[0]
-      : "";
+      : "/placeholder.png";
 
+
+
+
+  const hasSale =
+    product.oldPrice &&
+    product.oldPrice > product.price;
 
 
 
@@ -47,6 +55,7 @@ function ProductCard({
 
 
     <div
+
 
       onClick={() =>
         navigate(
@@ -56,6 +65,7 @@ function ProductCard({
 
 
       className="
+      relative
       bg-[#111113]
       rounded-3xl
       p-4
@@ -63,14 +73,63 @@ function ProductCard({
       border
       border-white/5
       hover:border-[#58BB43]
-      transition
+      transition-all
+      duration-300
+      overflow-hidden
       "
 
     >
 
 
 
+
+      {/* SALE BADGE */}
+
+
+      {
+        hasSale && (
+
+          <div
+
+            className="
+            absolute
+            top-3
+            right-3
+            z-10
+            bg-[#58BB43]
+            text-black
+            text-xs
+            font-black
+            px-3
+            py-1
+            rounded-full
+            shadow-lg
+            "
+
+          >
+
+            🔥 -
+            {
+              product.discount
+            }
+            %
+
+          </div>
+
+        )
+      }
+
+
+
+
+
+
+      {/* КАРТИНКА */}
+
+
       <div
+
+
         className="
         h-40
         flex
@@ -81,25 +140,27 @@ function ProductCard({
       >
 
 
-        {
-          image && (
+        <img
 
-            <img
 
-              src={image}
+          src={image}
 
-              alt={product.name}
 
-              className="
-              max-h-36
-              object-contain
-              "
+          alt={product.name}
 
-            />
 
-          )
+          loading="lazy"
 
-        }
+
+          className="
+          max-h-36
+          object-contain
+          hover:scale-105
+          transition-transform
+          duration-300
+          "
+
+        />
 
 
       </div>
@@ -107,39 +168,158 @@ function ProductCard({
 
 
 
+
+
+
+
+      {/* НАЗВАНИЕ */}
+
+
+
       <h3
+
 
         className="
         mt-3
         text-sm
         font-bold
+        leading-snug
+        line-clamp-3
         "
 
       >
 
         {product.name}
 
+
       </h3>
 
 
 
 
-      <p
-
-        className="
-        mt-2
-        text-[#58BB43]
-        font-bold
-        "
-
-      >
-
-        {product.price.toLocaleString()}
-        {" "}
-        ₽
 
 
-      </p>
+
+
+
+      {/* ЦЕНЫ */}
+
+
+
+      <div className="mt-3">
+
+
+
+        {
+          hasSale && (
+
+            <div
+
+
+              className="
+              text-gray-500
+              text-sm
+              line-through
+              "
+
+            >
+
+              {
+                product.oldPrice?.toLocaleString(
+                  "ru-RU"
+                )
+              }
+
+              {" "}₽
+
+
+            </div>
+
+
+          )
+        }
+
+
+
+
+
+
+
+        <div
+
+
+          className="
+          flex
+          items-center
+          gap-2
+          mt-1
+          "
+
+        >
+
+
+
+          <span
+
+
+            className="
+            text-[#58BB43]
+            text-xl
+            font-black
+            "
+
+          >
+
+            {
+              product.price.toLocaleString(
+                "ru-RU"
+              )
+            }
+
+            {" "}₽
+
+
+          </span>
+
+
+
+
+
+          {
+            hasSale && (
+
+              <span
+
+
+                className="
+                bg-white/10
+                text-[#58BB43]
+                text-xs
+                font-bold
+                px-2
+                py-1
+                rounded-full
+                "
+
+              >
+
+                скидка
+
+
+              </span>
+
+
+            )
+          }
+
+
+
+        </div>
+
+
+
+      </div>
+
 
 
 
@@ -147,7 +327,6 @@ function ProductCard({
 
 
   );
-
 
 }
 

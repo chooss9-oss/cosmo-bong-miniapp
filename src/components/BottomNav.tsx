@@ -1,112 +1,296 @@
 import {
-  Home,
-  Grid2X2,
-  Flame,
-  User
-} from "lucide-react"
+  NavLink
+} from "react-router-dom";
 
-import { useLocation, useNavigate } from "react-router-dom"
-
-
-function BottomNav() {
-
-  const navigate = useNavigate()
-  const location = useLocation()
+import {
+  useCart
+} from "../context/CartContext";
 
 
 
-  const items = [
-    {
-      title: "Главная",
-      icon: Home,
-      path: "/",
-    },
-    {
-      title: "Каталог",
-      icon: Grid2X2,
-      path: "/catalog",
-    },
-    {
-      title: "Акции",
-      icon: Flame,
-      path: "/sales",
-    },
-    {
-      title: "Профиль",
-      icon: User,
-      path: "/profile",
-    },
-  ]
+
+
+function BottomNav(){
 
 
 
-  return (
-
-    <div
-      className="
-        fixed
-        bottom-0
-        left-0
-        right-0
-        h-20
-        bg-[#09090B]/95
-        backdrop-blur
-        border-t
-        border-white/10
-        flex
-        items-center
-        justify-around
-        px-4
-        z-50
-      "
-    >
+const {
+  cart
+}=useCart();
 
 
-      {items.map((item) => {
-
-        const Icon = item.icon
-
-        const active = location.pathname === item.path
 
 
-        return (
 
-          <button
-            key={item.path}
-            onClick={() => navigate(item.path)}
-            className={`
-              flex
-              flex-col
-              items-center
-              gap-1
-              transition
-              ${
-                active
-                ? "text-[#58BB43]"
-                : "text-gray-400"
-              }
-            `}
-          >
+const cartCount =
 
-            <Icon size={24} />
+cart.reduce(
+
+(sum,item)=>
+
+sum + item.quantity,
+
+0
+
+);
 
 
-            <span className="text-xs">
-              {item.title}
-            </span>
 
 
-          </button>
-
-        )
-
-      })}
 
 
-    </div>
 
-  )
+
+const items = [
+
+
+{
+
+path:"/",
+
+label:"Главная",
+
+icon:"🏠"
+
+},
+
+
+
+{
+
+path:"/catalog",
+
+label:"Каталог",
+
+icon:"📂"
+
+},
+
+
+
+{
+
+path:"/cart",
+
+label:"Корзина",
+
+icon:"🛒"
+
 }
 
 
-export default BottomNav
+
+];
+
+
+
+
+
+
+
+
+return(
+
+
+
+<nav
+
+
+className="
+fixed
+bottom-0
+left-0
+right-0
+z-50
+bg-[#111113]/95
+backdrop-blur
+border-t
+border-white/10
+h-20
+"
+
+>
+
+
+
+<div
+
+className="
+max-w-md
+mx-auto
+h-full
+flex
+items-center
+justify-around
+"
+
+>
+
+
+
+{
+
+items.map(item=>(
+
+
+<NavLink
+
+
+key={item.path}
+
+
+to={item.path}
+
+
+className={({isActive})=>
+
+`
+
+relative
+
+flex
+
+flex-col
+
+items-center
+
+justify-center
+
+gap-1
+
+text-xs
+
+transition
+
+${
+
+isActive
+
+?
+
+"text-[#58BB43]"
+
+:
+
+"text-gray-400"
+
+}
+
+`
+
+}
+
+
+
+>
+
+
+<div
+
+className="
+relative
+text-2xl
+"
+
+>
+
+
+{item.icon}
+
+
+
+
+
+
+{
+
+item.path === "/cart"
+
+&&
+
+cartCount > 0
+
+&& (
+
+
+<span
+
+className="
+absolute
+-left-3
+-top-2
+bg-[#58BB43]
+text-black
+text-[10px]
+font-bold
+min-w-5
+h-5
+rounded-full
+flex
+items-center
+justify-center
+px-1
+"
+
+>
+
+
+{cartCount}
+
+
+
+</span>
+
+
+)
+
+
+}
+
+
+
+
+</div>
+
+
+
+
+
+
+<span>
+
+{item.label}
+
+</span>
+
+
+
+
+
+</NavLink>
+
+
+))
+
+}
+
+
+
+
+</div>
+
+
+</nav>
+
+
+
+);
+
+
+}
+
+
+
+
+
+export default BottomNav;

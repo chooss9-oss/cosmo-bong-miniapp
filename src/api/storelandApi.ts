@@ -1,12 +1,11 @@
-const API_URL = "http://localhost:3001/api";
+const API_URL = "/api";
 
 
 export async function getProducts() {
 
-  const response =
-    await fetch(
-      `${API_URL}/products`
-    );
+  const response = await fetch(
+    `${API_URL}/products`
+  );
 
 
   if (!response.ok) {
@@ -24,10 +23,9 @@ export async function getProducts() {
 
 export async function getCategories() {
 
-  const response =
-    await fetch(
-      `${API_URL}/categories`
-    );
+  const response = await fetch(
+    `${API_URL}/categories`
+  );
 
 
   if (!response.ok) {
@@ -43,13 +41,11 @@ export async function getCategories() {
 
 
 
-export async function getProduct(id:string) {
+export async function getProduct(id: string) {
 
-
-  const response =
-    await fetch(
-      `${API_URL}/products/${id}`
-    );
+  const response = await fetch(
+    `${API_URL}/product/${id}`
+  );
 
 
   if (!response.ok) {

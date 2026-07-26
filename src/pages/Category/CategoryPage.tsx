@@ -1,12 +1,24 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import {
+  useEffect,
+  useState
+} from "react";
+
+
+import {
+  useParams,
+  useNavigate
+} from "react-router-dom";
+
 
 import ProductCard from "../../components/ProductCard";
+
 
 import {
   getProducts,
   getCategories
 } from "../../api/storelandApi";
+
+
 
 
 
@@ -20,17 +32,21 @@ type Product = {
 
   images?:string[];
 
-  categoryId:string | number;
+  categoryIds?:string[];
 
 };
+
+
 
 
 
 type Category = {
 
-  "@_id": string;
+  "@_id":string;
 
-  "#text": string;
+  "#text":string;
+
+  "@_parentId"?:string;
 
 };
 
@@ -38,198 +54,687 @@ type Category = {
 
 
 
-function CategoryPage() {
 
 
-  const {
-    categoryName
-  } = useParams();
+const mainCategoryNames = [
 
+"Бонги и Водники",
 
+"Запчасти и Тюнинг",
 
-  const [
-    products,
-    setProducts
-  ] = useState<Product[]>([]);
+"Сувенирные трубки",
 
+"Гриндеры и Прессы",
 
+"Для самокруток",
 
-  const [
-    category,
-    setCategory
-  ] = useState<Category | null>(null);
+"Аксессуары для Wax",
 
+"КБД (cbd) / Мицелий",
 
+"Гроу",
 
-  useEffect(()=>{
+"Чайная Лавка",
 
+"Благовония",
 
-    async function load(){
+"Мерч Космо Бонг",
 
+"Напасы"
 
-      const [
-        productsData,
-        categoriesData
-      ] = await Promise.all([
+];
 
-        getProducts(),
 
-        getCategories()
 
-      ]);
 
 
 
-      const currentCategory =
-        categoriesData.find(
-          (cat:Category)=>
-            cat["#text"]
-            ===
-            categoryName
-        );
 
 
 
-      setCategory(
-        currentCategory || null
-      );
+function getChildCategoryIds(
 
+parentId:string,
 
+categories:Category[]
 
-      if(currentCategory){
+):string[]{
 
 
-        const filtered =
-          productsData.filter(
-            (product:Product)=>
+  const children = categories.filter(
 
-              String(product.categoryId)
-              ===
-              String(
-                currentCategory["@_id"]
-              )
+    cat =>
 
-          );
+    String(cat["@_parentId"])
 
+    ===
 
-        setProducts(filtered);
-
-
-      }
-
-
-
-    }
-
-
-
-    load();
-
-
-
-  },[categoryName]);
-
-
-
-
-
-
-  return (
-
-    <div
-
-      className="
-      p-5
-      text-white
-      "
-
-    >
-
-
-
-      <h1
-
-        className="
-        text-2xl
-        font-bold
-        mb-6
-        "
-
-      >
-
-        {
-          category
-          ? category["#text"]
-          : "Категория"
-        }
-
-
-      </h1>
-
-
-
-
-
-      <div
-
-        className="
-        grid
-        grid-cols-2
-        gap-4
-        "
-
-      >
-
-        {
-          products.map(
-            product=>(
-
-              <ProductCard
-
-                key={product.id}
-
-                product={product}
-
-              />
-
-            )
-
-          )
-        }
-
-
-      </div>
-
-
-
-
-
-      {
-        products.length === 0 && (
-
-          <div
-            className="
-            text-gray-400
-            "
-          >
-
-            В этой категории пока нет товаров
-
-          </div>
-
-        )
-
-      }
-
-
-
-    </div>
+    String(parentId)
 
   );
+
+
+
+  let ids:string[]=[];
+
+
+
+  children.forEach(child=>{
+
+
+    ids.push(
+
+      String(child["@_id"])
+
+    );
+
+
+
+    ids.push(
+
+      ...getChildCategoryIds(
+
+        String(child["@_id"]),
+
+        categories
+
+      )
+
+    );
+
+
+  });
+
+
+
+  return ids;
+
+}
+
+
+
+
+
+
+
+
+
+export default function CategoryPage(){
+
+
+
+const {
+
+categoryId
+
+}=useParams();
+
+
+
+
+const navigate =
+useNavigate();
+
+
+
+
+
+const [
+
+products,
+
+setProducts
+
+]=useState<Product[]>([]);
+
+
+
+
+
+const [
+
+categories,
+
+setCategories
+
+]=useState<Category[]>([]);
+
+
+
+
+
+const [
+
+category,
+
+setCategory
+
+]=useState<Category|null>(null);
+
+
+
+
+
+const [
+
+loading,
+
+setLoading
+
+]=useState(true);
+
+
+
+
+
+
+
+
+
+useEffect(()=>{
+
+
+async function load(){
+
+
+try{
+
+
+
+const [
+
+productsData,
+
+categoriesData
+
+]=await Promise.all([
+
+
+getProducts(),
+
+
+getCategories()
+
+
+]);
+
+
+
+
+
+
+
+const mainCategories =
+
+categoriesData.filter(
+
+(cat:Category)=>
+
+mainCategoryNames.includes(
+
+cat["#text"]
+
+)
+
+);
+
+
+
+
+
+setCategories(
+
+mainCategories
+
+);
+
+
+
+
+
+
+
+
+const currentCategory =
+
+categoriesData.find(
+
+(cat:Category)=>
+
+String(cat["@_id"])
+
+===
+
+String(categoryId)
+
+);
+
+
+
+
+
+
+
+setCategory(
+
+currentCategory || null
+
+);
+
+
+
+
+
+
+
+
+if(!currentCategory){
+
+
+setProducts([]);
+
+return;
 
 
 }
 
 
 
-export default CategoryPage;
+
+
+
+
+
+const childIds =
+
+getChildCategoryIds(
+
+String(currentCategory["@_id"]),
+
+categoriesData
+
+);
+
+
+
+
+
+
+
+const allowedIds = [
+
+
+String(currentCategory["@_id"]),
+
+
+...childIds
+
+
+];
+
+
+
+
+
+
+
+
+const filtered =
+
+productsData.filter(
+
+(product:Product)=>
+
+product.categoryIds?.some(
+
+id=>
+
+allowedIds.includes(
+
+String(id)
+
+)
+
+)
+
+);
+
+
+
+
+
+
+setProducts(
+
+filtered
+
+);
+
+
+
+
+
+}
+
+catch(error){
+
+
+console.log(
+
+"CATEGORY ERROR",
+
+error
+
+);
+
+
+}
+
+finally{
+
+
+setLoading(false);
+
+
+}
+
+
+}
+
+
+
+load();
+
+
+
+},[categoryId]);
+
+
+
+
+
+
+
+
+
+if(loading){
+
+
+return(
+
+<div
+
+className="
+p-5
+text-white
+"
+
+>
+
+Загрузка...
+
+</div>
+
+);
+
+
+}
+
+
+
+
+
+
+
+
+
+return(
+
+
+
+<div
+
+className="
+min-h-screen
+bg-[#080808]
+text-white
+p-5
+"
+
+>
+
+
+
+
+
+
+
+
+
+<h1
+
+className="
+text-2xl
+font-bold
+mb-5
+"
+
+>
+
+{
+
+category
+
+?
+
+category["#text"]
+
+:
+
+"Категория"
+
+}
+
+
+</h1>
+
+
+
+
+
+
+
+
+
+{/* КАТЕГОРИИ КАК В КАТАЛОГЕ */}
+
+
+
+<div
+
+className="
+sticky
+top-20
+z-40
+bg-[#080808]/95
+backdrop-blur
+py-3
+mb-6
+"
+
+>
+
+
+
+<div
+
+className="
+flex
+gap-3
+overflow-x-auto
+scrollbar-hide
+"
+
+>
+
+
+
+{
+
+categories.map(cat=>(
+
+
+
+<button
+
+
+key={cat["@_id"]}
+
+
+onClick={()=>
+
+
+navigate(
+
+`/category/${cat["@_id"]}`
+
+)
+
+
+}
+
+
+
+className="
+flex-shrink-0
+bg-[#151515]
+border
+border-white/10
+rounded-2xl
+px-4
+py-3
+text-sm
+font-bold
+hover:border-[#58BB43]
+transition
+"
+
+>
+
+
+{cat["#text"]}
+
+
+
+</button>
+
+
+
+))
+
+
+}
+
+
+
+</div>
+
+
+
+</div>
+
+
+
+
+
+
+
+
+
+<div
+
+className="
+grid
+grid-cols-2
+gap-4
+"
+
+>
+
+
+{
+
+products.map(product=>(
+
+
+
+<ProductCard
+
+key={product.id}
+
+product={product}
+
+/>
+
+
+
+))
+
+
+}
+
+
+</div>
+
+
+
+
+
+
+
+
+
+{
+
+products.length===0 && (
+
+
+
+<div
+
+className="
+text-center
+text-gray-400
+mt-10
+"
+
+>
+
+В этой категории пока нет товаров
+
+
+</div>
+
+
+
+)
+
+
+}
+
+
+
+
+
+
+
+
+
+</div>
+
+
+
+);
+
+
+}

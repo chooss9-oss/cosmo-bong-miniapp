@@ -1,22 +1,23 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom"
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 
-import Header from "./components/Header"
-import BottomNav from "./components/BottomNav"
+import Header from "./components/Header";
+import BottomNav from "./components/BottomNav";
 
 
-import Home from "./pages/Home/Home"
-import Catalog from "./pages/Catalog/Catalog"
-import Sales from "./pages/Sales/Sales"
-import Profile from "./pages/Profile/Profile"
+import Home from "./pages/Home/Home";
+import Catalog from "./pages/Catalog/Catalog";
+import Sales from "./pages/Sales/Sales";
+import Profile from "./pages/Profile/Profile";
 
 
-import CategoryPage from "./pages/Category/CategoryPage"
-import ProductPage from "./pages/Product/ProductPage"
-import Cart from "./pages/Cart/Cart"
+import CategoryPage from "./pages/Category/CategoryPage";
+import ProductPage from "./pages/Product/ProductPage";
+import Cart from "./pages/Cart/Cart";
+import Checkout from "./pages/Checkout/Checkout";
+import Success from "./pages/Success/Success";
 
-
-import { CartProvider } from "./context/CartContext"
+import { CartProvider } from "./context/CartContext";
 
 
 
@@ -27,21 +28,19 @@ function App() {
 
   return (
 
-
     <BrowserRouter>
 
 
       <CartProvider>
 
 
-
         <div
 
           className="
-            min-h-screen
-            bg-[#09090B]
-            text-white
-            pb-20
+          min-h-screen
+          bg-[#09090B]
+          text-white
+          pb-20
           "
 
         >
@@ -49,6 +48,7 @@ function App() {
 
 
           <Header />
+
 
 
 
@@ -71,6 +71,7 @@ function App() {
 
 
 
+
               <Route
 
                 path="/catalog"
@@ -79,6 +80,13 @@ function App() {
 
               />
 
+<Route
+
+path="/success"
+
+element={<Success />}
+
+/>
 
 
 
@@ -89,6 +97,7 @@ function App() {
                 element={<Sales />}
 
               />
+
 
 
 
@@ -104,13 +113,15 @@ function App() {
 
 
 
+
               <Route
 
-                path="/category/:categoryName"
+  path="/category/:categoryId"
 
-                element={<CategoryPage />}
+  element={<CategoryPage />}
 
-              />
+/>
+
 
 
 
@@ -126,6 +137,7 @@ function App() {
 
 
 
+
               <Route
 
                 path="/cart"
@@ -137,7 +149,21 @@ function App() {
 
 
 
+
+              <Route
+
+                path="/checkout"
+
+                element={<Checkout />}
+
+              />
+
+
+
+
+
             </Routes>
+
 
 
           </main>
@@ -146,7 +172,9 @@ function App() {
 
 
 
+
           <BottomNav />
+
 
 
         </div>
@@ -159,11 +187,11 @@ function App() {
     </BrowserRouter>
 
 
-  )
+  );
 
 
 }
 
 
 
-export default App
+export default App;
