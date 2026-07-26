@@ -69,8 +69,8 @@ export default function ProductPage(){
       return;
 
     fetch(
-      `http://localhost:3001/api/product/${productId}`
-    )
+  `https://cosmo-bong-miniapp.onrender.com/api/product/${productId}`
+)
 
     .then(response=>
       response.json()
@@ -197,19 +197,25 @@ export default function ProductPage(){
 
   function addProduct(){
 
-    if (!product) return;
+  if (!product) return;
 
-addToCart({
-  id: String(product.id),
-  name: product.name || "",
-  price: product.price,
-  images: product.images || [],
-  
-});
+  addToCart({
 
-    vibrate();
+    id: String(product.id),
 
-  }
+    name: product.name || "",
+
+    price: price,
+
+    images:
+      product.images ||
+      (product.image ? [product.image] : [])
+
+  });
+
+  vibrate();
+
+}
 
   return (
 
