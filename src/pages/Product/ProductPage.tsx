@@ -226,29 +226,41 @@ min-h-screen
 bg-[#080808]
 text-white
 px-4
-pt-16
+pt-28
 pb-24
 "
 
 >
 
-      <button
+      <div
+className="
+fixed
+top-[72px]
+left-0
+right-0
+z-40
+px-4
+py-2
+bg-[#080808]/95
+backdrop-blur
+"
+>
+
+<button
 
 onClick={()=>navigate(-1)}
 
 className="
-mt-24
-mb-5
 flex
 items-center
-gap-2
+gap-1.5
 bg-[#151515]
 border
 border-white/10
-px-4
-py-2
+px-3
+py-1.5
 rounded-full
-text-sm
+text-xs
 font-semibold
 text-gray-300
 active:scale-95
@@ -257,7 +269,7 @@ transition
 
 >
 
-<span className="text-lg">
+<span className="text-sm">
 ←
 </span>
 
@@ -265,7 +277,8 @@ transition
 
 </button>
 
-      <div
+
+</div>      <div
 
         className="
         bg-[#151515]
