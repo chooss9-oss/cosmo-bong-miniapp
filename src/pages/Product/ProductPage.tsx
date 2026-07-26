@@ -221,30 +221,49 @@ export default function ProductPage(){
 
     <div
 
-      className="
-      min-h-screen
-      bg-[#080808]
-      text-white
-      px-4
-      pb-24
-      "
+className="
+min-h-screen
+bg-[#080808]
+text-white
+px-4
+pt-16
+pb-24
+"
 
-    >
+>
 
       <button
 
-        onClick={()=>navigate(-1)}
+onClick={()=>navigate(-1)}
 
-        className="
-        mb-4
-        text-gray-300
-        "
+className="
+mt-24
+mb-5
+flex
+items-center
+gap-2
+bg-[#151515]
+border
+border-white/10
+px-4
+py-2
+rounded-full
+text-sm
+font-semibold
+text-gray-300
+active:scale-95
+transition
+"
 
-      >
+>
 
-        ← Назад
+<span className="text-lg">
+←
+</span>
 
-      </button>
+Назад
+
+</button>
 
       <div
 
