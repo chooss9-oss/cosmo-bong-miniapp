@@ -350,32 +350,30 @@ export default function ProductPage(){
 
         }
 
-        <div className="p-5">
+        <div className="p-4">
 
           <h1
 
-            className="
-            text-2xl
-            font-black
-            leading-tight
-            "
+  className="
+  text-lg
+  font-bold
+  leading-snug
+  "
 
-          >
-
-            {product.name}
-
-          </h1>
+>
+  {product.name}
+</h1>
 
           <div
 
-            className="
-            text-[#58BB43]
-            text-3xl
-            font-black
-            mt-4
-            "
+  className="
+  text-[#58BB43]
+  text-2xl
+  font-bold
+  mt-3
+  "
 
-          >
+>
 
             {price.toLocaleString(
               "ru-RU"
