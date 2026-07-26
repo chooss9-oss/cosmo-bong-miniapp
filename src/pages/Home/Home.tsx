@@ -9,6 +9,11 @@ import {
 
 
 
+const API_URL =
+"https://cosmo-bong-miniapp.onrender.com/api";
+
+
+
 interface Category {
 
   "#text": string;
@@ -142,15 +147,37 @@ try{
 
 const categoriesRes =
 await fetch(
-"http://localhost:3001/api/categories"
+`${API_URL}/categories`
 );
 
 
 
 const productsRes =
 await fetch(
-"http://localhost:3001/api/products"
+`${API_URL}/products`
 );
+
+
+
+if(!categoriesRes.ok){
+
+throw new Error(
+"Ошибка загрузки категорий"
+);
+
+}
+
+
+
+if(!productsRes.ok){
+
+throw new Error(
+"Ошибка загрузки товаров"
+);
+
+}
+
+
 
 
 
