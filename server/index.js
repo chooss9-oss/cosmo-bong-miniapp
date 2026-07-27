@@ -33,44 +33,54 @@ async function fetchSalesData() {
 
   try {
     console.log("🔄 Обновление данных распродажи с cosmo-bong.ru...");
-    const { data } = await axios.get("https://cosmo-bong.ru/discount/Rasprodazha", {
+
+    // Шаг 1: получаем список товаров, которые сейчас на распродаже
+    const { data: listPage } = await axios.get("https://cosmo-bong.ru/discount/Rasprodazha", {
       headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
     });
-    const $ = cheerio.load(data);
-    const newSalesCache = {};
 
-    $('form.goodsListForm').each((i, el) => {
+    const $list = cheerio.load(listPage);
+    const productUrls = new Set();
 
-      // ID товара — из скрытого поля формы (совпадает с "id" в кэше товаров)
-      const productId = $(el)
-        .find('input[name="form[goods_mod_id]"]')
-        .attr('value');
-
-      if (!productId) return;
-
-      // Старая цена — из блока .old-price
-      const oldPriceText = $(el)
-        .find('.old-price .num')
-        .first()
-        .text()
-        .replace(/\s/g, '');
-      const oldPrice = parseInt(oldPriceText, 10);
-
-      // Новая цена — из атрибута content у .main-price
-      const newPriceAttr = $(el).find('.main-price').first().attr('content');
-      const newPrice = parseInt(newPriceAttr, 10);
-
-      if (productId && oldPrice && newPrice && oldPrice > newPrice) {
-        newSalesCache[productId] = {
-          oldPrice: oldPrice,
-          discount: Math.round(((oldPrice - newPrice) / oldPrice) * 100)
-        };
+    $list('.product-name a').each((i, el) => {
+      const href = $list(el).attr('href');
+      if (href) {
+        productUrls.add(href.split('?')[0]);
       }
     });
 
+    const newSalesCache = {};
+
+    // Шаг 2: заходим на страницу каждого товара и берём цены ВСЕХ его модификаций
+    for (const url of productUrls) {
+      try {
+        const { data: productPage } = await axios.get(url, {
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+        });
+
+        const $product = cheerio.load(productPage);
+
+        $product('.goodsDataMainModificationsList').each((i, el) => {
+          const modId = $product(el).find('input[name="id"]').attr('value');
+          const priceNow = parseInt($product(el).find('input[name="price_now"]').attr('value'), 10);
+          const priceOld = parseInt($product(el).find('input[name="price_old"]').attr('value'), 10);
+
+          if (modId && priceOld && priceNow && priceOld > priceNow) {
+            newSalesCache[modId] = {
+              oldPrice: priceOld,
+              discount: Math.round(((priceOld - priceNow) / priceOld) * 100)
+            };
+          }
+        });
+
+      } catch (innerError) {
+        console.error(`⚠️ Не удалось загрузить товар ${url}:`, innerError.message);
+      }
+    }
+
     salesCache = newSalesCache;
     lastSalesFetch = now;
-    console.log(`✅ Данные распродажи обновлены: найдено ${Object.keys(salesCache).length} товаров.`);
+    console.log(`✅ Данные распродажи обновлены: найдено ${Object.keys(salesCache).length} модификаций.`);
   } catch (error) {
     console.error("❌ Ошибка при получении данных распродажи:", error.message);
     return salesCache || {};
