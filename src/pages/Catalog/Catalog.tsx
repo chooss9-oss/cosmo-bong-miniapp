@@ -5,8 +5,7 @@ import {
 
 
 import {
-  useSearchParams,
-  useNavigate
+  useSearchParams
 } from "react-router-dom";
 
 
@@ -14,9 +13,11 @@ import ProductCard from "../../components/ProductCard";
 
 
 import {
-  getProducts,
-  getCategories
+  getProducts
 } from "../../api/storelandApi";
+
+
+import MainCategories from "../../components/MainCategories";
 
 
 
@@ -37,56 +38,6 @@ type Product = {
   description?:string;
 
 };
-
-
-
-
-
-type Category = {
-
-  "@_id":string;
-
-  "#text":string;
-
-  "@_parentId"?:string;
-
-};
-
-
-
-
-
-
-
-
-
-const mainCategoryNames = [
-
-"Бонги и Водники",
-
-"Запчасти и Тюнинг",
-
-"Сувенирные трубки",
-
-"Гриндеры и Прессы",
-
-"Для самокруток",
-
-"Аксессуары для Wax",
-
-"КБД (cbd) / Мицелий",
-
-"Гроу",
-
-"Чайная Лавка",
-
-"Благовония",
-
-"Мерч Космо Бонг",
-
-"Напасы"
-
-];
 
 
 
@@ -150,13 +101,6 @@ function Catalog(){
 
 
 
-const navigate =
-useNavigate();
-
-
-
-
-
 const [
 
 searchParams
@@ -186,6 +130,7 @@ searchParams
 
 
 
+
 const [
 
 products,
@@ -198,14 +143,6 @@ setProducts
 
 
 
-const [
-
-categories,
-
-setCategories
-
-]=useState<Category[]>([]);
-
 
 
 
@@ -217,6 +154,10 @@ filteredProducts,
 setFilteredProducts
 
 ]=useState<Product[]>([]);
+
+
+
+
 
 
 
@@ -238,79 +179,32 @@ setLoading
 
 
 
+
+
 useEffect(()=>{
 
 
 async function load(){
 
 
-
 try{
 
 
+const productsData =
 
-const [
-
-productsData,
-
-categoriesData
-
-]=await Promise.all([
-
-
-
-getProducts(),
-
-
-
-getCategories()
-
-
-
-]);
+await getProducts();
 
 
 
 
 
 setProducts(
-
 productsData
-
-);
-
-
-
-
-
-const mainCategories =
-
-categoriesData.filter(
-
-(category:Category)=>
-
-mainCategoryNames.includes(
-
-category["#text"]
-
-)
-
-);
-
-
-
-
-
-setCategories(
-
-mainCategories
-
 );
 
 
 
 }
-
 
 
 catch(error){
@@ -323,7 +217,6 @@ console.log(
 error
 
 );
-
 
 
 }
@@ -358,8 +251,9 @@ load();
 
 
 
-useEffect(()=>{
 
+
+useEffect(()=>{
 
 
 if(!search){
@@ -451,6 +345,7 @@ product.name
 
 
 
+
 const description =
 
 product.description
@@ -485,7 +380,6 @@ normalizeWord(
 
 
 
-
 return searchWords.every(word =>
 
 fullText.includes(word)
@@ -512,7 +406,12 @@ result
 
 
 
-},[search,products]);
+},[
+search,
+products
+]);
+
+
 
 
 
@@ -527,6 +426,7 @@ if(loading){
 
 return(
 
+
 <div
 
 className="
@@ -534,11 +434,14 @@ p-5
 text-white
 "
 
+
 >
 
 Загрузка каталога...
 
+
 </div>
+
 
 );
 
@@ -559,14 +462,37 @@ return(
 
 <div
 
+
 className="
 min-h-screen
 bg-[#080808]
 text-white
-p-5
+px-4
+pt-[70px]
+pb-28
 "
 
+
 >
+
+
+
+
+
+
+
+
+
+{/* КАТЕГОРИИ */}
+
+
+
+<MainCategories />
+
+
+
+
+
 
 
 
@@ -575,13 +501,17 @@ p-5
 
 <h1
 
+
 className="
-text-3xl
+text-2xl
 font-bold
-mb-5
+mt-3
+mb-4
 "
 
+
 >
+
 
 
 {
@@ -599,114 +529,8 @@ search
 }
 
 
+
 </h1>
-
-
-
-
-
-
-
-
-
-{/* ГЛАВНЫЕ КАТЕГОРИИ */}
-
-
-
-<div
-
-className="
-sticky
-top-20
-z-40
-bg-[#080808]/95
-backdrop-blur
-py-3
-mb-6
-"
-
->
-
-
-
-<div
-
-className="
-flex
-gap-3
-overflow-x-auto
-scrollbar-hide
-touch-pan-x
-select-none
-"
-
->
-
-
-
-{
-
-categories.map(category=>(
-
-
-
-<button
-
-
-key={category["@_id"]}
-
-
-onClick={()=>
-
-
-navigate(
-
-`/category/${category["@_id"]}`
-
-)
-
-
-}
-
-
-
-className="
-flex-shrink-0
-bg-[#151515]
-border
-border-white/10
-rounded-2xl
-px-4
-py-3
-text-sm
-font-bold
-hover:border-[#58BB43]
-transition
-"
-
->
-
-
-{category["#text"]}
-
-
-
-</button>
-
-
-
-))
-
-
-}
-
-
-
-</div>
-
-
-
-</div>
 
 
 
@@ -722,11 +546,13 @@ transition
 
 <div
 
+
 className="
 grid
 grid-cols-2
 gap-4
 "
+
 
 >
 
@@ -742,10 +568,14 @@ filteredProducts.map(product=>(
 <ProductCard
 
 
-key={product.id}
+key={
+product.id
+}
 
 
-product={product}
+product={
+product
+}
 
 
 />
@@ -777,11 +607,13 @@ filteredProducts.length===0 && (
 
 <div
 
+
 className="
 text-center
 text-gray-400
 mt-10
 "
+
 
 >
 
@@ -796,7 +628,10 @@ mt-10
 )
 
 
+
 }
+
+
 
 
 
