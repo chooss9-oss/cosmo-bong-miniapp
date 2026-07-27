@@ -4,8 +4,7 @@ import {
 } from "react";
 
 import {
-  useParams,
-  useNavigate
+  useParams
 } from "react-router-dom";
 
 import {
@@ -60,8 +59,7 @@ export default function ProductPage(){
 
 
 
-  const navigate =
-    useNavigate();
+  
 
 
 

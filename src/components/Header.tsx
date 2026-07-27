@@ -14,9 +14,7 @@ import {
 function Header(){
 
 
-
 const navigate =
-
 useNavigate();
 
 
@@ -31,7 +29,6 @@ setSearch
 
 
 
-
 function handleSearch(
 e:React.FormEvent
 ){
@@ -40,9 +37,7 @@ e:React.FormEvent
 e.preventDefault();
 
 
-
 const value =
-
 search.trim();
 
 
@@ -51,19 +46,14 @@ if(value){
 
 
 navigate(
-
 `/catalog?search=${encodeURIComponent(value)}`
-
 );
-
 
 
 setSearch("");
 
 
-
 }
-
 
 
 }
@@ -87,11 +77,12 @@ top-0
 left-0
 right-0
 z-50
-h-20
 bg-[#080808]/95
 backdrop-blur
 border-b
 border-white/10
+px-4
+py-3
 "
 
 >
@@ -100,15 +91,11 @@ border-white/10
 
 <form
 
-
 onSubmit={handleSearch}
 
-
 className="
-h-full
 flex
 items-center
-px-5
 "
 
 >
@@ -130,10 +117,11 @@ w-full
 
 className="
 absolute
-left-4
+left-3
 top-1/2
 -translate-y-1/2
 text-gray-400
+text-sm
 "
 
 >
@@ -141,7 +129,6 @@ text-gray-400
 🔍
 
 </span>
-
 
 
 
@@ -174,13 +161,14 @@ placeholder="
 
 className="
 w-full
-h-12
+h-9
 bg-[#151515]
 border
 border-white/10
-rounded-2xl
-pl-12
-pr-5
+rounded-full
+pl-9
+pr-4
+text-sm
 text-white
 outline-none
 focus:border-[#58BB43]
@@ -189,9 +177,8 @@ transition
 
 
 
+
 />
-
-
 
 
 
@@ -199,13 +186,7 @@ transition
 
 
 
-
-
-
-
 </form>
-
-
 
 
 
