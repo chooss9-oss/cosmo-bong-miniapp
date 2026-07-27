@@ -70,6 +70,18 @@ icon:"📂"
 
 {
 
+path:"/sales",
+
+label:"Акции",
+
+icon:"🔥"
+
+},
+
+
+
+{
+
 path:"/cart",
 
 label:"Корзина",
