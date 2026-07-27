@@ -41,8 +41,10 @@ async function fetchSalesData() {
 
     $('form.goodsListForm').each((i, el) => {
 
-      // ID самого товара берём из data-id кнопки избранного (а не из mod_id)
-      const productId = $(el).find('.add-wishlist').attr('data-id');
+      // ID товара — из скрытого поля формы (совпадает с "id" в кэше товаров)
+      const productId = $(el)
+        .find('input[name="form[goods_mod_id]"]')
+        .attr('value');
 
       if (!productId) return;
 
@@ -54,7 +56,7 @@ async function fetchSalesData() {
         .replace(/\s/g, '');
       const oldPrice = parseInt(oldPriceText, 10);
 
-      // Новая цена — берём напрямую из атрибута content у .main-price (число без парсинга текста)
+      // Новая цена — из атрибута content у .main-price
       const newPriceAttr = $(el).find('.main-price').first().attr('content');
       const newPrice = parseInt(newPriceAttr, 10);
 
@@ -106,8 +108,7 @@ app.use("/api/order", orderRouter);
 app.get("/api/products", async (req, res) => {
   try {
     const salesData = await fetchSalesData();
-    
-    // Обогащаем массив товаров реальными данными о скидках
+
     const productsWithSales = products.map(product => {
       const saleInfo = salesData[product.id];
       if (saleInfo) {
@@ -117,13 +118,13 @@ app.get("/api/products", async (req, res) => {
           discount: saleInfo.discount
         };
       }
-      return product; // Если товара нет в распродаже, отдаем как есть
+      return product;
     });
 
     res.json(productsWithSales);
   } catch (error) {
     console.error("Ошибка в /api/products:", error.message);
-    res.json(products); // На случай ошибки отдаем обычные данные
+    res.json(products);
   }
 });
 
