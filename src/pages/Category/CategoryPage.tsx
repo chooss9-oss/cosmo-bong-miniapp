@@ -1,6 +1,7 @@
 import {
   useEffect,
-  useState
+  useState,
+  useRef
 } from "react";
 
 
@@ -169,7 +170,7 @@ categoryId
 
 }=useParams();
 
-
+const categoryScrollRef = useRef<HTMLDivElement>(null);
 
 
 const navigate =
@@ -455,6 +456,10 @@ useEffect(() => {
 
   window.scrollTo(0, 0);
 
+  if (categoryScrollRef.current) {
+    categoryScrollRef.current.scrollLeft = 0;
+  }
+
 }, [categoryId]);
 
 
@@ -566,13 +571,16 @@ category["#text"]
 >
 
   <div
-    className="
-    flex
-    gap-2
-    overflow-x-auto
-    scrollbar-hide
-    "
-  >
+
+  ref={categoryScrollRef}
+
+  className="
+  flex
+  gap-2
+  overflow-x-auto
+  scrollbar-hide
+  "
+>
 
     {categories.map(cat => (
 
