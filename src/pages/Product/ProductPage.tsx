@@ -11,8 +11,7 @@ import {
 import {
   useCart
 } from "../../context/CartContext";
-
-
+import BackBar from "../../components/BackBar";
 interface Variant {
 
   id:string;
@@ -386,7 +385,7 @@ export default function ProductPage(){
       bg-[#080808]
       text-white
       px-4
-      pt-[118px]
+      pt-[122px]
       pb-28
       "
 
@@ -398,56 +397,7 @@ export default function ProductPage(){
 
 
 
-      {/* BACK BUTTON */}
-
-
-
-      <div
-
-        className="
-        fixed
-        top-[68px]
-        left-0
-        right-0
-        z-40
-        px-4
-        py-2
-        bg-[#080808]/95
-        backdrop-blur
-        "
-
-      >
-
-
-
-        <button
-
-
-          onClick={()=>navigate(-1)}
-
-
-          className="
-          bg-[#151515]
-          border
-          border-white/10
-          rounded-xl
-          px-3
-          py-1.5
-          text-xs
-          font-semibold
-          text-gray-300
-          "
-
-        >
-
-          ← Назад
-
-
-        </button>
-
-
-
-      </div>
+   <BackBar />
 
 
 
