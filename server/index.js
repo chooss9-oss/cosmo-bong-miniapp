@@ -1,21 +1,33 @@
 require("dotenv").config();
 
-
 const express = require("express");
 const cors = require("cors");
-
 const fs = require("fs");
 const path = require("path");
-
 const axios = require("axios");
 const cheerio = require("cheerio");
 
-// Кэш для данных распродажи (обновляем не чаще раза в 10 минут)
+const orderRouter = require("./routes/orders");
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+const PORT = process.env.PORT || 3001;
+
+let products = [];
+let categories = [];
+
+// ==============================
+// КЭШ РАСПРОДАЖИ
+// ==============================
 let salesCache = null;
 let lastSalesFetch = 0;
 
 async function fetchSalesData() {
   const now = Date.now();
+  // Обновляем кэш не чаще раза в 10 минут (600000 мс)
   if (salesCache && now - lastSalesFetch < 600000) {
     return salesCache;
   }
@@ -28,23 +40,30 @@ async function fetchSalesData() {
     const $ = cheerio.load(data);
     const newSalesCache = {};
 
-    $(".price-box").each((i, el) => {
-      const oldPriceText = $(el).find(".old-price .num").text().replace(/\s/g, "");
+    // Ищем все формы добавления в корзину на странице распродажи
+    $('form.goodsListForm').each((i, el) => {
+      // 1. Получаем ID товара из скрытого поля
+      const modIdInput = $(el).find('input[name="form[goods_mod_id]"]');
+      const productId = modIdInput.attr('value');
+
+      if (!productId) return;
+
+      // 2. Ищем старую цену (классы Storeland или зачеркнутый текст)
+      const oldPriceEl = $(el).find('.old-price, .old_price, .price-old, del, span[style*="line-through"]').first();
+      const oldPriceText = oldPriceEl.text().replace(/\s/g, '').replace(/[^0-9]/g, '');
       const oldPrice = parseInt(oldPriceText, 10);
-      const mainPrice = parseInt($(el).find(".main-price").attr("content"), 10);
-      
-      if (oldPrice && mainPrice) {
-        const link = $(el).closest(".actions").find("a[href*='mod_id=']");
-        const href = link.attr("href");
-        const match = href ? href.match(/mod_id=(\d+)/) : null;
-        
-        if (match) {
-          const productId = match[1];
-          newSalesCache[productId] = {
-            oldPrice,
-            discount: Math.round(((oldPrice - mainPrice) / oldPrice) * 100)
-          };
-        }
+
+      // 3. Ищем новую (акционную) цену
+      const newPriceEl = $(el).find('.current-price, .new-price, .price-box .num, .price-value').first();
+      const newPriceText = newPriceEl.text().replace(/\s/g, '').replace(/[^0-9]/g, '');
+      const newPrice = parseInt(newPriceText, 10);
+
+      // 4. Если нашли обе цены и старая действительно больше новой, сохраняем
+      if (productId && oldPrice && newPrice && oldPrice > newPrice) {
+        newSalesCache[productId] = {
+          oldPrice: oldPrice,
+          discount: Math.round(((oldPrice - newPrice) / oldPrice) * 100)
+        };
       }
     });
 
@@ -58,143 +77,33 @@ async function fetchSalesData() {
   
   return salesCache;
 }
-const orderRouter = require("./routes/orders");
-
-
-
-const app = express();
-
-
-
-app.use(cors());
-
-app.use(express.json());
-
-
-
-const PORT =
-process.env.PORT || 3001;
-
-
-
-let products = [];
-let categories = [];
-
-
-
-
 
 // ==============================
 // LOAD CACHE
 // ==============================
-
-
-function loadCache(){
-
-
-try{
-
-
-products = JSON.parse(
-
-fs.readFileSync(
-
-path.join(
-__dirname,
-"cache/products.json"
-),
-
-"utf8"
-
-)
-
-);
-
-
-
-
-categories = JSON.parse(
-
-fs.readFileSync(
-
-path.join(
-__dirname,
-"cache/categories.json"
-),
-
-"utf8"
-
-)
-
-);
-
-
-
-
-
-console.log(
-`✅ Товары: ${products.length}`
-);
-
-
-
-console.log(
-`✅ Категории: ${categories.length}`
-);
-
-
-
+function loadCache() {
+  try {
+    products = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "cache/products.json"), "utf8")
+    );
+    categories = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "cache/categories.json"), "utf8")
+    );
+    console.log(`✅ Товары: ${products.length}`);
+    console.log(`✅ Категории: ${categories.length}`);
+  } catch (error) {
+    console.log("❌ CACHE ERROR:", error.message);
+  }
 }
-
-catch(error){
-
-
-console.log(
-
-"❌ CACHE ERROR:",
-error.message
-
-);
-
-
-}
-
-
-}
-
-
-
-
-
-
-
 
 // ==============================
 // ORDERS
 // ==============================
-
-
-app.use(
-
-"/api/order",
-
-orderRouter
-
-);
-
-
-
-
-
-
-
-
+app.use("/api/order", orderRouter);
 
 // ==============================
 // ALL PRODUCTS
 // ==============================
-
-
 app.get("/api/products", async (req, res) => {
   try {
     const salesData = await fetchSalesData();
@@ -219,158 +128,41 @@ app.get("/api/products", async (req, res) => {
   }
 });
 
-
-
-
-
-
-
-
-
-
 // ==============================
 // ONE PRODUCT
 // ==============================
+app.get("/api/product/:id", (req, res) => {
+  const id = String(req.params.id);
+  const product = products.find(item => String(item.id) === id);
 
+  if (!product) {
+    return res.status(404).json({ error: "Product not found" });
+  }
 
-app.get(
-
-"/api/product/:id",
-
-(req,res)=>{
-
-
-const id =
-String(req.params.id);
-
-
-
-
-const product =
-
-products.find(
-
-item =>
-
-String(item.id) === id
-
-);
-
-
-
-
-
-if(!product){
-
-
-return res.status(404).json({
-
-error:"Product not found"
-
+  res.json({
+    id: product.id,
+    name: product.name,
+    price: Number(product.price),
+    description: product.description || "",
+    images: product.images ? product.images : (product.image ? [product.image] : []),
+    categoryIds: product.categoryIds || []
+  });
 });
-
-
-}
-
-
-
-
-
-
-res.json({
-
-id:product.id,
-
-name:product.name,
-
-
-price:Number(product.price),
-
-
-
-description:
-product.description || "",
-
-
-
-images:
-
-product.images
-
-?
-
-product.images
-
-:
-
-product.image
-
-?
-
-[product.image]
-
-:
-
-[],
-
-
-
-categoryIds:
-
-product.categoryIds || []
-
-
-
-});
-
-
-
-}
-
-);
-
-
-
-
-
-
-
-
 
 // ==============================
 // CATEGORIES
 // ==============================
-
-
-app.get(
-
-"/api/categories",
-
-(req,res)=>{
-
-
-res.json(categories);
-
-
-}
-
-);
-
-
-
-
-
-
-
-
+app.get("/api/categories", (req, res) => {
+  res.json(categories);
+});
 
 // ==============================
 // START
 // ==============================
-
 loadCache();
 
 module.exports = app;
+
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`🚀 Server started http://localhost:${PORT}`);
