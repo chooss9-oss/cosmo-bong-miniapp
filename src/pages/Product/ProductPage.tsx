@@ -35,6 +35,10 @@ interface Product {
 
   price:number;
 
+  oldPrice?:number;
+
+  discount?:number;
+
   image?:string;
 
   images?:string[];
@@ -569,13 +573,36 @@ export default function ProductPage(){
 
 
 
+          {
+            product.oldPrice &&
+            product.oldPrice > price &&
+            (
+              <div
+
+                className="
+                text-gray-500
+                text-sm
+                line-through
+                mt-3
+                "
+
+              >
+
+                {product.oldPrice.toLocaleString("ru-RU")} ₽
+
+              </div>
+
+            )
+          }
+
+
           <div
 
             className="
             text-[#58BB43]
             text-2xl
             font-bold
-            mt-3
+            mt-1
             "
 
           >
@@ -709,81 +736,9 @@ export default function ProductPage(){
 
             <div
 
-  className="
-  mt-6
-  text-sm
-  leading-relaxed
-  product-description
-  "
-
-  dangerouslySetInnerHTML={{
-
-    __html:
-    product.description
-
-  }}
-
-/>
-
-            )
-
-          }
-
-
-
-
-
-
-
-
-
-          <button
-
-
-            onClick={addProduct}
-
-
-            className="
-            w-full
-            mt-6
-            bg-[#58BB43]
-            text-black
-            font-bold
-            py-3
-            rounded-xl
-            text-base
-            "
-
-          >
-
-            Добавить в корзину
-
-
-          </button>
-
-
-
-
-
-
-        </div>
-
-
-
-
-
-
-      </div>
-
-
-
-
-
-
-    </div>
-
-
-  );
-
-
-}
+              className="
+              mt-6
+              text-sm
+              leading-relaxed
+              product-description
+              "

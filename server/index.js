@@ -141,7 +141,28 @@ app.get("/api/products", async (req, res) => {
 // ==============================
 // ONE PRODUCT
 // ==============================
-app.get("/api/product/:id", (req, res) => {
+app.get("app.get("/api/product/:id", async (req, res) => {
+  const id = String(req.params.id);
+  const product = products.find(item => String(item.id) === id);
+
+  if (!product) {
+    return res.status(404).json({ error: "Product not found" });
+  }
+
+  const salesData = await fetchSalesData();
+  const saleInfo = salesData[id];
+
+  res.json({
+    id: product.id,
+    name: product.name,
+    price: Number(product.price),
+    oldPrice: saleInfo ? saleInfo.oldPrice : undefined,
+    discount: saleInfo ? saleInfo.discount : undefined,
+    description: product.description || "",
+    images: product.images ? product.images : (product.image ? [product.image] : []),
+    categoryIds: product.categoryIds || []
+  });
+});/api/product/:id", (req, res) => {
   const id = String(req.params.id);
   const product = products.find(item => String(item.id) === id);
 
