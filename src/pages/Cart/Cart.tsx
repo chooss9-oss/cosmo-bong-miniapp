@@ -1,5 +1,6 @@
 import {
-  useState
+  useState,
+  useEffect
 } from "react";
 
 
@@ -47,7 +48,9 @@ useNavigate();
 const total =
 getTotal();
 
-
+useEffect(() => {
+  window.scrollTo(0, 0);
+}, []);
 
 
 
@@ -343,7 +346,9 @@ className="
 min-h-screen
 bg-[#080808]
 text-white
-p-5
+pt-[57px]
+px-5
+pb-5
 "
 
 >
@@ -463,7 +468,8 @@ className="
 min-h-screen
 bg-[#080808]
 text-white
-p-5
+pt-[57px]
+px-5
 pb-28
 "
 
