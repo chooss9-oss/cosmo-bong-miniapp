@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@tma.js/sdk-react": "^3.0.23",
+    "axios": "^1.18.1",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^5.1.0",
