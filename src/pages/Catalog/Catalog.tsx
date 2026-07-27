@@ -534,7 +534,7 @@ min-h-screen
 bg-[#080808]
 text-white
 px-4
-pt-[72px]
+pt-[57px]
 pb-28
 "
 
@@ -555,7 +555,7 @@ pb-28
 
 className="
 sticky
-top-[72px]
+top-[57px]
 z-30
 bg-[#080808]
 py-2
@@ -609,12 +609,10 @@ py-1.5
 rounded-full
 bg-[#151515]
 border
-border-white/10
+border-[#58BB43]
 text-xs
 font-semibold
 text-gray-300
-active:bg-[#58BB43]
-active:text-black
 transition
 "
 
