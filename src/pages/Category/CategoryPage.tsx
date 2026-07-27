@@ -498,7 +498,9 @@ className="
 min-h-screen
 bg-[#080808]
 text-white
-p-5
+pt-[57px]
+px-5
+pb-5
 "
 
 >
@@ -548,98 +550,53 @@ category["#text"]
 
 {/* КАТЕГОРИИ КАК В КАТАЛОГЕ */}
 
-
-
 <div
-
-className="
-sticky
-top-20
-z-40
-bg-[#080808]/95
-backdrop-blur
-py-3
-mb-6
-"
-
+  className="
+  sticky
+  top-[57px]
+  z-30
+  bg-[#080808]
+  py-2
+  mb-3
+  "
 >
 
+  <div
+    className="
+    flex
+    gap-2
+    overflow-x-auto
+    scrollbar-hide
+    "
+  >
 
+    {categories.map(cat => (
 
-<div
+      <button
+        key={cat["@_id"]}
+        onClick={() =>
+          navigate(`/category/${cat["@_id"]}`)
+        }
+        className="
+        flex-shrink-0
+        px-3
+        py-1.5
+        rounded-full
+        bg-[#151515]
+        border
+        border-[#58BB43]
+        text-xs
+        font-semibold
+        text-gray-300
+        transition
+        "
+      >
+        {cat["#text"]}
+      </button>
 
-className="
-flex
-gap-3
-overflow-x-auto
-scrollbar-hide
-"
+    ))}
 
->
-
-
-
-{
-
-categories.map(cat=>(
-
-
-
-<button
-
-
-key={cat["@_id"]}
-
-
-onClick={()=>
-
-
-navigate(
-
-`/category/${cat["@_id"]}`
-
-)
-
-
-}
-
-
-
-className="
-flex-shrink-0
-bg-[#151515]
-border
-border-white/10
-rounded-2xl
-px-4
-py-3
-text-sm
-font-bold
-hover:border-[#58BB43]
-transition
-"
-
->
-
-
-{cat["#text"]}
-
-
-
-</button>
-
-
-
-))
-
-
-}
-
-
-
-</div>
-
-
+  </div>
 
 </div>
 
