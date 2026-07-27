@@ -27,7 +27,6 @@ let lastSalesFetch = 0;
 
 async function fetchSalesData() {
   const now = Date.now();
-  // Обновляем кэш не чаще раза в 10 минут (600000 мс)
   if (salesCache && now - lastSalesFetch < 600000) {
     return salesCache;
   }
@@ -40,25 +39,25 @@ async function fetchSalesData() {
     const $ = cheerio.load(data);
     const newSalesCache = {};
 
-    // Ищем все формы добавления в корзину на странице распродажи
     $('form.goodsListForm').each((i, el) => {
-      // 1. Получаем ID товара из скрытого поля
-      const modIdInput = $(el).find('input[name="form[goods_mod_id]"]');
-      const productId = modIdInput.attr('value');
+
+      // ID самого товара берём из data-id кнопки избранного (а не из mod_id)
+      const productId = $(el).find('.add-wishlist').attr('data-id');
 
       if (!productId) return;
 
-      // 2. Ищем старую цену (классы Storeland или зачеркнутый текст)
-      const oldPriceEl = $(el).find('.old-price, .old_price, .price-old, del, span[style*="line-through"]').first();
-      const oldPriceText = oldPriceEl.text().replace(/\s/g, '').replace(/[^0-9]/g, '');
+      // Старая цена — из блока .old-price
+      const oldPriceText = $(el)
+        .find('.old-price .num')
+        .first()
+        .text()
+        .replace(/\s/g, '');
       const oldPrice = parseInt(oldPriceText, 10);
 
-      // 3. Ищем новую (акционную) цену
-      const newPriceEl = $(el).find('.current-price, .new-price, .price-box .num, .price-value').first();
-      const newPriceText = newPriceEl.text().replace(/\s/g, '').replace(/[^0-9]/g, '');
-      const newPrice = parseInt(newPriceText, 10);
+      // Новая цена — берём напрямую из атрибута content у .main-price (число без парсинга текста)
+      const newPriceAttr = $(el).find('.main-price').first().attr('content');
+      const newPrice = parseInt(newPriceAttr, 10);
 
-      // 4. Если нашли обе цены и старая действительно больше новой, сохраняем
       if (productId && oldPrice && newPrice && oldPrice > newPrice) {
         newSalesCache[productId] = {
           oldPrice: oldPrice,
@@ -74,7 +73,7 @@ async function fetchSalesData() {
     console.error("❌ Ошибка при получении данных распродажи:", error.message);
     return salesCache || {};
   }
-  
+
   return salesCache;
 }
 
