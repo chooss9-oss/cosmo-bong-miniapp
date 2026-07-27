@@ -55,3 +55,9 @@ body {
   scrollbar-width: none;
 
 }
+.product-description,
+.product-description * {
+
+  color: #FFFFFF !important;
+
+}

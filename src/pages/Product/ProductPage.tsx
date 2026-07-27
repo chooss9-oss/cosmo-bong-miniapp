@@ -709,21 +709,21 @@ export default function ProductPage(){
 
             <div
 
-              className="
-              mt-6
-              text-sm
-              text-gray-300
-              leading-relaxed
-              "
+  className="
+  mt-6
+  text-sm
+  leading-relaxed
+  product-description
+  "
 
-              dangerouslySetInnerHTML={{
+  dangerouslySetInnerHTML={{
 
-                __html:
-                product.description
+    __html:
+    product.description
 
-              }}
+  }}
 
-            />
+/>
 
             )
 
