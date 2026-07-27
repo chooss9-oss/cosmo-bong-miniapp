@@ -2,204 +2,236 @@ import {
   useState
 } from "react";
 
-
 import {
-  useNavigate
+  useNavigate,
+  useLocation
 } from "react-router-dom";
-
-
 
 
 
 function Header(){
 
 
-const navigate =
-useNavigate();
+  const navigate = useNavigate();
+
+  const location = useLocation();
+
+
+  const [
+    search,
+    setSearch
+  ] = useState("");
 
 
 
-const [
-search,
-setSearch
-]=useState("");
+  const isHome =
+    location.pathname === "/";
+
+
+
+  function handleSearch(
+    e:React.FormEvent
+  ){
+
+    e.preventDefault();
+
+
+    const value =
+      search.trim();
+
+
+    if(value){
+
+      navigate(
+        `/catalog?search=${encodeURIComponent(value)}`
+      );
+
+
+      setSearch("");
+
+    }
+
+  }
+
+
+
+  function goBack(){
+
+    navigate(-1);
+
+  }
+
+
+
+  return(
+
+
+    <header
+
+      className="
+      fixed
+      top-0
+      left-0
+      right-0
+      z-50
+      bg-[#080808]/95
+      backdrop-blur
+      border-b
+      border-white/10
+      px-4
+      py-2
+      "
+
+    >
+
+
+      <form
+
+        onSubmit={handleSearch}
+
+        className="
+        flex
+        items-center
+        gap-2
+        "
+
+      >
+
+
+
+        {
+          !isHome && (
+
+            <button
+
+              type="button"
+
+              onClick={goBack}
+
+              className="
+              flex
+              items-center
+              justify-center
+              w-10
+              h-10
+              rounded-xl
+              bg-[#151515]
+              border
+              border-white/10
+              text-gray-300
+              text-lg
+              active:scale-95
+              transition
+              "
+
+            >
+
+              ←
+
+            </button>
+
+          )
+        }
 
 
 
 
 
 
-function handleSearch(
-e:React.FormEvent
-){
+        <div
 
+          className="
+          relative
+          flex-1
+          "
 
-e.preventDefault();
-
-
-const value =
-search.trim();
+        >
 
 
 
-if(value){
+          <span
+
+            className="
+            absolute
+            left-4
+            top-1/2
+            -translate-y-1/2
+            text-gray-400
+            "
+
+          >
+
+            🔍
+
+          </span>
 
 
-navigate(
-`/catalog?search=${encodeURIComponent(value)}`
-);
 
 
-setSearch("");
+
+
+          <input
+
+
+            value={search}
+
+
+            onChange={
+
+              e=>
+
+              setSearch(
+                e.target.value
+              )
+
+            }
+
+
+
+            placeholder="
+            Поиск по товарам...
+            "
+
+
+
+            className="
+            w-full
+            h-10
+            bg-[#151515]
+            border
+            border-white/10
+            rounded-xl
+            pl-12
+            pr-4
+            text-sm
+            text-white
+            outline-none
+            focus:border-[#58BB43]
+            transition
+            "
+
+          />
+
+
+
+        </div>
+
+
+
+
+
+
+      </form>
+
+
+
+    </header>
+
+
+  );
 
 
 }
-
-
-}
-
-
-
-
-
-
-
-
-return(
-
-
-
-<header
-
-className="
-fixed
-top-0
-left-0
-right-0
-z-50
-bg-[#080808]/95
-backdrop-blur
-border-b
-border-white/10
-px-4
-py-3
-"
-
->
-
-
-
-<form
-
-onSubmit={handleSearch}
-
-className="
-flex
-items-center
-"
-
->
-
-
-
-<div
-
-className="
-relative
-w-full
-"
-
->
-
-
-
-<span
-
-className="
-absolute
-left-3
-top-1/2
--translate-y-1/2
-text-gray-400
-text-sm
-"
-
->
-
-🔍
-
-</span>
-
-
-
-
-
-
-<input
-
-
-value={search}
-
-
-onChange={
-
-e=>
-
-setSearch(
-e.target.value
-)
-
-}
-
-
-
-placeholder="
-Поиск по товарам...
-"
-
-
-
-className="
-w-full
-h-9
-bg-[#151515]
-border
-border-white/10
-rounded-full
-pl-9
-pr-4
-text-sm
-text-white
-outline-none
-focus:border-[#58BB43]
-transition
-"
-
-
-
-
-/>
-
-
-
-</div>
-
-
-
-</form>
-
-
-
-</header>
-
-
-
-);
-
-
-}
-
-
 
 
 

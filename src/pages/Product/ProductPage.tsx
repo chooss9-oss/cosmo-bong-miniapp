@@ -10,7 +10,7 @@ import {
 import {
   useCart
 } from "../../context/CartContext";
-import BackBar from "../../components/BackBar";
+
 interface Variant {
 
   id:string;
@@ -395,7 +395,7 @@ export default function ProductPage(){
 
 
 
-   <BackBar />
+   
 
 
 
