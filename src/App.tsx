@@ -21,23 +21,57 @@ import Success from "./pages/Success/Success";
 import { CartProvider } from "./context/CartContext";
 
 
-
-
-
 function App() {
-
 
   return (
 
     <BrowserRouter>
 
-
       <CartProvider>
-
 
         <SwipeBack />
 
+        <div className="min-h-screen bg-[#09090B] text-white pb-20">
 
-        <div
+          <Header />
 
-          className="
+          <main>
+
+            <Routes>
+
+              <Route path="/" element={<Home />} />
+
+              <Route path="/catalog" element={<Catalog />} />
+
+              <Route path="/success" element={<Success />} />
+
+              <Route path="/sales" element={<Sales />} />
+
+              <Route path="/profile" element={<Profile />} />
+
+              <Route path="/category/:categoryId" element={<CategoryPage />} />
+
+              <Route path="/product/:productId" element={<ProductPage />} />
+
+              <Route path="/cart" element={<Cart />} />
+
+              <Route path="/checkout" element={<Checkout />} />
+
+            </Routes>
+
+          </main>
+
+          <BottomNav />
+
+        </div>
+
+      </CartProvider>
+
+    </BrowserRouter>
+
+  );
+
+}
+
+
+export default App;
