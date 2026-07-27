@@ -25,7 +25,8 @@ export async function getProducts() {
 export async function getCategories() {
 
   const response = await fetch(
-    `${API_URL}/categories`
+    `${API_URL}/categories`,
+    { cache: "no-store" }
   );
 
 

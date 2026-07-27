@@ -9,6 +9,10 @@ import {
 } from "react-router-dom";
 
 
+const API_URL =
+"https://cosmo-bong-miniapp.onrender.com/api";
+
+
 
 interface Category {
 
@@ -76,7 +80,6 @@ const categoryImages:Record<string,string> = {
 "Напасы":
 "/categories/napasy.png"
 
-
 };
 
 
@@ -89,11 +92,6 @@ const categoryImages:Record<string,string> = {
 function MainCategories(){
 
 
-const location =
-useLocation();
-
-
-
 const [
 categories,
 setCategories
@@ -101,18 +99,8 @@ setCategories
 
 
 
-const [
-visible,
-setVisible
-]=useState(true);
-
-
-
-const [
-lastScroll,
-setLastScroll
-]=useState(0);
-
+const location =
+useLocation();
 
 
 
@@ -122,46 +110,63 @@ setLastScroll
 useEffect(()=>{
 
 
-fetch(
-"https://cosmo-bong-miniapp.onrender.com/api/categories"
-)
+async function load(){
 
 
-.then(res=>
-res.json()
-)
+try{
 
 
-.then(data=>{
+const response =
+await fetch(
+`${API_URL}/categories`
+);
 
 
-setCategories(
+
+const data =
+await response.json();
+
+
+
+
+
+const mainCategories =
+
 data.filter(
+
 (category:Category)=>
 
 categoryImages[
 category["#text"]
 ]
 
-)
-
 );
 
 
-})
 
 
-.catch(error=>{
+setCategories(
+mainCategories
+);
 
+
+
+}
+catch(error){
 
 console.log(
-"CATEGORY ERROR",
+"Categories error",
 error
 );
 
+}
 
-});
 
+}
+
+
+
+load();
 
 
 },[]);
@@ -173,115 +178,24 @@ error
 
 
 
-
-useEffect(()=>{
-
-
-function scroll(){
-
-
-const current =
-window.scrollY;
-
-
-
-if(current > lastScroll && current > 120){
-
-
-setVisible(false);
-
-
-}
-
-
-else{
-
-
-setVisible(true);
-
-
-}
-
-
-
-setLastScroll(current);
-
-
-}
-
-
-
-window.addEventListener(
-"scroll",
-scroll
-);
-
-
-
-return()=>{
-
-
-window.removeEventListener(
-"scroll",
-scroll
-);
-
-
-}
-
-
-
-},[lastScroll]);
-
-
-
-
-
-
-
-
-
 return(
+
 
 
 <div
 
-
-className={
-
-`
+className="
 sticky
-top-[56px]
-z-30
-bg-[#080808]/95
-backdrop-blur
-transition-all
-duration-300
-
-${
-visible
-
-?
-
-"opacity-100 translate-y-0"
-
-:
-
-"opacity-0 -translate-y-10 pointer-events-none"
-
-}
-
-`
-
-}
-
+top-[60px]
+z-40
+bg-[#080808]
+py-2
+"
 
 >
 
 
-
 <div
-
 
 className="
 w-full
@@ -289,29 +203,21 @@ overflow-x-auto
 scrollbar-hide
 "
 
-
 >
-
 
 
 <div
 
-
 className="
 flex
 gap-2
-px-4
-py-1.5
 whitespace-nowrap
 "
-
 
 >
 
 
-
 {
-
 
 categories.map(category=>{
 
@@ -319,12 +225,8 @@ categories.map(category=>{
 const active =
 
 location.pathname.includes(
-
 category["@_id"]
-
 );
-
-
 
 
 
@@ -333,31 +235,30 @@ return(
 
 <Link
 
-
 key={
 category["@_id"]
 }
 
 
-to={
-
-`/category/${category["@_id"]}`
-
-}
+to={`/category/${category["@_id"]}`}
 
 
+className={`
 
-className={
-
-`
+flex-shrink-0
 
 px-3
 py-1.5
+
 rounded-full
+
 text-xs
+
 font-semibold
+
 border
-transition-all
+
+transition
 
 ${
 active
@@ -372,25 +273,20 @@ active
 
 }
 
-
-`
-
-}
+`}
 
 
 >
 
 
-{
-category["#text"]
-}
+{category["#text"]}
 
 
 </Link>
 
 
-
 );
+
 
 
 })
@@ -399,14 +295,10 @@ category["#text"]
 }
 
 
-
-
 </div>
 
 
-
 </div>
-
 
 
 </div>
@@ -416,7 +308,6 @@ category["#text"]
 
 
 }
-
 
 
 
