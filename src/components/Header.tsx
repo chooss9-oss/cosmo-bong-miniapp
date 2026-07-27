@@ -30,17 +30,33 @@ function Header(){
 
 
   function handleSearch(
-    e:React.FormEvent
+    e:React.FormEvent<HTMLFormElement>
   ){
 
+
     e.preventDefault();
+
 
 
     const value =
       search.trim();
 
 
+
+    // убираем фокус с input
+    // закрывает клавиатуру на iPhone
+    const activeElement =
+      document.activeElement as HTMLElement;
+
+
+    activeElement?.blur();
+
+
+
+
+
     if(value){
+
 
       navigate(
         `/catalog?search=${encodeURIComponent(value)}`
@@ -49,24 +65,40 @@ function Header(){
 
       setSearch("");
 
+
     }
 
+
   }
+
+
+
+
+
 
 
 
   function goBack(){
 
+
     navigate(-1);
 
+
   }
+
+
+
+
+
 
 
 
   return(
 
 
+
     <header
+
 
       className="
       fixed
@@ -82,12 +114,18 @@ function Header(){
       py-2
       "
 
+
     >
+
+
+
 
 
       <form
 
+
         onSubmit={handleSearch}
+
 
         className="
         flex
@@ -95,18 +133,30 @@ function Header(){
         gap-2
         "
 
+
       >
+
+
+
+
+
 
 
 
         {
           !isHome && (
 
+
+
             <button
+
 
               type="button"
 
+
               onClick={goBack}
+
+
 
               className="
               flex
@@ -124,11 +174,16 @@ function Header(){
               transition
               "
 
+
             >
+
 
               ←
 
+
             </button>
+
+
 
           )
         }
@@ -138,18 +193,28 @@ function Header(){
 
 
 
+
+
+
         <div
+
 
           className="
           relative
           flex-1
           "
 
+
         >
 
 
 
+
+
+
+
           <span
+
 
             className="
             absolute
@@ -159,11 +224,17 @@ function Header(){
             text-gray-400
             "
 
+
           >
+
 
             🔍
 
+
           </span>
+
+
+
 
 
 
@@ -173,16 +244,20 @@ function Header(){
           <input
 
 
+
             value={search}
+
 
 
             onChange={
 
-              e=>
+
+              e =>
 
               setSearch(
                 e.target.value
               )
+
 
             }
 
@@ -191,6 +266,26 @@ function Header(){
             placeholder="
             Поиск по товарам...
             "
+
+
+
+            enterKeyHint="search"
+
+
+
+            inputMode="search"
+
+
+
+            autoComplete="off"
+
+
+
+            autoCorrect="off"
+
+
+
+            spellCheck={false}
 
 
 
@@ -203,14 +298,20 @@ function Header(){
             rounded-xl
             pl-12
             pr-4
-            text-sm
+            text-base
             text-white
             outline-none
             focus:border-[#58BB43]
             transition
             "
 
+
+
           />
+
+
+
+
 
 
 
@@ -221,17 +322,28 @@ function Header(){
 
 
 
+
+
+
       </form>
+
+
+
+
+
 
 
 
     </header>
 
 
+
   );
 
 
 }
+
+
 
 
 
