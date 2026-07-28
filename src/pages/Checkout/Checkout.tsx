@@ -1,5 +1,6 @@
 import {
-  useState
+  useState,
+  useEffect
 } from "react";
 
 import {
@@ -55,6 +56,10 @@ success,
 setSuccess
 ]=useState(false);
 
+
+useEffect(() => {
+  window.scrollTo(0, 0);
+}, []);
 
 
 const [
@@ -498,15 +503,7 @@ rounded-2xl
 return(
 
 
-<div
-
-className="
-min-h-screen
-p-5
-text-white
-"
-
->
+<div className="min-h-screen bg-[#080808] pt-[57px] px-5 pb-5 text-white">
 
 
 
@@ -542,33 +539,13 @@ space-y-4
 
 
 
-
-
-
-
 <input
-
 
 value={username}
 
+onChange={e=>setUsername(e.target.value)}
 
-onChange={
-
-e=>
-
-setUsername(
-e.target.value
-)
-
-}
-
-
-
-placeholder="
-Telegram username (если есть)
-"
-
-
+placeholder="Telegram username (если есть)"
 
 className="
 w-full
@@ -578,53 +555,7 @@ p-4
 outline-none
 "
 
- />
-
-
-
-
-
-
-
-
-<input
-
-
-value={phone}
-
-
-onChange={
-
-e=>
-
-setPhone(
-e.target.value
-)
-
-}
-
-
-
-placeholder="
-Телефон (не обязательно)
-"
-
-
-
-className="
-w-full
-bg-[#111113]
-rounded-2xl
-p-4
-outline-none
-"
-
- />
-
-
-
-
-
+/>
 
 
 
@@ -647,34 +578,33 @@ text-sm
 
 
 
+<input
 
+value={phone}
 
+onChange={e=>setPhone(e.target.value)}
+
+placeholder="Телефон (не обязательно)"
+
+className="
+w-full
+bg-[#111113]
+rounded-2xl
+p-4
+outline-none
+"
+
+/>
 
 
 
 <textarea
 
-
 value={comment}
 
+onChange={e=>setComment(e.target.value)}
 
-onChange={
-
-e=>
-
-setComment(
-e.target.value
-)
-
-}
-
-
-
-placeholder="
-Комментарий к заказу
-"
-
-
+placeholder="Комментарий к заказу"
 
 className="
 w-full
@@ -685,10 +615,7 @@ p-4
 outline-none
 "
 
- />
-
-
-
+/>
 
 
 
