@@ -121,14 +121,24 @@ app.get("/api/products", async (req, res) => {
 
     const productsWithSales = products.map(product => {
       const saleInfo = salesData[product.id];
+
+      const lightProduct = {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        images: product.images,
+        categoryIds: product.categoryIds
+      };
+
       if (saleInfo) {
         return {
-          ...product,
+          ...lightProduct,
           oldPrice: saleInfo.oldPrice,
           discount: saleInfo.discount
         };
       }
-      return product;
+
+      return lightProduct;
     });
 
     res.json(productsWithSales);
