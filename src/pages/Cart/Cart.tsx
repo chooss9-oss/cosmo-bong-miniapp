@@ -765,6 +765,21 @@ setPromoMessage("");
 
 }}
 
+onFocus={(e)=>{
+
+const target = e.target;
+
+setTimeout(()=>{
+
+target.scrollIntoView({
+  behavior: "smooth",
+  block: "center"
+});
+
+}, 300);
+
+}}
+
 placeholder="Введите промокод"
 
 className="
