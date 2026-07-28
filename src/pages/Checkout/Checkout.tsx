@@ -529,27 +529,7 @@ mb-6
 
 </h1>
 
-<pre
 
-style={{
-  fontSize: "10px",
-  color: "#888",
-  whiteSpace: "pre-wrap",
-  wordBreak: "break-all",
-  marginBottom: "20px"
-}}
-
->
-
-{
-  JSON.stringify(
-    (window as any).Telegram?.WebApp?.initDataUnsafe,
-    null,
-    2
-  )
-}
-
-</pre>
 
 
 
