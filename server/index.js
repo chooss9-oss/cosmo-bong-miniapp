@@ -20,73 +20,84 @@ let products = [];
 let categories = [];
 
 // ==============================
-// КЭШ РАСПРОДАЖИ
+// КЭШ РАСПРОДАЖИ (неблокирующее обновление)
 // ==============================
-let salesCache = null;
+let salesCache = {};
 let lastSalesFetch = 0;
+let salesFetchInProgress = false;
 
-async function fetchSalesData() {
+function refreshSalesDataInBackground() {
   const now = Date.now();
-  if (salesCache && now - lastSalesFetch < 600000) {
-    return salesCache;
-  }
 
-  try {
-    console.log("🔄 Обновление данных распродажи с cosmo-bong.ru...");
+  if (now - lastSalesFetch < 600000) return;
+  if (salesFetchInProgress) return;
 
-    // Шаг 1: получаем список товаров, которые сейчас на распродаже
-    const { data: listPage } = await axios.get("https://cosmo-bong.ru/discount/Rasprodazha", {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+  salesFetchInProgress = true;
+
+  scrapeSalesData()
+    .then(result => {
+      salesCache = result;
+      lastSalesFetch = Date.now();
+      console.log(`✅ Данные распродажи обновлены в фоне: найдено ${Object.keys(result).length} модификаций.`);
+    })
+    .catch(error => {
+      console.error("❌ Фоновое обновление скидок не удалось:", error.message);
+    })
+    .finally(() => {
+      salesFetchInProgress = false;
     });
+}
 
-    const $list = cheerio.load(listPage);
-    const productUrls = new Set();
+async function scrapeSalesData() {
+  console.log("🔄 Обновление данных распродажи с cosmo-bong.ru...");
 
-    $list('.product-name a').each((i, el) => {
-      const href = $list(el).attr('href');
-      if (href) {
-        productUrls.add(href.split('?')[0]);
-      }
-    });
+  // Шаг 1: получаем список товаров, которые сейчас на распродаже
+  const { data: listPage } = await axios.get("https://cosmo-bong.ru/discount/Rasprodazha", {
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+    timeout: 8000
+  });
 
-    const newSalesCache = {};
+  const $list = cheerio.load(listPage);
+  const productUrls = new Set();
 
-    // Шаг 2: заходим на страницу каждого товара и берём цены ВСЕХ его модификаций
-    for (const url of productUrls) {
-      try {
-        const { data: productPage } = await axios.get(url, {
-          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
-        });
-
-        const $product = cheerio.load(productPage);
-
-        $product('.goodsDataMainModificationsList').each((i, el) => {
-          const modId = $product(el).find('input[name="id"]').attr('value');
-          const priceNow = parseInt($product(el).find('input[name="price_now"]').attr('value'), 10);
-          const priceOld = parseInt($product(el).find('input[name="price_old"]').attr('value'), 10);
-
-          if (modId && priceOld && priceNow && priceOld > priceNow) {
-            newSalesCache[modId] = {
-              oldPrice: priceOld,
-              discount: Math.round(((priceOld - priceNow) / priceOld) * 100)
-            };
-          }
-        });
-
-      } catch (innerError) {
-        console.error(`⚠️ Не удалось загрузить товар ${url}:`, innerError.message);
-      }
+  $list('.product-name a').each((i, el) => {
+    const href = $list(el).attr('href');
+    if (href) {
+      productUrls.add(href.split('?')[0]);
     }
+  });
 
-    salesCache = newSalesCache;
-    lastSalesFetch = now;
-    console.log(`✅ Данные распродажи обновлены: найдено ${Object.keys(salesCache).length} модификаций.`);
-  } catch (error) {
-    console.error("❌ Ошибка при получении данных распродажи:", error.message);
-    return salesCache || {};
+  const newSalesCache = {};
+
+  // Шаг 2: заходим на страницу каждого товара и берём цены ВСЕХ его модификаций
+  for (const url of productUrls) {
+    try {
+      const { data: productPage } = await axios.get(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        timeout: 8000
+      });
+
+      const $product = cheerio.load(productPage);
+
+      $product('.goodsDataMainModificationsList').each((i, el) => {
+        const modId = $product(el).find('input[name="id"]').attr('value');
+        const priceNow = parseInt($product(el).find('input[name="price_now"]').attr('value'), 10);
+        const priceOld = parseInt($product(el).find('input[name="price_old"]').attr('value'), 10);
+
+        if (modId && priceOld && priceNow && priceOld > priceNow) {
+          newSalesCache[modId] = {
+            oldPrice: priceOld,
+            discount: Math.round(((priceOld - priceNow) / priceOld) * 100)
+          };
+        }
+      });
+
+    } catch (innerError) {
+      console.error(`⚠️ Не удалось загрузить товар ${url}:`, innerError.message);
+    }
   }
 
-  return salesCache;
+  return newSalesCache;
 }
 
 // ==============================
@@ -113,14 +124,14 @@ function loadCache() {
 app.use("/api/order", orderRouter);
 
 // ==============================
-// ALL PRODUCTS
+// ALL PRODUCTS (быстрый ответ, скидки — из того, что уже есть в кэше)
 // ==============================
-app.get("/api/products", async (req, res) => {
+app.get("/api/products", (req, res) => {
   try {
-    const salesData = await fetchSalesData();
+    refreshSalesDataInBackground();
 
     const productsWithSales = products.map(product => {
-      const saleInfo = salesData[product.id];
+      const saleInfo = salesCache[product.id];
 
       const lightProduct = {
         id: product.id,
@@ -149,9 +160,9 @@ app.get("/api/products", async (req, res) => {
 });
 
 // ==============================
-// ONE PRODUCT
+// ONE PRODUCT (быстрый ответ, скидка — из того, что уже есть в кэше)
 // ==============================
-app.get("/api/product/:id", async (req, res) => {
+app.get("/api/product/:id", (req, res) => {
   const id = String(req.params.id);
   const product = products.find(item => String(item.id) === id);
 
@@ -159,8 +170,9 @@ app.get("/api/product/:id", async (req, res) => {
     return res.status(404).json({ error: "Product not found" });
   }
 
-  const salesData = await fetchSalesData();
-  const saleInfo = salesData[id];
+  refreshSalesDataInBackground();
+
+  const saleInfo = salesCache[id];
 
   res.json({
     id: product.id,
