@@ -742,3 +742,46 @@ export default function ProductPage(){
               leading-relaxed
               product-description
               "
+              dangerouslySetInnerHTML={{
+
+                __html:
+                product.description
+
+              }}
+
+            />
+
+            )
+
+          }
+
+          <button
+
+            onClick={addProduct}
+
+            className="
+            w-full
+            mt-6
+            bg-[#58BB43]
+            text-black
+            font-bold
+            py-3
+            rounded-xl
+            text-base
+            "
+
+          >
+
+            Добавить в корзину
+
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  );
+
+}
