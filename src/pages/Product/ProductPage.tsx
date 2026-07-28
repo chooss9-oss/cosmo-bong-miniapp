@@ -115,11 +115,11 @@ export default function ProductPage(){
 
 
     fetch(
-      `https://cosmo-bong-miniapp.onrender.com/api/product/${productId}`,
-      {
-        cache:"no-store"
-      }
-    )
+  `/api/product/${productId}`,
+  {
+    cache:"no-store"
+  }
+)
 
 
     .then(async response=>{
