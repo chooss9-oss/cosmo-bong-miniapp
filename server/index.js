@@ -162,22 +162,6 @@ app.get("/api/product/:id", async (req, res) => {
     images: product.images ? product.images : (product.image ? [product.image] : []),
     categoryIds: product.categoryIds || []
   });
-});/api/product/:id", (req, res) => {
-  const id = String(req.params.id);
-  const product = products.find(item => String(item.id) === id);
-
-  if (!product) {
-    return res.status(404).json({ error: "Product not found" });
-  }
-
-  res.json({
-    id: product.id,
-    name: product.name,
-    price: Number(product.price),
-    description: product.description || "",
-    images: product.images ? product.images : (product.image ? [product.image] : []),
-    categoryIds: product.categoryIds || []
-  });
 });
 
 // ==============================
