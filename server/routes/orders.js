@@ -18,6 +18,8 @@ const {
 
 username,
 
+telegramUsername,
+
 phone,
 
 comment,
@@ -66,11 +68,19 @@ message +=
 
 
 
-message += username
+message += telegramUsername
 
 ?
 
-`@${username}\n\n`
+`@${telegramUsername} (подтверждено Telegram)\n\n`
+
+:
+
+username
+
+?
+
+`@${username} (введено вручную, не проверено)\n\n`
 
 :
 

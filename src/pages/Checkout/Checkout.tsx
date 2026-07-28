@@ -109,7 +109,13 @@ item.quantity,
 
 
 
+function getTelegramUsername(){
 
+const tg = (window as any).Telegram?.WebApp;
+
+return tg?.initDataUnsafe?.user?.username || "";
+
+}
 
 async function sendOrder(){
 
@@ -164,6 +170,8 @@ headers:{
 body:JSON.stringify({
 
 username,
+
+telegramUsername: getTelegramUsername(),
 
 phone,
 
