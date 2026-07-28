@@ -141,7 +141,7 @@ app.get("/api/products", async (req, res) => {
 // ==============================
 // ONE PRODUCT
 // ==============================
-app.get("app.get("/api/product/:id", async (req, res) => {
+app.get("/api/product/:id", async (req, res) => {
   const id = String(req.params.id);
   const product = products.find(item => String(item.id) === id);
 
