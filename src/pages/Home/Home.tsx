@@ -9,8 +9,7 @@ import {
 
 
 
-const API_URL =
-"https://cosmo-bong-miniapp.onrender.com/api";
+const API_URL = "/api";
 
 
 
@@ -74,6 +73,8 @@ const categoryImages:Record<string,string> = {
 "Аксессуары для Wax":
 "/categories/wax.png",
 
+"Аксессуары":
+"/categories/accessories.png",
 
 "КБД (cbd) / Мицелий":
 "/categories/cbd.png",
