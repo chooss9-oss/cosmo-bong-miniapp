@@ -494,12 +494,22 @@ saleProducts.length > 0 && (
 
 <>
 
+<div
+
+className="
+flex
+items-center
+justify-between
+mb-5
+"
+
+>
+
 <h2
 
 className="
 text-xl
 font-bold
-mb-5
 "
 
 >
@@ -507,6 +517,24 @@ mb-5
 🔥 Акции
 
 </h2>
+
+<button
+
+onClick={()=>navigate("/sales")}
+
+className="
+text-sm
+font-semibold
+text-[#58BB43]
+"
+
+>
+
+Все акции →
+
+</button>
+
+</div>
 
 <div
 
