@@ -7,6 +7,8 @@ import {
   useNavigate
 } from "react-router-dom";
 
+import ProductCard from "../../components/ProductCard";
+
 
 
 const API_URL = "/api";
@@ -32,6 +34,10 @@ interface Product {
   name:string;
 
   price:number;
+
+  oldPrice?:number;
+
+  discount?:number;
 
   images?:string[];
 
@@ -389,6 +395,18 @@ category["#text"]
 
 
 
+const saleProducts =
+
+products.filter(product=>
+
+product.oldPrice &&
+
+product.oldPrice > product.price
+
+).slice(0, 10);
+
+
+
 
 
 
@@ -461,6 +479,79 @@ mb-8
 
 
 />
+
+
+
+
+
+
+
+
+
+{
+
+saleProducts.length > 0 && (
+
+<>
+
+<h2
+
+className="
+text-xl
+font-bold
+mb-5
+"
+
+>
+
+🔥 Акции
+
+</h2>
+
+<div
+
+className="
+flex
+gap-4
+overflow-x-auto
+scrollbar-hide
+mb-8
+-mx-5
+px-5
+"
+
+>
+
+{
+
+saleProducts.map(product=>(
+
+<div
+
+key={product.id}
+
+className="
+w-40
+flex-shrink-0
+"
+
+>
+
+<ProductCard product={product} />
+
+</div>
+
+))
+
+}
+
+</div>
+
+</>
+
+)
+
+}
 
 
 

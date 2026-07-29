@@ -7,7 +7,6 @@ const path = require("path");
 const axios = require("axios");
 const cheerio = require("cheerio");
 
-
 const orderRouter = require("./routes/orders");
 
 const app = express();
@@ -35,7 +34,7 @@ function refreshSalesDataInBackground() {
 
   salesFetchInProgress = true;
 
-  const task = scrapeSalesData()
+  scrapeSalesData()
     .then(result => {
       salesCache = result;
       lastSalesFetch = Date.now();
@@ -47,8 +46,6 @@ function refreshSalesDataInBackground() {
     .finally(() => {
       salesFetchInProgress = false;
     });
-
-  
 }
 
 async function scrapeSalesData() {
@@ -72,33 +69,39 @@ async function scrapeSalesData() {
 
   const newSalesCache = {};
 
-  // Шаг 2: заходим на страницу каждого товара и берём цены ВСЕХ его модификаций
-  for (const url of productUrls) {
-    try {
-      const { data: productPage } = await axios.get(url, {
-        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
-        timeout: 8000
-      });
+  // Шаг 2: заходим на страницы всех товаров ОДНОВРЕМЕННО (параллельно), а не по очереди
+  await Promise.allSettled(
 
-      const $product = cheerio.load(productPage);
+    Array.from(productUrls).map(async (url) => {
 
-      $product('.goodsDataMainModificationsList').each((i, el) => {
-        const modId = $product(el).find('input[name="id"]').attr('value');
-        const priceNow = parseInt($product(el).find('input[name="price_now"]').attr('value'), 10);
-        const priceOld = parseInt($product(el).find('input[name="price_old"]').attr('value'), 10);
+      try {
+        const { data: productPage } = await axios.get(url, {
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+          timeout: 12000
+        });
 
-        if (modId && priceOld && priceNow && priceOld > priceNow) {
-          newSalesCache[modId] = {
-            oldPrice: priceOld,
-            discount: Math.round(((priceOld - priceNow) / priceOld) * 100)
-          };
-        }
-      });
+        const $product = cheerio.load(productPage);
 
-    } catch (innerError) {
-      console.error(`⚠️ Не удалось загрузить товар ${url}:`, innerError.message);
-    }
-  }
+        $product('.goodsDataMainModificationsList').each((i, el) => {
+          const modId = $product(el).find('input[name="id"]').attr('value');
+          const priceNow = parseInt($product(el).find('input[name="price_now"]').attr('value'), 10);
+          const priceOld = parseInt($product(el).find('input[name="price_old"]').attr('value'), 10);
+
+          if (modId && priceOld && priceNow && priceOld > priceNow) {
+            newSalesCache[modId] = {
+              oldPrice: priceOld,
+              discount: Math.round(((priceOld - priceNow) / priceOld) * 100)
+            };
+          }
+        });
+
+      } catch (innerError) {
+        console.error(`⚠️ Не удалось загрузить товар ${url}:`, innerError.message);
+      }
+
+    })
+
+  );
 
   return newSalesCache;
 }
