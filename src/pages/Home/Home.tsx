@@ -230,6 +230,9 @@ setProducts
 ]=useState<Product[]>([]);
 
 
+useEffect(() => {
+  window.scrollTo(0, 0);
+}, []);
 
 
 
@@ -434,25 +437,7 @@ pt-28
 
 
 
-<img
 
-
-src="/logo.png"
-
-
-alt="Cosmo Bong"
-
-
-className="
-w-48
-mx-auto
-mb-8
-object-contain
-drop-shadow-[0_0_20px_rgba(88,187,67,.8)]
-"
-
-
-/>
 
 
 
