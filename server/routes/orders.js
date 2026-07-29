@@ -1,10 +1,70 @@
 const express = require("express");
+const axios = require("axios");
 
 const router = express.Router();
 
+const STORELAND_API_URL = "https://cosmo-bong.ru/api/v1";
+const STORELAND_SECRET_KEY = process.env.STORELAND_API_KEY;
 
+async function createStorelandOrder({ username, telegramUsername, phone, comment, cart }) {
 
+  const params = new URLSearchParams();
 
+  params.append("secret_key", STORELAND_SECRET_KEY);
+
+  const displayName =
+    telegramUsername
+      ? `@${telegramUsername}`
+      : username
+      ? `@${username}`
+      : "Клиент из Telegram";
+
+  params.append("form[order_person]", displayName);
+  params.append("form[order_phone]", phone || "-");
+  params.append("form[without_delivery]", "1");
+
+  const commentParts = [];
+
+  if (comment) {
+    commentParts.push(comment);
+  }
+
+  commentParts.push("Заказ оформлен через Telegram Mini App");
+
+  params.append(
+    "form[order_comment_only_for_staff]",
+    commentParts.join(" | ")
+  );
+
+  cart.forEach((item, index) => {
+    params.append(`form[line][${index}][goods_mod_id]`, item.id);
+    params.append(`form[line][${index}][order_line_quantity]`, item.quantity);
+  });
+
+  const response = await axios.post(
+    `${STORELAND_API_URL}/orders/add`,
+    params,
+    { timeout: 10000 }
+  );
+
+  return response.data;
+}
+
+async function debitStorelandOrderStock(orderNum) {
+
+  const params = new URLSearchParams();
+
+  params.append("secret_key", STORELAND_SECRET_KEY);
+  params.append("form[is_debit]", "1");
+
+  const response = await axios.post(
+    `${STORELAND_API_URL}/orders/modify_rest_value/${orderNum}`,
+    params,
+    { timeout: 10000 }
+  );
+
+  return response.data;
+}
 
 router.post(
 "/",
@@ -47,6 +107,43 @@ error:"Корзина пустая"
 });
 
 
+}
+
+
+// ==============================
+// Создаём настоящий заказ в Storeland
+// ==============================
+let storelandOrderNum = null;
+let storelandError = null;
+
+try {
+
+  const storelandResult = await createStorelandOrder({
+    username,
+    telegramUsername,
+    phone,
+    comment,
+    cart
+  });
+
+  if (storelandResult.status === "ok") {
+
+    storelandOrderNum = storelandResult.data.order_num.value;
+
+    try {
+      await debitStorelandOrderStock(storelandOrderNum);
+    } catch (debitError) {
+      console.log("STORELAND DEBIT ERROR:", debitError.message);
+    }
+
+  } else {
+    storelandError = JSON.stringify(storelandResult);
+    console.log("STORELAND ORDER ERROR:", storelandError);
+  }
+
+} catch (storelandRequestError) {
+  storelandError = storelandRequestError.message;
+  console.log("STORELAND REQUEST ERROR:", storelandError);
 }
 
 
@@ -171,6 +268,20 @@ ${comment || "нет"}
 
 
 
+message +=
+
+storelandOrderNum
+
+?
+
+`\n✅ Заказ в Storeland: №${storelandOrderNum}\n`
+
+:
+
+`\n⚠️ Не удалось создать заказ в Storeland, оформите вручную!\n`;
+
+
+
 
 
 
@@ -249,7 +360,9 @@ error:"Telegram send failed"
 
 res.json({
 
-success:true
+success:true,
+
+storelandOrderNum
 
 });
 
