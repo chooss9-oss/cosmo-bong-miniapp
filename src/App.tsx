@@ -20,6 +20,9 @@ import Success from "./pages/Success/Success";
 
 import { CartProvider } from "./context/CartContext";
 
+if ("scrollRestoration" in window.history) {
+  window.history.scrollRestoration = "manual";
+}
 
 function App() {
 
