@@ -6,6 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
 const cheerio = require("cheerio");
+const { waitUntil } = require("@vercel/functions");
 
 const orderRouter = require("./routes/orders");
 
@@ -34,7 +35,7 @@ function refreshSalesDataInBackground() {
 
   salesFetchInProgress = true;
 
-  scrapeSalesData()
+  const task = scrapeSalesData()
     .then(result => {
       salesCache = result;
       lastSalesFetch = Date.now();
@@ -46,6 +47,13 @@ function refreshSalesDataInBackground() {
     .finally(() => {
       salesFetchInProgress = false;
     });
+
+  try {
+    waitUntil(task);
+  } catch (e) {
+    // waitUntil доступен только в среде Vercel;
+    // при локальном запуске просто игнорируем это
+  }
 }
 
 async function scrapeSalesData() {
