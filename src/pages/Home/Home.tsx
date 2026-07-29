@@ -328,6 +328,26 @@ error
 load();
 
 
+const retryTimers = [5000, 10000, 15000, 20000].map(delay =>
+
+  setTimeout(() => {
+
+    fetch(`${API_URL}/products`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data) {
+          setProducts(data);
+        }
+      })
+      .catch(() => {});
+
+  }, delay)
+
+);
+
+return () => retryTimers.forEach(timer => clearTimeout(timer));
+
+
 
 },[]);
 
@@ -432,18 +452,6 @@ pt-28
 "
 
 >
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
