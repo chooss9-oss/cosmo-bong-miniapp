@@ -467,7 +467,7 @@ mb-8
 <img
 
 
-src="/banner.png"
+src="/banner.PNG"
 
 
 alt=""
