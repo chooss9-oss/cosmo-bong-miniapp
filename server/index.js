@@ -1,776 +1,210 @@
-import {
-  useEffect,
-  useState
-} from "react";
+require("dotenv").config();
 
-import {
-  useNavigate
-} from "react-router-dom";
-
-import ProductCard from "../../components/ProductCard";
+const express = require("express");
+const cors = require("cors");
+const fs = require("fs");
+const path = require("path");
+const axios = require("axios");
+const cheerio = require("cheerio");
 
 
+const orderRouter = require("./routes/orders");
 
-const API_URL = "/api";
+const app = express();
 
+app.use(cors());
+app.use(express.json());
 
+const PORT = process.env.PORT || 3001;
 
-interface Category {
+let products = [];
+let categories = [];
 
-  "#text": string;
+// ==============================
+// КЭШ РАСПРОДАЖИ (неблокирующее обновление)
+// ==============================
+let salesCache = {};
+let lastSalesFetch = 0;
+let salesFetchInProgress = false;
 
-  "@_id": string;
+function refreshSalesDataInBackground() {
+  const now = Date.now();
 
-  "@_parentId"?: string;
+  if (now - lastSalesFetch < 600000) return;
+  if (salesFetchInProgress) return;
 
+  salesFetchInProgress = true;
+
+  const task = scrapeSalesData()
+    .then(result => {
+      salesCache = result;
+      lastSalesFetch = Date.now();
+      console.log(`✅ Данные распродажи обновлены в фоне: найдено ${Object.keys(result).length} модификаций.`);
+    })
+    .catch(error => {
+      console.error("❌ Фоновое обновление скидок не удалось:", error.message);
+    })
+    .finally(() => {
+      salesFetchInProgress = false;
+    });
+
+  
 }
 
-
-
-interface Product {
-
-  id:string;
-
-  name:string;
-
-  price:number;
-
-  oldPrice?:number;
-
-  discount?:number;
-
-  images?:string[];
-
-  image?:string;
-
-  categoryIds?:string[];
-
-  categoryId?:string | number;
-
-}
-
-
-
-
-
-const categoryImages:Record<string,string> = {
-
-
-"Бонги и Водники":
-"/categories/bongs.png",
-
-
-"Запчасти и Тюнинг":
-"/categories/parts.png",
-
-
-"Сувенирные трубки":
-"/categories/pipes.png",
-
-
-"Гриндеры и Прессы":
-"/categories/grinders.png",
-
-
-"Для самокруток":
-"/categories/rolling.png",
-
-
-"Аксессуары":
-"/categories/accessories.png",
-
-
-"Аксессуары для Wax":
-"/categories/wax.png",
-
-
-"КБД (cbd) / Мицелий":
-"/categories/cbd.png",
-
-
-"Гроу":
-"/categories/grow.png",
-
-
-"Чайная Лавка":
-"/categories/tea.png",
-
-
-"Благовония":
-"/categories/incense.png",
-
-
-"Дисконт":
-"/categories/discount.png",
-
-
-"Мерч Космо Бонг":
-"/categories/merch.png",
-
-
-"Напасы":
-"/categories/napasy.png"
-
-};
-
-
-
-function getChildCategoryIds(
-
-parentId:string,
-
-categories:Category[]
-
-):string[]{
-
-
-  const children = categories.filter(
-
-    cat =>
-
-    String(cat["@_parentId"])
-
-    ===
-
-    String(parentId)
-
-  );
-
-
-
-  let ids:string[]=[];
-
-
-
-  children.forEach(child=>{
-
-
-    ids.push(
-
-      String(child["@_id"])
-
-    );
-
-
-
-    ids.push(
-
-      ...getChildCategoryIds(
-
-        String(child["@_id"]),
-
-        categories
-
-      )
-
-    );
-
-
+async function scrapeSalesData() {
+  console.log("🔄 Обновление данных распродажи с cosmo-bong.ru...");
+
+  // Шаг 1: получаем список товаров, которые сейчас на распродаже
+  const { data: listPage } = await axios.get("https://cosmo-bong.ru/discount/Rasprodazha", {
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+    timeout: 8000
   });
 
+  const $list = cheerio.load(listPage);
+  const productUrls = new Set();
 
+  $list('.product-name a').each((i, el) => {
+    const href = $list(el).attr('href');
+    if (href) {
+      productUrls.add(href.split('?')[0]);
+    }
+  });
 
-  return ids;
+  const newSalesCache = {};
 
+  // Шаг 2: заходим на страницу каждого товара и берём цены ВСЕХ его модификаций
+  for (const url of productUrls) {
+    try {
+      const { data: productPage } = await axios.get(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        timeout: 8000
+      });
+
+      const $product = cheerio.load(productPage);
+
+      $product('.goodsDataMainModificationsList').each((i, el) => {
+        const modId = $product(el).find('input[name="id"]').attr('value');
+        const priceNow = parseInt($product(el).find('input[name="price_now"]').attr('value'), 10);
+        const priceOld = parseInt($product(el).find('input[name="price_old"]').attr('value'), 10);
+
+        if (modId && priceOld && priceNow && priceOld > priceNow) {
+          newSalesCache[modId] = {
+            oldPrice: priceOld,
+            discount: Math.round(((priceOld - priceNow) / priceOld) * 100)
+          };
+        }
+      });
+
+    } catch (innerError) {
+      console.error(`⚠️ Не удалось загрузить товар ${url}:`, innerError.message);
+    }
+  }
+
+  return newSalesCache;
 }
 
-
-
-function pluralizeTovarov(count:number){
-
-const mod10 = count % 10;
-
-const mod100 = count % 100;
-
-if(mod100 >= 11 && mod100 <= 14){
-
-return "товаров";
-
+// ==============================
+// LOAD CACHE
+// ==============================
+function loadCache() {
+  try {
+    products = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "cache/products.json"), "utf8")
+    );
+    categories = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "cache/categories.json"), "utf8")
+    );
+    console.log(`✅ Товары: ${products.length}`);
+    console.log(`✅ Категории: ${categories.length}`);
+  } catch (error) {
+    console.log("❌ CACHE ERROR:", error.message);
+  }
 }
 
-if(mod10 === 1){
+// ==============================
+// ORDERS
+// ==============================
+app.use("/api/order", orderRouter);
 
-return "товар";
+// ==============================
+// ALL PRODUCTS (быстрый ответ, скидки — из того, что уже есть в кэше)
+// ==============================
+app.get("/api/products", (req, res) => {
+  try {
+    refreshSalesDataInBackground();
 
+    const productsWithSales = products.map(product => {
+      const saleInfo = salesCache[product.id];
+
+      const lightProduct = {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        images: product.images,
+        categoryIds: product.categoryIds
+      };
+
+      if (saleInfo) {
+        return {
+          ...lightProduct,
+          oldPrice: saleInfo.oldPrice,
+          discount: saleInfo.discount
+        };
+      }
+
+      return lightProduct;
+    });
+
+    res.json(productsWithSales);
+  } catch (error) {
+    console.error("Ошибка в /api/products:", error.message);
+    res.json(products);
+  }
+});
+
+// ==============================
+// ONE PRODUCT (быстрый ответ, скидка — из того, что уже есть в кэше)
+// ==============================
+app.get("/api/product/:id", (req, res) => {
+  const id = String(req.params.id);
+  const product = products.find(item => String(item.id) === id);
+
+  if (!product) {
+    return res.status(404).json({ error: "Product not found" });
+  }
+
+  refreshSalesDataInBackground();
+
+  const saleInfo = salesCache[id];
+
+  res.json({
+    id: product.id,
+    name: product.name,
+    price: Number(product.price),
+    oldPrice: saleInfo ? saleInfo.oldPrice : undefined,
+    discount: saleInfo ? saleInfo.discount : undefined,
+    description: product.description || "",
+    images: product.images ? product.images : (product.image ? [product.image] : []),
+    categoryIds: product.categoryIds || []
+  });
+});
+
+// ==============================
+// CATEGORIES
+// ==============================
+app.get("/api/categories", (req, res) => {
+  res.json(categories);
+});
+
+// ==============================
+// START
+// ==============================
+loadCache();
+
+module.exports = app;
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server started http://localhost:${PORT}`);
+  });
 }
-
-if(mod10 >= 2 && mod10 <= 4){
-
-return "товара";
-
-}
-
-return "товаров";
-
-}
-
-
-
-
-
-
-
-function Home(){
-
-
-const navigate = useNavigate();
-
-
-
-const [
-categories,
-setCategories
-]=useState<Category[]>([]);
-
-
-
-const [
-products,
-setProducts
-]=useState<Product[]>([]);
-
-
-
-
-
-
-
-
-useEffect(()=>{
-
-
-async function load(){
-
-
-try{
-
-
-const categoriesRes =
-await fetch(
-`${API_URL}/categories`
-);
-
-
-
-const productsRes =
-await fetch(
-`${API_URL}/products`
-);
-
-
-
-if(!categoriesRes.ok){
-
-throw new Error(
-"Ошибка загрузки категорий"
-);
-
-}
-
-
-
-if(!productsRes.ok){
-
-throw new Error(
-"Ошибка загрузки товаров"
-);
-
-}
-
-
-
-
-
-const categoriesData =
-await categoriesRes.json();
-
-
-
-const productsData =
-await productsRes.json();
-
-
-
-
-
-setCategories(
-categoriesData
-);
-
-
-
-setProducts(
-productsData
-);
-
-
-
-}
-catch(error){
-
-
-console.error(
-"Ошибка загрузки:",
-error
-);
-
-
-}
-
-
-}
-
-
-
-load();
-
-
-
-},[]);
-
-
-
-
-
-
-
-
-
-function getCategoryCount(id:string){
-
-const childIds = getChildCategoryIds(id, categories);
-
-const allowedIds = [id, ...childIds];
-
-
-return products.filter(product=>{
-
-
-if(product.categoryIds){
-
-
-return product.categoryIds.some(catId=>
-
-allowedIds.includes(String(catId))
-
-);
-
-
-}
-
-
-
-return allowedIds.includes(
-
-String(product.categoryId)
-
-);
-
-
-
-}).length;
-
-
-
-}
-
-
-
-
-
-
-
-
-
-
-const mainCategories =
-
-categories.filter(category=>
-
-categoryImages[
-category["#text"]
-]
-
-);
-
-
-
-const saleProducts =
-
-products.filter(product=>
-
-product.oldPrice &&
-
-product.oldPrice > product.price
-
-).slice(0, 10);
-
-
-
-
-
-
-
-
-
-
-return(
-
-
-
-<div
-
-className="
-min-h-screen
-bg-[#080808]
-text-white
-p-5
-pt-28
-"
-
->
-
-
-
-
-
-<img
-
-
-src="/logo.png"
-
-
-alt="Cosmo Bong"
-
-
-className="
-w-48
-mx-auto
-mb-8
-object-contain
-drop-shadow-[0_0_20px_rgba(88,187,67,.8)]
-"
-
-
-/>
-
-
-
-
-
-
-
-
-
-<img
-
-
-src="/banner.jpg"
-
-
-alt=""
-
-
-className="
-w-full
-rounded-3xl
-mb-8
-"
-
-
-/>
-
-
-
-
-
-
-
-
-
-{
-
-saleProducts.length > 0 && (
-
-<>
-
-<h2
-
-className="
-text-xl
-font-bold
-mb-5
-"
-
->
-
-🔥 Акции
-
-</h2>
-
-<div
-
-className="
-flex
-gap-4
-overflow-x-auto
-scrollbar-hide
-mb-8
--mx-5
-px-5
-"
-
->
-
-{
-
-saleProducts.map(product=>(
-
-<div
-
-key={product.id}
-
-className="
-w-40
-flex-shrink-0
-"
-
->
-
-<ProductCard product={product} />
-
-</div>
-
-))
-
-}
-
-</div>
-
-</>
-
-)
-
-}
-
-
-
-
-
-
-
-
-<h2
-
-className="
-text-xl
-font-bold
-mb-5
-"
-
->
-
-Категории
-
-</h2>
-
-
-
-
-
-
-
-
-
-<div
-
-className="
-grid
-grid-cols-2
-gap-4
-"
-
->
-
-
-{
-
-mainCategories.map(category=>(
-
-
-<div
-
-
-key={
-category["@_id"]
-}
-
-
-onClick={()=>
-
-
-navigate(
-
-`/category/${category["@_id"]}`
-
-)
-
-}
-
-
-className="
-bg-gradient-to-b
-from-[#191919]
-to-[#090909]
-rounded-3xl
-border
-border-white/10
-overflow-hidden
-cursor-pointer
-hover:border-[#58bb43]
-transition
-"
-
->
-
-
-
-
-
-<div
-
-className="
-h-36
-flex
-items-center
-justify-center
-"
-
->
-
-
-
-<img
-
-
-src={
-categoryImages[
-category["#text"]
-]
-}
-
-
-alt=""
-
-
-className="
-w-28
-h-28
-object-contain
-brightness-0
-invert
-drop-shadow-[0_0_20px_rgba(88,187,67,1)]
-"
-
-
-/>
-
-
-
-</div>
-
-
-
-
-
-
-
-
-<div
-
-className="
-px-4
-pb-5
-"
-
->
-
-
-
-<h3
-
-className="
-font-bold
-text-sm
-"
-
->
-
-{
-category["#text"]
-}
-
-</h3>
-
-
-
-
-
-
-<p
-
-className="
-text-gray-400
-text-xs
-mt-2
-"
-
->
-
-{`${getCategoryCount(category["@_id"])} ${pluralizeTovarov(getCategoryCount(category["@_id"]))}`}
-
-</p>
-
-
-
-
-
-</div>
-
-
-
-
-
-
-</div>
-
-
-
-))
-
-
-}
-
-
-
-</div>
-
-
-
-
-
-
-</div>
-
-
-
-);
-
-
-}
-
-
-
-
-
-export default Home;
