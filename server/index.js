@@ -7,6 +7,7 @@ const path = require("path");
 const axios = require("axios");
 const cheerio = require("cheerio");
 const { waitUntil } = require("@vercel/functions");
+const { createClient } = require("redis");
 
 const orderRouter = require("./routes/orders");
 
@@ -21,7 +22,52 @@ let products = [];
 let categories = [];
 
 // ==============================
-// КЭШ РАСПРОДАЖИ (неблокирующее обновление)
+// REDIS (постоянное хранилище скидок)
+// ==============================
+let redisClient = null;
+
+async function getRedisClient() {
+  if (redisClient && redisClient.isOpen) {
+    return redisClient;
+  }
+
+  redisClient = createClient({ url: process.env.REDIS_URL });
+
+  redisClient.on("error", (err) => {
+    console.error("❌ Redis Client Error:", err.message);
+  });
+
+  await redisClient.connect();
+
+  return redisClient;
+}
+
+async function readSalesCacheFromRedis() {
+  try {
+    const client = await getRedisClient();
+    const stored = await client.get("salesCache");
+
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (error) {
+    console.error("❌ Не удалось прочитать скидки из Redis:", error.message);
+  }
+
+  return null;
+}
+
+async function writeSalesCacheToRedis(data) {
+  try {
+    const client = await getRedisClient();
+    await client.set("salesCache", JSON.stringify(data));
+  } catch (error) {
+    console.error("❌ Не удалось записать скидки в Redis:", error.message);
+  }
+}
+
+// ==============================
+// КЭШ РАСПРОДАЖИ (запасной вариант в памяти + фоновое обновление)
 // ==============================
 let salesCache = {};
 let lastSalesFetch = 0;
@@ -36,9 +82,10 @@ function refreshSalesDataInBackground() {
   salesFetchInProgress = true;
 
   const task = scrapeSalesData()
-    .then(result => {
+    .then(async result => {
       salesCache = result;
       lastSalesFetch = Date.now();
+      await writeSalesCacheToRedis(result);
       console.log(`✅ Данные распродажи обновлены в фоне: найдено ${Object.keys(result).length} модификаций.`);
     })
     .catch(error => {
@@ -138,14 +185,44 @@ function loadCache() {
 app.use("/api/order", orderRouter);
 
 // ==============================
-// ALL PRODUCTS (быстрый ответ, скидки — из того, что уже есть в кэше)
+// REFRESH SALES (вызывается внешним планировщиком, не пользователями)
 // ==============================
-app.get("/api/products", (req, res) => {
+app.get("/api/refresh-sales", async (req, res) => {
+  if (req.query.secret !== process.env.REFRESH_SECRET) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
   try {
-    refreshSalesDataInBackground();
+    const result = await scrapeSalesData();
+
+    salesCache = result;
+    lastSalesFetch = Date.now();
+
+    await writeSalesCacheToRedis(result);
+
+    console.log(`✅ Данные распродажи обновлены по запросу планировщика: найдено ${Object.keys(result).length} модификаций.`);
+
+    res.json({ success: true, count: Object.keys(result).length });
+  } catch (error) {
+    console.error("❌ Ошибка обновления скидок:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==============================
+// ALL PRODUCTS (быстрый ответ, скидки — сначала из Redis, иначе из памяти)
+// ==============================
+app.get("/api/products", async (req, res) => {
+  try {
+    const redisSalesData = await readSalesCacheFromRedis();
+    const salesData = redisSalesData || salesCache;
+
+    if (!redisSalesData) {
+      refreshSalesDataInBackground();
+    }
 
     const productsWithSales = products.map(product => {
-      const saleInfo = salesCache[product.id];
+      const saleInfo = salesData[product.id];
 
       const lightProduct = {
         id: product.id,
@@ -174,9 +251,9 @@ app.get("/api/products", (req, res) => {
 });
 
 // ==============================
-// ONE PRODUCT (быстрый ответ, скидка — из того, что уже есть в кэше)
+// ONE PRODUCT (быстрый ответ, скидка — сначала из Redis, иначе из памяти)
 // ==============================
-app.get("/api/product/:id", (req, res) => {
+app.get("/api/product/:id", async (req, res) => {
   const id = String(req.params.id);
   const product = products.find(item => String(item.id) === id);
 
@@ -184,9 +261,14 @@ app.get("/api/product/:id", (req, res) => {
     return res.status(404).json({ error: "Product not found" });
   }
 
-  refreshSalesDataInBackground();
+  const redisSalesData = await readSalesCacheFromRedis();
+  const salesData = redisSalesData || salesCache;
 
-  const saleInfo = salesCache[id];
+  if (!redisSalesData) {
+    refreshSalesDataInBackground();
+  }
+
+  const saleInfo = salesData[id];
 
   res.json({
     id: product.id,
