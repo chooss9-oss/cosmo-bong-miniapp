@@ -70,11 +70,13 @@ const categoryImages:Record<string,string> = {
 "/categories/rolling.png",
 
 
+"Аксессуары":
+"/categories/accessories.png",
+
+
 "Аксессуары для Wax":
 "/categories/wax.png",
 
-"Аксессуары":
-"/categories/accessories.png",
 
 "КБД (cbd) / Мицелий":
 "/categories/cbd.png",
@@ -104,6 +106,97 @@ const categoryImages:Record<string,string> = {
 "/categories/napasy.png"
 
 };
+
+
+
+function getChildCategoryIds(
+
+parentId:string,
+
+categories:Category[]
+
+):string[]{
+
+
+  const children = categories.filter(
+
+    cat =>
+
+    String(cat["@_parentId"])
+
+    ===
+
+    String(parentId)
+
+  );
+
+
+
+  let ids:string[]=[];
+
+
+
+  children.forEach(child=>{
+
+
+    ids.push(
+
+      String(child["@_id"])
+
+    );
+
+
+
+    ids.push(
+
+      ...getChildCategoryIds(
+
+        String(child["@_id"]),
+
+        categories
+
+      )
+
+    );
+
+
+  });
+
+
+
+  return ids;
+
+}
+
+
+
+function pluralizeTovarov(count:number){
+
+const mod10 = count % 10;
+
+const mod100 = count % 100;
+
+if(mod100 >= 11 && mod100 <= 14){
+
+return "товаров";
+
+}
+
+if(mod10 === 1){
+
+return "товар";
+
+}
+
+if(mod10 >= 2 && mod10 <= 4){
+
+return "товара";
+
+}
+
+return "товаров";
+
+}
 
 
 
@@ -239,6 +332,10 @@ load();
 
 function getCategoryCount(id:string){
 
+const childIds = getChildCategoryIds(id, categories);
+
+const allowedIds = [id, ...childIds];
+
 
 return products.filter(product=>{
 
@@ -246,14 +343,22 @@ return products.filter(product=>{
 if(product.categoryIds){
 
 
-return product.categoryIds.includes(id);
+return product.categoryIds.some(catId=>
+
+allowedIds.includes(String(catId))
+
+);
 
 
 }
 
 
 
-return String(product.categoryId)===id;
+return allowedIds.includes(
+
+String(product.categoryId)
+
+);
 
 
 
@@ -531,13 +636,7 @@ mt-2
 
 >
 
-{
-getCategoryCount(
-category["@_id"]
-)
-}
-
- товаров
+{`${getCategoryCount(category["@_id"])} ${pluralizeTovarov(getCategoryCount(category["@_id"]))}`}
 
 </p>
 
