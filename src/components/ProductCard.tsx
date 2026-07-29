@@ -253,6 +253,7 @@ function ProductCard({
           items-center
           gap-2
           mt-1
+          flex-wrap
           "
 
         >
@@ -266,6 +267,7 @@ function ProductCard({
             text-[#58BB43]
             text-xl
             font-black
+            whitespace-nowrap
             "
 
           >
@@ -299,6 +301,7 @@ function ProductCard({
                 px-2
                 py-1
                 rounded-full
+                whitespace-nowrap
                 "
 
               >
