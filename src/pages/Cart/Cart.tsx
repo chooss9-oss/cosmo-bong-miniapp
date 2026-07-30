@@ -54,45 +54,11 @@ useEffect(() => {
 
 
 
-const savedPromo =
-localStorage.getItem("promoCode");
+const [promo,setPromo]=useState("");
 
+const [promoApplied,setPromoApplied]=useState(false);
 
-
-
-
-const [
-promo,
-setPromo
-]=useState(
-  savedPromo || ""
-);
-
-
-
-
-
-const [
-promoApplied,
-setPromoApplied
-]=useState(
-  savedPromo === "cosmo420tg"
-);
-
-
-
-
-
-const [
-promoMessage,
-setPromoMessage
-]=useState(
-  savedPromo === "cosmo420tg"
-  ?
-  "✅ Промокод применен: скидка 10%"
-  :
-  ""
-);
+const [promoMessage,setPromoMessage]=useState("");
 
 
 
@@ -168,13 +134,7 @@ setPromoMessage(
 
 
 
-localStorage.setItem(
 
-"promoCode",
-
-"cosmo420tg"
-
-);
 
 
 
