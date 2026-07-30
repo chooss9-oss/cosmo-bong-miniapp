@@ -23,6 +23,8 @@ type Product = {
 
   description?: string;
 
+  inStock?:boolean;
+
 };
 
 
@@ -45,10 +47,11 @@ function Sales() {
         const data: Product[] = await getProducts();
 
         const saleProducts = data.filter(
-          (product) =>
-            product.oldPrice &&
-            product.oldPrice > product.price
-        );
+  (product) =>
+    product.oldPrice &&
+    product.oldPrice > product.price &&
+    product.inStock !== false
+);
 
         setProducts(saleProducts);
 

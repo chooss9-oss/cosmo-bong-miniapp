@@ -47,6 +47,8 @@ interface Product {
 
   categoryId?:string | number;
 
+  inStock?:boolean;
+  
 }
 
 
@@ -424,7 +426,9 @@ products.filter(product=>
 
 product.oldPrice &&
 
-product.oldPrice > product.price
+product.oldPrice > product.price &&
+
+product.inStock !== false
 
 ).slice(0, 10);
 
