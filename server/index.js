@@ -233,9 +233,13 @@ async function scrapeStockData() {
   const newStockCache = {};
   const BATCH_SIZE = 20;
 
-  const productUrls = products
-    .filter(p => p.url)
-    .map(p => p.url);
+  const newProducts = await readNewProductsFromRedis();
+
+  const productUrls = [...new Set(
+    products.concat(newProducts)
+      .filter(p => p.url)
+      .map(p => p.url.split('?')[0])
+  )];
 
   for (let i = 0; i < productUrls.length; i += BATCH_SIZE) {
 
