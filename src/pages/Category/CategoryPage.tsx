@@ -31,6 +31,12 @@ type Product = {
 
   price:number;
 
+  oldPrice?:number;
+
+  discount?:number;
+
+  inStock?:boolean;
+
   images?:string[];
 
   categoryIds?:string[];
@@ -225,6 +231,11 @@ loading,
 setLoading
 
 ]=useState(true);
+
+
+const [onlyDiscount, setOnlyDiscount] = useState(false);
+
+const [sortBy, setSortBy] = useState<"none" | "price_asc" | "price_desc">("none");
 
 
 
@@ -465,6 +476,32 @@ useEffect(() => {
 }, [categoryId]);
 
 
+let displayedProducts = products.filter(product => product.inStock !== false);
+
+if(onlyDiscount){
+
+  displayedProducts = displayedProducts.filter(product =>
+
+    product.oldPrice &&
+
+    product.oldPrice > product.price
+
+  );
+
+}
+
+if(sortBy === "price_asc"){
+
+  displayedProducts = [...displayedProducts].sort((a, b) => a.price - b.price);
+
+}
+else if(sortBy === "price_desc"){
+
+  displayedProducts = [...displayedProducts].sort((a, b) => b.price - a.price);
+
+}
+
+
 
 
 
@@ -568,7 +605,6 @@ category["#text"]
   z-30
   bg-[#080808]
   py-2
-  mb-3
   "
 >
 
@@ -615,6 +651,114 @@ category["#text"]
 </div>
 
 
+{/* ЛИПКИЕ ФИЛЬТРЫ */}
+
+<div
+
+className="
+sticky
+top-[102px]
+z-20
+bg-[#080808]
+py-2
+mb-3
+"
+
+>
+
+<div
+
+className="
+flex
+gap-2
+flex-wrap
+"
+
+>
+
+<button
+
+onClick={() => setOnlyDiscount(v => !v)}
+
+className={`
+flex-shrink-0
+px-3
+py-1.5
+rounded-full
+border
+text-xs
+font-semibold
+transition
+${
+  onlyDiscount
+  ? "bg-[#58BB43] border-[#58BB43] text-black"
+  : "bg-[#151515] border-white/10 text-gray-300"
+}
+`}
+
+>
+
+🔥 Со скидкой
+
+</button>
+
+<button
+
+onClick={() => setSortBy(sortBy === "price_asc" ? "none" : "price_asc")}
+
+className={`
+flex-shrink-0
+px-3
+py-1.5
+rounded-full
+border
+text-xs
+font-semibold
+transition
+${
+  sortBy === "price_asc"
+  ? "bg-[#58BB43] border-[#58BB43] text-black"
+  : "bg-[#151515] border-white/10 text-gray-300"
+}
+`}
+
+>
+
+Цена ↑
+
+</button>
+
+<button
+
+onClick={() => setSortBy(sortBy === "price_desc" ? "none" : "price_desc")}
+
+className={`
+flex-shrink-0
+px-3
+py-1.5
+rounded-full
+border
+text-xs
+font-semibold
+transition
+${
+  sortBy === "price_desc"
+  ? "bg-[#58BB43] border-[#58BB43] text-black"
+  : "bg-[#151515] border-white/10 text-gray-300"
+}
+`}
+
+>
+
+Цена ↓
+
+</button>
+
+</div>
+
+</div>
+
+
 
 
 
@@ -635,7 +779,7 @@ gap-4
 
 {
 
-products.map(product=>(
+displayedProducts.map(product=>(
 
 
 
@@ -667,7 +811,7 @@ product={product}
 
 {
 
-products.length===0 && (
+displayedProducts.length===0 && (
 
 
 
