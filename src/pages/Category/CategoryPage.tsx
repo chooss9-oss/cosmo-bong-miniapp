@@ -506,38 +506,6 @@ else if(sortBy === "price_desc"){
 
 
 
-
-if(loading){
-
-
-return(
-
-<div
-
-className="
-p-5
-text-white
-"
-
->
-
-Загрузка...
-
-</div>
-
-);
-
-
-}
-
-
-
-
-
-
-
-
-
 return(
 
 
@@ -554,23 +522,6 @@ pb-5
 "
 
 >
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 {/* КАТЕГОРИИ КАК В КАТАЛОГЕ */}
@@ -766,6 +717,23 @@ category["#text"]
 </h1>
 
 
+{loading && (
+
+<div
+
+className="
+text-gray-400
+mt-10
+text-center
+"
+
+>
+
+Загрузка...
+
+</div>
+
+)}
 
 
 <div
@@ -812,6 +780,8 @@ product={product}
 
 
 {
+
+!loading &&
 
 displayedProducts.length===0 && (
 

@@ -276,7 +276,6 @@ getCategories()
 
 
 ]);
-console.log("CATEGORIES DATA", categoriesData);
 
 
 
@@ -302,10 +301,6 @@ cat["#text"]
 )
 
 );
-
-console.log("ALL CATEGORIES", categoriesData);
-
-console.log("MAIN CATEGORIES", mainCategories);
 
 
 
@@ -524,36 +519,6 @@ if(sortBy === "price_asc"){
 else if(sortBy === "price_desc"){
 
   displayedProducts = [...displayedProducts].sort((a, b) => b.price - a.price);
-
-}
-
-
-
-
-
-
-
-
-
-if(loading){
-
-
-return(
-
-<div
-
-className="
-p-5
-text-white
-"
-
->
-
-Загрузка каталога...
-
-</div>
-
-);
 
 }
 
@@ -821,6 +786,25 @@ search
 </h1>
 
 
+{loading && (
+
+<div
+
+className="
+text-gray-400
+mt-10
+text-center
+"
+
+>
+
+Загрузка каталога...
+
+</div>
+
+)}
+
+
 
 
 
@@ -871,6 +855,8 @@ product={product}
 
 
 {
+
+!loading &&
 
 displayedProducts.length===0 && (
 
