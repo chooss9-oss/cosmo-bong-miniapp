@@ -34,6 +34,8 @@ type Product = {
 
   discount?:number;
 
+  inStock?:boolean;
+
   images?:string[];
 
   categoryIds?:string[];
@@ -498,7 +500,7 @@ products
 ]);
 
 
-let displayedProducts = filteredProducts;
+let displayedProducts = filteredProducts.filter(product => product.inStock !== false);
 
 if(onlyDiscount){
 
