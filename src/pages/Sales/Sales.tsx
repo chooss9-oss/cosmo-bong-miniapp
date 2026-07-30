@@ -100,7 +100,7 @@ function Sales() {
         Специальные предложения и скидки
       </p>
 
-      <div className="flex gap-2 mt-4 flex-wrap">
+      <div className="sticky top-[57px] z-20 bg-[#080808] flex gap-2 py-2 mt-4 flex-wrap">
 
         <button
 
