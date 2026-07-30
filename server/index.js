@@ -524,16 +524,9 @@ app.get("/api/refresh-catalog", async (req, res) => {
   const task = scrapeNewProducts()
     .then(async result => {
 
-      const existing = await readNewProductsFromRedis();
-      const existingIds = new Set(existing.map(p => p.id));
+      await writeNewProductsToRedis(result);
 
-      const merged = existing.concat(
-        result.filter(p => !existingIds.has(p.id))
-      );
-
-      await writeNewProductsToRedis(merged);
-
-      console.log(`✅ Каталог обновлён в фоне: всего новых товаров в Redis — ${merged.length}.`);
+      console.log(`✅ Каталог обновлён в фоне: всего новых товаров в Redis — ${result.length}.`);
     })
     .catch(error => {
       console.error("❌ Ошибка поиска новых товаров:", error.message);
