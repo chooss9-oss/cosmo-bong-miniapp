@@ -231,7 +231,7 @@ async function scrapeStockData() {
   console.log("🔄 Обновление данных о наличии товаров...");
 
   const newStockCache = {};
-  const BATCH_SIZE = 20;
+  const BATCH_SIZE = 50;
 
   const newProducts = await readNewProductsFromRedis();
 
