@@ -284,7 +284,11 @@ async function scrapeStockData() {
 async function scrapeNewProducts() {
   console.log("🔄 Поиск новых товаров...");
 
-  const existingUrls = new Set(products.map(p => p.url).filter(Boolean));
+  const existingUrls = new Set(
+  products
+    .map(p => p.url ? p.url.split('?')[0] : null)
+    .filter(Boolean)
+);
   const newProductsFound = [];
 
   // Шаг 1: параллельно проверяем ВСЕ категории, собираем новые URL
