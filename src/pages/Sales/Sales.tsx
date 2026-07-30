@@ -37,6 +37,9 @@ function Sales() {
 
   const [sortBy, setSortBy] = useState<"none" | "price_asc" | "price_desc">("none");
 
+useEffect(() => {
+  window.scrollTo(0, 0);
+}, [sortBy]);
 
   useEffect(() => {
 
