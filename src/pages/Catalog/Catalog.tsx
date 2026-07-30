@@ -30,6 +30,10 @@ type Product = {
 
   price:number;
 
+  oldPrice?:number;
+
+  discount?:number;
+
   images?:string[];
 
   categoryIds?:string[];
@@ -229,6 +233,11 @@ loading,
 setLoading
 
 ]=useState(true);
+
+
+const [onlyDiscount, setOnlyDiscount] = useState(false);
+
+const [sortBy, setSortBy] = useState<"none" | "price_asc" | "price_desc">("none");
 
 
 
@@ -489,6 +498,32 @@ products
 ]);
 
 
+let displayedProducts = filteredProducts;
+
+if(onlyDiscount){
+
+  displayedProducts = displayedProducts.filter(product =>
+
+    product.oldPrice &&
+
+    product.oldPrice > product.price
+
+  );
+
+}
+
+if(sortBy === "price_asc"){
+
+  displayedProducts = [...displayedProducts].sort((a, b) => a.price - b.price);
+
+}
+else if(sortBy === "price_desc"){
+
+  displayedProducts = [...displayedProducts].sort((a, b) => b.price - a.price);
+
+}
+
+
 
 
 
@@ -675,6 +710,100 @@ search
 </h1>
 
 
+{/* ФИЛЬТРЫ */}
+
+<div
+
+className="
+flex
+gap-2
+mb-4
+flex-wrap
+"
+
+>
+
+<button
+
+onClick={() => setOnlyDiscount(v => !v)}
+
+className={`
+flex-shrink-0
+px-3
+py-1.5
+rounded-full
+border
+text-xs
+font-semibold
+transition
+${
+  onlyDiscount
+  ? "bg-[#58BB43] border-[#58BB43] text-black"
+  : "bg-[#151515] border-white/10 text-gray-300"
+}
+`}
+
+>
+
+🔥 Со скидкой
+
+</button>
+
+<button
+
+onClick={() => setSortBy(sortBy === "price_asc" ? "none" : "price_asc")}
+
+className={`
+flex-shrink-0
+px-3
+py-1.5
+rounded-full
+border
+text-xs
+font-semibold
+transition
+${
+  sortBy === "price_asc"
+  ? "bg-[#58BB43] border-[#58BB43] text-black"
+  : "bg-[#151515] border-white/10 text-gray-300"
+}
+`}
+
+>
+
+Цена ↑
+
+</button>
+
+<button
+
+onClick={() => setSortBy(sortBy === "price_desc" ? "none" : "price_desc")}
+
+className={`
+flex-shrink-0
+px-3
+py-1.5
+rounded-full
+border
+text-xs
+font-semibold
+transition
+${
+  sortBy === "price_desc"
+  ? "bg-[#58BB43] border-[#58BB43] text-black"
+  : "bg-[#151515] border-white/10 text-gray-300"
+}
+`}
+
+>
+
+Цена ↓
+
+</button>
+
+</div>
+
+
 
 
 
@@ -695,7 +824,7 @@ gap-3
 
 {
 
-filteredProducts.map(product=>(
+displayedProducts.map(product=>(
 
 
 <ProductCard
@@ -726,7 +855,7 @@ product={product}
 
 {
 
-filteredProducts.length===0 && (
+displayedProducts.length===0 && (
 
 
 <div
