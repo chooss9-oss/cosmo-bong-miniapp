@@ -95,13 +95,7 @@ useEffect(() => {
 
     <div className="min-h-screen bg-[#080808] text-white pt-[57px] px-5 pb-24">
 
-      <h1 className="text-3xl font-bold">
-        🔥 Акции Cosmo Bong
-      </h1>
-
-      <p className="mt-3 text-gray-400">
-        Специальные предложения и скидки
-      </p>
+      
 
       <div className="sticky top-[57px] z-20 bg-[#080808] flex gap-2 py-2 mt-4 flex-wrap">
 
@@ -158,6 +152,14 @@ useEffect(() => {
         </button>
 
       </div>
+
+<h1 className="text-3xl font-bold">
+  🔥 Акции Cosmo Bong
+</h1>
+
+<p className="mt-3 text-gray-400">
+  Специальные предложения и скидки
+</p>
 
       {loading && (
         <div className="text-gray-400 mt-10">

@@ -563,32 +563,7 @@ pb-5
 
 
 
-<h1
 
-className="
-text-2xl
-font-bold
-mb-5
-"
-
->
-
-{
-
-category
-
-?
-
-category["#text"]
-
-:
-
-"Категория"
-
-}
-
-
-</h1>
 
 
 
@@ -763,7 +738,32 @@ ${
 
 
 
+<h1
 
+className="
+text-2xl
+font-bold
+mb-5
+"
+
+>
+
+{
+
+category
+
+?
+
+category["#text"]
+
+:
+
+"Категория"
+
+}
+
+
+</h1>
 
 
 
