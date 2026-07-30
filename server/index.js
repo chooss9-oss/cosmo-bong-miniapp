@@ -287,12 +287,16 @@ async function scrapeNewProducts() {
   const existingUrls = new Set(products.map(p => p.url).filter(Boolean));
   const newProductsFound = [];
 
-  for (const [categoryName, slug] of Object.entries(CATEGORY_SLUGS)) {
+  // Шаг 1: параллельно проверяем ВСЕ категории, собираем новые URL
+  const categoryEntries = Object.entries(CATEGORY_SLUGS);
 
-    const categoryObj = categories.find(c => c["#text"] === categoryName);
-    const categoryId = categoryObj ? String(categoryObj["@_id"]) : null;
+  const categoryResults = await Promise.allSettled(
 
-    try {
+    categoryEntries.map(async ([categoryName, slug]) => {
+
+      const categoryObj = categories.find(c => c["#text"] === categoryName);
+      const categoryId = categoryObj ? String(categoryObj["@_id"]) : null;
+
       const { data: html } = await axios.get(`https://cosmo-bong.ru/catalog/${slug}`, {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
         timeout: 15000
@@ -301,9 +305,50 @@ async function scrapeNewProducts() {
       const urlMatches = [...html.matchAll(/https:\/\/cosmo-bong\.ru\/goods\/[^"'\s?]+/g)];
       const foundUrls = [...new Set(urlMatches.map(m => m[0]))];
 
-      const newUrls = foundUrls.filter(url => !existingUrls.has(url));
+      const newUrls = foundUrls
+        .filter(url => !existingUrls.has(url))
+        .map(url => ({ url, categoryId }));
 
-      for (const url of newUrls) {
+      return newUrls;
+
+    })
+
+  );
+
+  const allNewUrlEntries = [];
+  const seenUrls = new Set();
+
+  categoryResults.forEach(result => {
+
+    if (result.status === "fulfilled") {
+
+      result.value.forEach(entry => {
+
+        if (!seenUrls.has(entry.url)) {
+          seenUrls.add(entry.url);
+          allNewUrlEntries.push(entry);
+        }
+
+      });
+
+    } else {
+      console.error("⚠️ Не удалось загрузить категорию:", result.reason?.message);
+    }
+
+  });
+
+  console.log(`🔎 Новых ссылок на товары найдено: ${allNewUrlEntries.length}`);
+
+  // Шаг 2: параллельно (батчами по 20) заходим на страницы новых товаров
+  const BATCH_SIZE = 20;
+
+  for (let i = 0; i < allNewUrlEntries.length; i += BATCH_SIZE) {
+
+    const batch = allNewUrlEntries.slice(i, i + BATCH_SIZE);
+
+    await Promise.allSettled(
+
+      batch.map(async ({ url, categoryId }) => {
 
         try {
           const { data: productPage } = await axios.get(url, {
@@ -373,11 +418,9 @@ async function scrapeNewProducts() {
           console.error(`⚠️ Не удалось загрузить товар ${url}:`, productError.message);
         }
 
-      }
+      })
 
-    } catch (categoryError) {
-      console.error(`⚠️ Не удалось загрузить категорию ${slug}:`, categoryError.message);
-    }
+    );
 
   }
 
