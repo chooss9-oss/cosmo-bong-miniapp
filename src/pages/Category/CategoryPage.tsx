@@ -209,15 +209,6 @@ setCategories
 ]=useState<Category[]>([]);
 
 
-const [
-
-subcategories,
-
-setSubcategories
-
-]=useState<Category[]>([]);
-
-
 
 
 
@@ -345,33 +336,6 @@ setCategory(
 currentCategory || null
 
 );
-
-
-
-if(currentCategory){
-
-  const directChildren =
-
-    categoriesData.filter(
-
-      (cat:Category)=>
-
-      String(cat["@_parentId"])
-
-      ===
-
-      String(currentCategory["@_id"])
-
-    );
-
-  setSubcategories(directChildren);
-
-}
-else{
-
-  setSubcategories([]);
-
-}
 
 
 
@@ -540,10 +504,6 @@ else if(sortBy === "price_desc"){
 }
 
 
-const hasSubcategories = subcategories.length > 0;
-
-const filtersTopClass = hasSubcategories ? "top-[131px]" : "top-[94px]";
-
 
 
 
@@ -693,90 +653,18 @@ category["#text"]
 </div>
 
 
-{/* ПОДКАТЕГОРИИ */}
-
-{
-
-hasSubcategories && (
+{/* ЛИПКИЕ ФИЛЬТРЫ */}
 
 <div
 
 className="
 sticky
 top-[94px]
-z-25
-bg-[#080808]
-py-1
-"
-
->
-
-<div
-
-className="
-flex
-gap-2
-overflow-x-auto
-scrollbar-hide
-"
-
->
-
-{
-
-subcategories.map(sub => (
-
-<button
-
-key={sub["@_id"]}
-
-onClick={() => navigate(`/category/${sub["@_id"]}`)}
-
-className="
-flex-shrink-0
-px-3
-py-1.5
-rounded-full
-bg-[#151515]
-border
-border-white/10
-text-xs
-font-semibold
-text-gray-300
-transition
-"
-
->
-
-{sub["#text"]}
-
-</button>
-
-))
-
-}
-
-</div>
-
-</div>
-
-)
-
-}
-
-
-{/* ЛИПКИЕ ФИЛЬТРЫ */}
-
-<div
-
-className={`
-sticky
-${filtersTopClass}
 z-20
 bg-[#080808]
-py-2
+py-1
 mb-3
-`}
+"
 
 >
 
