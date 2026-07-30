@@ -599,7 +599,7 @@ sticky
 top-[57px]
 z-30
 bg-[#080808]
-py-2
+py-1
 "
 
 >
@@ -684,10 +684,10 @@ transition
 
 className="
 sticky
-top-[102px]
+top-[94px]
 z-20
 bg-[#080808]
-py-2
+py-1
 mb-3
 "
 

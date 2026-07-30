@@ -542,7 +542,7 @@ else if(sortBy === "price_desc"){
 
 const hasSubcategories = subcategories.length > 0;
 
-const filtersTopClass = hasSubcategories ? "top-[147px]" : "top-[102px]";
+const filtersTopClass = hasSubcategories ? "top-[131px]" : "top-[94px]";
 
 
 
@@ -646,7 +646,7 @@ category["#text"]
   top-[57px]
   z-30
   bg-[#080808]
-  py-2
+  py-1
   "
 >
 
@@ -703,10 +703,10 @@ hasSubcategories && (
 
 className="
 sticky
-top-[102px]
+top-[94px]
 z-25
 bg-[#080808]
-py-2
+py-1
 "
 
 >
