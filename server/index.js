@@ -21,8 +21,25 @@ const PORT = process.env.PORT || 3001;
 let products = [];
 let categories = [];
 
+const CATEGORY_SLUGS = {
+  "Гроу": "Grow",
+  "Бонги и Водники": "Bongi-i-Vodniki",
+  "Запчасти и Тюнинг": "Zapchasti-i-Tyuning",
+  "Сувенирные трубки": "Suvenirnye-trubki",
+  "Гриндеры и Прессы": "Grindery-i-Pressy",
+  "Для самокруток": "Dlya-samokrutok",
+  "Аксессуары": "Aksessuary",
+  "Напасы": "Napasy",
+  "КБД (cbd) / Мицелий": "CBD-Micelij",
+  "Аксессуары для Wax": "Wax-devajsy",
+  "Чайная Лавка": "Chajnaya-Lavka",
+  "Благовония": "Blagovoniya",
+  "Дисконт": "Diskont",
+  "Мерч Космо Бонг": "Merch"
+};
+
 // ==============================
-// REDIS (постоянное хранилище скидок и наличия)
+// REDIS (постоянное хранилище скидок, наличия и новых товаров)
 // ==============================
 let redisClient = null;
 
@@ -90,6 +107,30 @@ async function writeStockCacheToRedis(data) {
   }
 }
 
+async function readNewProductsFromRedis() {
+  try {
+    const client = await getRedisClient();
+    const stored = await client.get("newProducts");
+
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (error) {
+    console.error("❌ Не удалось прочитать новые товары из Redis:", error.message);
+  }
+
+  return [];
+}
+
+async function writeNewProductsToRedis(data) {
+  try {
+    const client = await getRedisClient();
+    await client.set("newProducts", JSON.stringify(data));
+  } catch (error) {
+    console.error("❌ Не удалось записать новые товары в Redis:", error.message);
+  }
+}
+
 // ==============================
 // КЭШ РАСПРОДАЖИ (запасной вариант в памяти + фоновое обновление)
 // ==============================
@@ -130,7 +171,6 @@ function refreshSalesDataInBackground() {
 async function scrapeSalesData() {
   console.log("🔄 Обновление данных распродажи с cosmo-bong.ru...");
 
-  // Шаг 1: получаем список товаров, которые сейчас на распродаже
   const { data: listPage } = await axios.get("https://cosmo-bong.ru/discount/Rasprodazha", {
     headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
     timeout: 8000
@@ -148,7 +188,6 @@ async function scrapeSalesData() {
 
   const newSalesCache = {};
 
-  // Шаг 2: заходим на страницы всех товаров ОДНОВРЕМЕННО (параллельно), а не по очереди
   await Promise.allSettled(
 
     Array.from(productUrls).map(async (url) => {
@@ -240,6 +279,114 @@ async function scrapeStockData() {
 }
 
 // ==============================
+// ПОИСК НОВЫХ ТОВАРОВ
+// ==============================
+async function scrapeNewProducts() {
+  console.log("🔄 Поиск новых товаров...");
+
+  const existingUrls = new Set(products.map(p => p.url).filter(Boolean));
+  const newProductsFound = [];
+
+  for (const [categoryName, slug] of Object.entries(CATEGORY_SLUGS)) {
+
+    const categoryObj = categories.find(c => c["#text"] === categoryName);
+    const categoryId = categoryObj ? String(categoryObj["@_id"]) : null;
+
+    try {
+      const { data: html } = await axios.get(`https://cosmo-bong.ru/catalog/${slug}`, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        timeout: 15000
+      });
+
+      const urlMatches = [...html.matchAll(/https:\/\/cosmo-bong\.ru\/goods\/[^"'\s?]+/g)];
+      const foundUrls = [...new Set(urlMatches.map(m => m[0]))];
+
+      const newUrls = foundUrls.filter(url => !existingUrls.has(url));
+
+      for (const url of newUrls) {
+
+        try {
+          const { data: productPage } = await axios.get(url, {
+            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+            timeout: 12000
+          });
+
+          const $product = cheerio.load(productPage);
+
+          const name = $product('.product-name h1').first().text().trim();
+
+          const description = $product('.htmlDataBlock').first().html() || "";
+
+          const images = [];
+
+          $product('.thumblist img').each((i, el) => {
+            const src = $product(el).attr('src');
+            if (src) {
+              images.push(src.replace('/baec64/', '/075a3e/'));
+            }
+          });
+
+          let addedAny = false;
+
+          $product('.goodsDataMainModificationsList').each((i, el) => {
+
+            const modId = $product(el).find('input[name="id"]').attr('value');
+            const priceAttr = $product(el).find('input[name="price_now"]').attr('value');
+            const price = parseFloat(priceAttr);
+
+            if (modId && name) {
+              newProductsFound.push({
+                id: modId,
+                name,
+                price: isNaN(price) ? 0 : price,
+                description,
+                images,
+                categoryIds: categoryId ? [categoryId] : [],
+                url
+              });
+              addedAny = true;
+            }
+
+          });
+
+          if (!addedAny) {
+
+            const modId = $product('.add-wishlist').attr('data-mod-id');
+            const priceAttr = $product('.main-price').first().attr('content');
+            const price = parseFloat(priceAttr);
+
+            if (modId && name) {
+              newProductsFound.push({
+                id: modId,
+                name,
+                price: isNaN(price) ? 0 : price,
+                description,
+                images,
+                categoryIds: categoryId ? [categoryId] : [],
+                url
+              });
+            }
+
+          }
+
+        } catch (productError) {
+          console.error(`⚠️ Не удалось загрузить товар ${url}:`, productError.message);
+        }
+
+      }
+
+    } catch (categoryError) {
+      console.error(`⚠️ Не удалось загрузить категорию ${slug}:`, categoryError.message);
+    }
+
+  }
+
+  console.log(`✅ Найдено новых товаров: ${newProductsFound.length}`);
+
+  return newProductsFound;
+}
+
+// ==============================
 // LOAD CACHE
 // ==============================
 function loadCache() {
@@ -263,7 +410,7 @@ function loadCache() {
 app.use("/api/order", orderRouter);
 
 // ==============================
-// REFRESH SALES (вызывается внешним планировщиком, не пользователями)
+// REFRESH SALES
 // ==============================
 app.get("/api/refresh-sales", async (req, res) => {
   if (req.query.secret !== process.env.REFRESH_SECRET) {
@@ -288,7 +435,7 @@ app.get("/api/refresh-sales", async (req, res) => {
 });
 
 // ==============================
-// REFRESH STOCK (вызывается внешним планировщиком, не пользователями)
+// REFRESH STOCK
 // ==============================
 app.get("/api/refresh-stock", async (req, res) => {
   if (req.query.secret !== process.env.REFRESH_SECRET) {
@@ -309,25 +456,62 @@ app.get("/api/refresh-stock", async (req, res) => {
   try {
     waitUntil(task);
   } catch (e) {
-    // waitUntil доступен только в среде Vercel;
-    // при локальном запуске просто игнорируем это
+    // waitUntil доступен только в среде Vercel
   }
 });
 
 // ==============================
-// ALL PRODUCTS (быстрый ответ, скидки и наличие — из Redis)
+// REFRESH CATALOG (поиск новых товаров)
+// ==============================
+app.get("/api/refresh-catalog", async (req, res) => {
+  if (req.query.secret !== process.env.REFRESH_SECRET) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  res.json({ success: true, status: "started" });
+
+  const task = scrapeNewProducts()
+    .then(async result => {
+
+      const existing = await readNewProductsFromRedis();
+      const existingIds = new Set(existing.map(p => p.id));
+
+      const merged = existing.concat(
+        result.filter(p => !existingIds.has(p.id))
+      );
+
+      await writeNewProductsToRedis(merged);
+
+      console.log(`✅ Каталог обновлён в фоне: всего новых товаров в Redis — ${merged.length}.`);
+    })
+    .catch(error => {
+      console.error("❌ Ошибка поиска новых товаров:", error.message);
+    });
+
+  try {
+    waitUntil(task);
+  } catch (e) {
+    // waitUntil доступен только в среде Vercel
+  }
+});
+
+// ==============================
+// ALL PRODUCTS
 // ==============================
 app.get("/api/products", async (req, res) => {
   try {
     const redisSalesData = await readSalesCacheFromRedis();
     const salesData = redisSalesData || salesCache;
     const stockData = await readStockCacheFromRedis();
+    const newProducts = await readNewProductsFromRedis();
 
     if (!redisSalesData) {
       refreshSalesDataInBackground();
     }
 
-    const productsWithSales = products.map(product => {
+    const allProducts = products.concat(newProducts);
+
+    const productsWithSales = allProducts.map(product => {
       const saleInfo = salesData[product.id];
       const stockValue = stockData ? stockData[product.id] : undefined;
       const inStock = stockValue === undefined ? true : stockValue > 0;
@@ -360,11 +544,15 @@ app.get("/api/products", async (req, res) => {
 });
 
 // ==============================
-// ONE PRODUCT (быстрый ответ, скидка и наличие — из Redis)
+// ONE PRODUCT
 // ==============================
 app.get("/api/product/:id", async (req, res) => {
   const id = String(req.params.id);
-  const product = products.find(item => String(item.id) === id);
+
+  const newProducts = await readNewProductsFromRedis();
+  const allProducts = products.concat(newProducts);
+
+  const product = allProducts.find(item => String(item.id) === id);
 
   if (!product) {
     return res.status(404).json({ error: "Product not found" });
