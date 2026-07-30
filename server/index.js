@@ -348,7 +348,7 @@ async function scrapeNewProducts() {
   console.log(`🔎 Новых ссылок на товары найдено: ${allNewUrlEntries.length}`);
 
   // Шаг 2: параллельно (батчами по 20) заходим на страницы новых товаров
-  const BATCH_SIZE = 20;
+  const BATCH_SIZE = 50;
 
   for (let i = 0; i < allNewUrlEntries.length; i += BATCH_SIZE) {
 
