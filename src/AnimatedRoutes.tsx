@@ -55,13 +55,25 @@ export default function AnimatedRoutes() {
 
       const saved = scrollPositions.get(location.key) ?? 0;
 
-      window.scrollTo(0, saved);
+      let attempts = 0;
+      const maxAttempts = 30;
 
-      const retry = setTimeout(() => {
-        window.scrollTo(0, saved);
-      }, 200);
+      const interval = setInterval(() => {
 
-      return () => clearTimeout(retry);
+        attempts++;
+
+        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+
+        if (maxScroll >= saved || attempts >= maxAttempts) {
+          window.scrollTo(0, saved);
+          clearInterval(interval);
+        } else {
+          window.scrollTo(0, maxScroll);
+        }
+
+      }, 100);
+
+      return () => clearInterval(interval);
 
     }
 
