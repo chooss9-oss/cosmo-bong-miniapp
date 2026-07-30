@@ -596,7 +596,6 @@ top-[57px]
 z-30
 bg-[#080808]
 py-2
-mb-3
 "
 
 >
@@ -675,49 +674,26 @@ transition
 </div>
 
 
+{/* ЛИПКИЕ ФИЛЬТРЫ */}
 
-
-
-
-
-
-
-<h1
+<div
 
 className="
-text-2xl
-font-bold
-mb-4
+sticky
+top-[102px]
+z-20
+bg-[#080808]
+py-2
+mb-3
 "
 
 >
-
-{
-
-search
-
-?
-
-`Поиск: ${search}`
-
-:
-
-"Каталог"
-
-}
-
-
-</h1>
-
-
-{/* ФИЛЬТРЫ */}
 
 <div
 
 className="
 flex
 gap-2
-mb-4
 flex-wrap
 "
 
@@ -802,6 +778,43 @@ ${
 </button>
 
 </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+<h1
+
+className="
+text-2xl
+font-bold
+mb-4
+"
+
+>
+
+{
+
+search
+
+?
+
+`Поиск: ${search}`
+
+:
+
+"Каталог"
+
+}
+
+
+</h1>
 
 
 
