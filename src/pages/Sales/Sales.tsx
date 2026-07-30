@@ -35,6 +35,8 @@ function Sales() {
 
   const [loading, setLoading] = useState(true);
 
+  const [sortBy, setSortBy] = useState<"none" | "price_asc" | "price_desc">("none");
+
 
   useEffect(() => {
 
@@ -72,6 +74,20 @@ function Sales() {
   }, []);
 
 
+  let displayedProducts = products;
+
+  if(sortBy === "price_asc"){
+
+    displayedProducts = [...displayedProducts].sort((a, b) => a.price - b.price);
+
+  }
+  else if(sortBy === "price_desc"){
+
+    displayedProducts = [...displayedProducts].sort((a, b) => b.price - a.price);
+
+  }
+
+
   return (
 
     <div className="min-h-screen bg-[#080808] text-white pt-[57px] px-5 pb-24">
@@ -84,21 +100,77 @@ function Sales() {
         Специальные предложения и скидки
       </p>
 
+      <div className="flex gap-2 mt-4 flex-wrap">
+
+        <button
+
+          onClick={() => setSortBy(sortBy === "price_asc" ? "none" : "price_asc")}
+
+          className={`
+          flex-shrink-0
+          px-3
+          py-1.5
+          rounded-full
+          border
+          text-xs
+          font-semibold
+          transition
+          ${
+            sortBy === "price_asc"
+            ? "bg-[#58BB43] border-[#58BB43] text-black"
+            : "bg-[#151515] border-white/10 text-gray-300"
+          }
+          `}
+
+        >
+
+          Цена ↑
+
+        </button>
+
+        <button
+
+          onClick={() => setSortBy(sortBy === "price_desc" ? "none" : "price_desc")}
+
+          className={`
+          flex-shrink-0
+          px-3
+          py-1.5
+          rounded-full
+          border
+          text-xs
+          font-semibold
+          transition
+          ${
+            sortBy === "price_desc"
+            ? "bg-[#58BB43] border-[#58BB43] text-black"
+            : "bg-[#151515] border-white/10 text-gray-300"
+          }
+          `}
+
+        >
+
+          Цена ↓
+
+        </button>
+
+      </div>
+
       {loading && (
         <div className="text-gray-400 mt-10">
           Загружаем акции...
         </div>
       )}
 
-      <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
 
-        {products.map((product) => (
+        {displayedProducts.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}
 
       </div>
 
-      {!loading && products.length === 0 && (
+      {!loading && displayedProducts.length === 0 && (
         <div className="text-gray-400 text-center mt-10">
           Сейчас нет акционных товаров
         </div>
