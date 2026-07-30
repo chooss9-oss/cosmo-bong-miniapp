@@ -290,7 +290,29 @@ app.get("/api/refresh-sales", async (req, res) => {
 // ==============================
 // REFRESH STOCK (вызывается внешним планировщиком, не пользователями)
 // ==============================
-app.get("/api/refresh-stock", async (req, res) => {
+app.app.get("/api/refresh-stock", async (req, res) => {
+  if (req.query.secret !== process.env.REFRESH_SECRET) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  res.json({ success: true, status: "started" });
+
+  const task = scrapeStockData()
+    .then(async result => {
+      await writeStockCacheToRedis(result);
+      console.log(`✅ Наличие обновлено в фоне: сохранено ${Object.keys(result).length} модификаций.`);
+    })
+    .catch(error => {
+      console.error("❌ Ошибка обновления наличия:", error.message);
+    });
+
+  try {
+    waitUntil(task);
+  } catch (e) {
+    // waitUntil доступен только в среде Vercel;
+    // при локальном запуске просто игнорируем это
+  }
+});get("/api/refresh-stock", async (req, res) => {
   if (req.query.secret !== process.env.REFRESH_SECRET) {
     return res.status(403).json({ error: "Forbidden" });
   }
