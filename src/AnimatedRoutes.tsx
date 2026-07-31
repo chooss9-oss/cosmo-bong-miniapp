@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   Routes,
@@ -18,6 +18,7 @@ import Checkout from "./pages/Checkout/Checkout";
 import Success from "./pages/Success/Success";
 
 
+// Запомненные позиции скролла для каждой записи в истории (по location.key)
 const scrollPositions = new Map<string, number>();
 
 
@@ -26,67 +27,108 @@ export default function AnimatedRoutes() {
   const location = useLocation();
   const navigationType = useNavigationType();
 
+  const prevKeyRef = useRef(location.key);
+
+  const [animClass, setAnimClass] = useState("");
+
+
+  // Сохраняем позицию скролла для текущей страницы, пока пользователь на ней
   useEffect(() => {
+
     const key = location.key;
-    return () => {
-      console.log("SAVE", key, "scrollY=", window.scrollY);
+
+    function handleScroll() {
       scrollPositions.set(key, window.scrollY);
-    };
+    }
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => window.removeEventListener("scroll", handleScroll);
+
   }, [location.key]);
 
+
+  // Восстанавливаем скролл при переходе назад, сбрасываем при переходе вперёд
   useEffect(() => {
+
     if (navigationType === "POP") {
+
       const saved = scrollPositions.get(location.key) ?? 0;
-      let cancelled = false;
-      const startTime = Date.now();
-      const maxWait = 4000;
-      function reassert() {
-        if (cancelled) return;
-        window.scrollTo(0, saved);
-        const reached = Math.abs(window.scrollY - saved) < 2;
-        const timedOut = Date.now() - startTime >= maxWait;
-        if (!reached && !timedOut) {
-          requestAnimationFrame(reassert);
+
+      let attempts = 0;
+      const maxAttempts = 40;
+
+      const interval = setInterval(() => {
+
+        attempts++;
+
+        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+
+        if (maxScroll >= saved || attempts >= maxAttempts) {
+          window.scrollTo(0, Math.min(saved, maxScroll));
+          clearInterval(interval);
         }
-      }
-      requestAnimationFrame(reassert);
-      return () => { cancelled = true; };
+
+      }, 50);
+
+      return () => clearInterval(interval);
+
     }
+
     window.scrollTo(0, 0);
     scrollPositions.set(location.key, 0);
+
   }, [location.key, navigationType]);
 
+
+  // Определяем класс анимации при смене страницы
+  useEffect(() => {
+
+    if (location.key !== prevKeyRef.current) {
+
+      if (location.pathname === "/") {
+        setAnimClass("");
+      } else {
+        setAnimClass(
+          navigationType === "POP" ? "page-anim-back" : "page-anim-forward"
+        );
+      }
+
+      prevKeyRef.current = location.key;
+
+    }
+
+  }, [location, navigationType]);
+
+
   return (
-    <>
-      <div
-        style={{
-          position: "fixed",
-          bottom: 90,
-          left: 10,
-          zIndex: 9999,
-          background: "black",
-          color: "lime",
-          fontSize: 10,
-          padding: 6,
-          borderRadius: 8,
-          maxWidth: "95vw",
-          wordBreak: "break-all"
-        }}
-      >
-        type: {navigationType} | key: {location.key} | saved: {scrollPositions.get(location.key) ?? "нет"}
-      </div>
+
+    <div key={location.key} className={animClass}>
 
       <Routes location={location}>
+
         <Route path="/" element={<Home />} />
+
         <Route path="/catalog" element={<Catalog />} />
+
         <Route path="/success" element={<Success />} />
+
         <Route path="/sales" element={<Sales />} />
+
         <Route path="/profile" element={<Profile />} />
+
         <Route path="/category/:categoryId" element={<CategoryPage />} />
+
         <Route path="/product/:productId" element={<ProductPage />} />
+
         <Route path="/cart" element={<Cart />} />
+
         <Route path="/checkout" element={<Checkout />} />
+
       </Routes>
-    </>
+
+    </div>
+
   );
+
 }
