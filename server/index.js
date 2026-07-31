@@ -252,7 +252,7 @@ async function scrapeStockData() {
         try {
           const { data: productPage } = await axios.get(url, {
             headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
-            timeout: 10000
+            timeout: 6000
           });
 
           const $product = cheerio.load(productPage);
