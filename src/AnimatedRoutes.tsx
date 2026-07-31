@@ -53,7 +53,7 @@ export default function AnimatedRoutes() {
 
       let cancelled = false;
       const startTime = Date.now();
-      const totalDuration = 1500;
+      const totalDuration = 4000;
 
       function reassert() {
 
