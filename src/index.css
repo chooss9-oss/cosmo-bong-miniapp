@@ -62,20 +62,15 @@ body {
 
 }
 
-@keyframes pageSlideInRight {
-  from { opacity: 0; transform: translateX(24px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes pageSlideInLeft {
-  from { opacity: 0; transform: translateX(-24px); }
-  to { opacity: 1; transform: translateX(0); }
+@keyframes pageFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .page-anim-forward {
-  animation: pageSlideInRight 250ms ease-out;
+  animation: pageFadeIn 200ms ease-out;
 }
 
 .page-anim-back {
-  animation: pageSlideInLeft 250ms ease-out;
+  animation: pageFadeIn 200ms ease-out;
 }
