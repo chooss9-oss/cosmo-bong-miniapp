@@ -28,18 +28,14 @@ export default function AnimatedRoutes() {
   const navigationType = useNavigationType();
 
 
-  // Сохраняем позицию скролла для текущей страницы, пока пользователь на ней
+  // Сохраняем позицию скролла для страницы ровно в момент, когда её покидаем
   useEffect(() => {
 
     const key = location.key;
 
-    function handleScroll() {
+    return () => {
       scrollPositions.set(key, window.scrollY);
-    }
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-
-    return () => window.removeEventListener("scroll", handleScroll);
+    };
 
   }, [location.key]);
 

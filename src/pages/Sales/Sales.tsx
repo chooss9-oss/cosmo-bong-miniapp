@@ -1,6 +1,8 @@
 // src/pages/Sales/Sales.tsx
 
-import { useEffect, useState } from "react";
+
+
+import { useEffect, useState, useRef } from "react";
 
 import ProductCard from "../../components/ProductCard";
 
@@ -37,8 +39,17 @@ function Sales() {
 
   const [sortBy, setSortBy] = useState<"none" | "price_asc" | "price_desc">("none");
 
+const isFirstFilterRender = useRef(true);
+
 useEffect(() => {
+
+  if (isFirstFilterRender.current) {
+    isFirstFilterRender.current = false;
+    return;
+  }
+
   window.scrollTo(0, 0);
+
 }, [sortBy]);
 
   useEffect(() => {

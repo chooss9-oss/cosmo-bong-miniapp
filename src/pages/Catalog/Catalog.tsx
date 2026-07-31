@@ -1,6 +1,7 @@
 import {
   useEffect,
-  useState
+  useState,
+  useRef
 } from "react";
 
 
@@ -241,8 +242,17 @@ const [onlyDiscount, setOnlyDiscount] = useState(false);
 
 const [sortBy, setSortBy] = useState<"none" | "price_asc" | "price_desc">("none");
 
+const isFirstFilterRender = useRef(true);
+
 useEffect(() => {
+
+  if (isFirstFilterRender.current) {
+    isFirstFilterRender.current = false;
+    return;
+  }
+
   window.scrollTo(0, 0);
+
 }, [sortBy, onlyDiscount]);
 
 
