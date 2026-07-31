@@ -103,7 +103,7 @@ export default function AnimatedRoutes() {
 
   return (
 
-    <div key={location.key} className={animClass}>
+    <div key={location.key} className={animClass} data-anim={animClass || "none"}>
 
       <Routes location={location}>
 
