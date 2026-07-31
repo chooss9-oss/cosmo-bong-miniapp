@@ -267,6 +267,16 @@ async function scrapeStockData() {
             }
           });
 
+const wishlistModId = $product('.add-wishlist').attr('data-mod-id');
+
+          if (wishlistModId && newStockCache[wishlistModId] === undefined) {
+            const availableFalseDiv = $product('.available-false').first();
+            const style = availableFalseDiv.attr('style') || '';
+            const isHidden = style.includes('display:none') || style.includes('display: none');
+            const isOutOfStock = availableFalseDiv.length > 0 && !isHidden;
+            newStockCache[wishlistModId] = isOutOfStock ? 0 : 1;
+          }
+
         } catch (innerError) {
           console.error(`⚠️ Не удалось проверить наличие ${url}:`, innerError.message);
         }
