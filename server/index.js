@@ -107,6 +107,26 @@ async function writeStockCacheToRedis(data) {
   }
 }
 
+async function readStockOffsetFromRedis() {
+  try {
+    const client = await getRedisClient();
+    const stored = await client.get("stockCheckOffset");
+    return stored ? parseInt(stored, 10) : 0;
+  } catch (error) {
+    console.error("❌ Не удалось прочитать offset наличия:", error.message);
+    return 0;
+  }
+}
+
+async function writeStockOffsetToRedis(offset) {
+  try {
+    const client = await getRedisClient();
+    await client.set("stockCheckOffset", String(offset));
+  } catch (error) {
+    console.error("❌ Не удалось записать offset наличия:", error.message);
+  }
+}
+
 async function readNewProductsFromRedis() {
   try {
     const client = await getRedisClient();
@@ -225,25 +245,17 @@ async function scrapeSalesData() {
 }
 
 // ==============================
-// ПРОВЕРКА НАЛИЧИЯ (обходит ВСЕ товары, батчами по 20)
+// ПРОВЕРКА НАЛИЧИЯ — ПОРЦИОННО (одна порция за один запуск)
 // ==============================
-async function scrapeStockData() {
-  console.log("🔄 Обновление данных о наличии товаров...");
+async function scrapeStockChunk(productUrls, offset, chunkSize) {
 
+  const chunk = productUrls.slice(offset, offset + chunkSize);
   const newStockCache = {};
   const BATCH_SIZE = 50;
 
-  const newProducts = await readNewProductsFromRedis();
+  for (let i = 0; i < chunk.length; i += BATCH_SIZE) {
 
-  const productUrls = [...new Set(
-    products.concat(newProducts)
-      .filter(p => p.url)
-      .map(p => p.url.split('?')[0])
-  )];
-
-  for (let i = 0; i < productUrls.length; i += BATCH_SIZE) {
-
-    const batch = productUrls.slice(i, i + BATCH_SIZE);
+    const batch = chunk.slice(i, i + BATCH_SIZE);
 
     await Promise.allSettled(
 
@@ -267,7 +279,7 @@ async function scrapeStockData() {
             }
           });
 
-const wishlistModId = $product('.add-wishlist').attr('data-mod-id');
+          const wishlistModId = $product('.add-wishlist').attr('data-mod-id');
 
           if (wishlistModId && newStockCache[wishlistModId] === undefined) {
             const availableFalseDiv = $product('.available-false').first();
@@ -287,9 +299,9 @@ const wishlistModId = $product('.add-wishlist').attr('data-mod-id');
 
   }
 
-  console.log(`✅ Наличие обновлено: проверено ${Object.keys(newStockCache).length} модификаций из ${productUrls.length} товаров.`);
+  const nextOffset = (offset + chunkSize >= productUrls.length) ? 0 : offset + chunkSize;
 
-  return newStockCache;
+  return { newStockCache, nextOffset };
 }
 
 // ==============================
@@ -299,13 +311,12 @@ async function scrapeNewProducts() {
   console.log("🔄 Поиск новых товаров...");
 
   const existingUrls = new Set(
-  products
-    .map(p => p.url ? p.url.split('?')[0] : null)
-    .filter(Boolean)
-);
+    products
+      .map(p => p.url ? p.url.split('?')[0] : null)
+      .filter(Boolean)
+  );
   const newProductsFound = [];
 
-  // Шаг 1: параллельно проверяем ВСЕ категории, собираем новые URL
   const categoryEntries = Object.entries(CATEGORY_SLUGS);
 
   const categoryResults = await Promise.allSettled(
@@ -357,7 +368,6 @@ async function scrapeNewProducts() {
 
   console.log(`🔎 Новых ссылок на товары найдено: ${allNewUrlEntries.length}`);
 
-  // Шаг 2: параллельно (батчами по 20) заходим на страницы новых товаров
   const BATCH_SIZE = 50;
 
   for (let i = 0; i < allNewUrlEntries.length; i += BATCH_SIZE) {
@@ -496,7 +506,7 @@ app.get("/api/refresh-sales", async (req, res) => {
 });
 
 // ==============================
-// REFRESH STOCK
+// REFRESH STOCK — обрабатывает ОДНУ порцию за запуск
 // ==============================
 app.get("/api/refresh-stock", async (req, res) => {
   if (req.query.secret !== process.env.REFRESH_SECRET) {
@@ -505,14 +515,39 @@ app.get("/api/refresh-stock", async (req, res) => {
 
   res.json({ success: true, status: "started" });
 
-  const task = scrapeStockData()
-    .then(async result => {
-      await writeStockCacheToRedis(result);
-      console.log(`✅ Наличие обновлено в фоне: сохранено ${Object.keys(result).length} модификаций.`);
-    })
-    .catch(error => {
+  const task = (async () => {
+
+    try {
+
+      const newProducts = await readNewProductsFromRedis();
+
+      const productUrls = [...new Set(
+        products.concat(newProducts)
+          .filter(p => p.url)
+          .map(p => p.url.split('?')[0])
+      )];
+
+      const CHUNK_SIZE = 150;
+
+      const offset = await readStockOffsetFromRedis();
+
+      const { newStockCache, nextOffset } = await scrapeStockChunk(productUrls, offset, CHUNK_SIZE);
+
+      const existingStock = (await readStockCacheFromRedis()) || {};
+      const mergedStock = { ...existingStock, ...newStockCache };
+
+      await writeStockCacheToRedis(mergedStock);
+      await writeStockOffsetToRedis(nextOffset);
+
+      const end = Math.min(offset + CHUNK_SIZE, productUrls.length);
+
+      console.log(`✅ Наличие обновлено в фоне (порция ${offset}-${end} из ${productUrls.length}): проверено ${Object.keys(newStockCache).length} модификаций, далее с ${nextOffset}.`);
+
+    } catch (error) {
       console.error("❌ Ошибка обновления наличия:", error.message);
-    });
+    }
+
+  })();
 
   try {
     waitUntil(task);
