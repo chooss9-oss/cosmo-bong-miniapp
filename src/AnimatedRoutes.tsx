@@ -57,15 +57,6 @@ export default function AnimatedRoutes() {
       const startTime = Date.now();
       const maxWait = 4000;
 
-      function stop() {
-        cancelled = true;
-        window.removeEventListener("wheel", stop);
-        window.removeEventListener("touchstart", stop);
-      }
-
-      window.addEventListener("wheel", stop, { passive: true });
-      window.addEventListener("touchstart", stop, { passive: true });
-
       function reassert() {
 
         if (cancelled) return;
@@ -82,11 +73,9 @@ export default function AnimatedRoutes() {
         window.scrollTo(0, saved);
 
         const timedOut = Date.now() - startTime >= maxWait;
-        const isStable = stableFrames >= 6;
+        const isStable = stableFrames >= 10;
 
-        if (timedOut || isStable) {
-          stop();
-        } else {
+        if (!(timedOut || isStable)) {
           requestAnimationFrame(reassert);
         }
 
@@ -94,7 +83,7 @@ export default function AnimatedRoutes() {
 
       requestAnimationFrame(reassert);
 
-      return () => stop();
+      return () => { cancelled = true; };
 
     }
 
