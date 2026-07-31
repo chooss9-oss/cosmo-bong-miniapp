@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 
 import {
   Routes,
@@ -26,10 +26,6 @@ export default function AnimatedRoutes() {
 
   const location = useLocation();
   const navigationType = useNavigationType();
-
-  const prevKeyRef = useRef(location.key);
-
-  const [animClass, setAnimClass] = useState("");
 
 
   // Сохраняем позицию скролла для текущей страницы, пока пользователь на ней
@@ -81,53 +77,29 @@ export default function AnimatedRoutes() {
   }, [location.key, navigationType]);
 
 
-  // Определяем класс анимации при смене страницы
-  useEffect(() => {
-
-    if (location.key !== prevKeyRef.current) {
-
-      if (location.pathname === "/") {
-        setAnimClass("");
-      } else {
-        setAnimClass(
-          navigationType === "POP" ? "page-anim-back" : "page-anim-forward"
-        );
-      }
-
-      prevKeyRef.current = location.key;
-
-    }
-
-  }, [location, navigationType]);
-
-
   return (
 
-    <div key={location.key} className={animClass} data-anim={animClass || "none"}>
+    <Routes location={location}>
 
-      <Routes location={location}>
+      <Route path="/" element={<Home />} />
 
-        <Route path="/" element={<Home />} />
+      <Route path="/catalog" element={<Catalog />} />
 
-        <Route path="/catalog" element={<Catalog />} />
+      <Route path="/success" element={<Success />} />
 
-        <Route path="/success" element={<Success />} />
+      <Route path="/sales" element={<Sales />} />
 
-        <Route path="/sales" element={<Sales />} />
+      <Route path="/profile" element={<Profile />} />
 
-        <Route path="/profile" element={<Profile />} />
+      <Route path="/category/:categoryId" element={<CategoryPage />} />
 
-        <Route path="/category/:categoryId" element={<CategoryPage />} />
+      <Route path="/product/:productId" element={<ProductPage />} />
 
-        <Route path="/product/:productId" element={<ProductPage />} />
+      <Route path="/cart" element={<Cart />} />
 
-        <Route path="/cart" element={<Cart />} />
+      <Route path="/checkout" element={<Checkout />} />
 
-        <Route path="/checkout" element={<Checkout />} />
-
-      </Routes>
-
-    </div>
+    </Routes>
 
   );
 
