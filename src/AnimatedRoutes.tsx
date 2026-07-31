@@ -52,8 +52,6 @@ export default function AnimatedRoutes() {
       const saved = scrollPositions.get(location.key) ?? 0;
 
       let cancelled = false;
-      let lastHeight = -1;
-      let stableFrames = 0;
       const startTime = Date.now();
       const maxWait = 4000;
 
@@ -61,21 +59,12 @@ export default function AnimatedRoutes() {
 
         if (cancelled) return;
 
-        const currentHeight = document.documentElement.scrollHeight;
-
-        if (currentHeight === lastHeight) {
-          stableFrames++;
-        } else {
-          stableFrames = 0;
-          lastHeight = currentHeight;
-        }
-
         window.scrollTo(0, saved);
 
+        const reached = Math.abs(window.scrollY - saved) < 2;
         const timedOut = Date.now() - startTime >= maxWait;
-        const isStable = stableFrames >= 10;
 
-        if (!(timedOut || isStable)) {
+        if (!reached && !timedOut) {
           requestAnimationFrame(reassert);
         }
 
