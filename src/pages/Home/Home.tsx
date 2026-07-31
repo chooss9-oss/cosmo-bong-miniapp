@@ -48,7 +48,7 @@ interface Product {
   categoryId?:string | number;
 
   inStock?:boolean;
-  
+
 }
 
 
@@ -232,9 +232,6 @@ setProducts
 ]=useState<Product[]>([]);
 
 
-useEffect(() => {
-  window.scrollTo(0, 0);
-}, []);
 
 
 

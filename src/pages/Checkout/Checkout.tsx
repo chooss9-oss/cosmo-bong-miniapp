@@ -1,6 +1,5 @@
 import {
-  useState,
-  useEffect
+  useState
 } from "react";
 
 import {
@@ -57,9 +56,6 @@ setSuccess
 ]=useState(false);
 
 
-useEffect(() => {
-  window.scrollTo(0, 0);
-}, []);
 
 
 const [

@@ -469,8 +469,6 @@ load();
 
 useEffect(() => {
 
-  window.scrollTo(0, 0);
-
   if (categoryScrollRef.current) {
     categoryScrollRef.current.scrollLeft = 0;
   }

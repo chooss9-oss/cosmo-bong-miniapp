@@ -1,6 +1,5 @@
 import {
-  useState,
-  useEffect
+  useState
 } from "react";
 
 
@@ -48,9 +47,6 @@ useNavigate();
 const total =
 getTotal();
 
-useEffect(() => {
-  window.scrollTo(0, 0);
-}, []);
 
 
 

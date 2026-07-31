@@ -43,9 +43,7 @@ useEffect(() => {
 
   useEffect(() => {
 
-    window.scrollTo(0, 0);
-
-    async function loadSale() {
+  async function loadSale() {
 
       try {
 
