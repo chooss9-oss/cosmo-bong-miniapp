@@ -73,9 +73,9 @@ body {
 }
 
 .page-anim-forward {
-  animation: pageSlideInRight 1500ms ease-out;
+  animation: pageSlideInRight 250ms ease-out;
 }
 
 .page-anim-back {
-  animation: pageSlideInLeft 1500ms ease-out;
+  animation: pageSlideInLeft 250ms ease-out;
 }
