@@ -29,6 +29,7 @@ export default function AnimatedRoutes() {
   useEffect(() => {
     const key = location.key;
     return () => {
+      console.log("SAVE", key, "scrollY=", window.scrollY);
       scrollPositions.set(key, window.scrollY);
     };
   }, [location.key]);
