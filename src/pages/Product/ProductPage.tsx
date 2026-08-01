@@ -113,18 +113,26 @@ export default function ProductPage(){
 
 
 
-  // Описание и варианты приходят только с полного запроса товара (в отличие
-  // от превью из кэша каталога). Плавно проявляем этот блок, когда данные
-  // приезжают, вместо резкого "выскакивания".
+  // Карточка товара (картинка + название + цена + описание) появляется
+  // одним общим fade-in, когда готовы ОБА условия: картинка прогрузилась
+  // и полные данные (описание/варианты) приехали с сервера. Так текст и
+  // картинка не появляются вразнобой.
   const [
-    detailsVisible,
-    setDetailsVisible
+    imageLoaded,
+    setImageLoaded
+  ] = useState(false);
+
+  const [
+    dataReady,
+    setDataReady
   ] = useState(
     () => {
       const preview = getCachedProductPreview(productId ?? "");
       return Boolean(preview?.description || preview?.variants);
     }
   );
+
+  const contentReady = imageLoaded && dataReady;
 
 
 
@@ -147,8 +155,10 @@ export default function ProductPage(){
     );
 
     if (!hadFullDetails) {
-      setDetailsVisible(false);
+      setDataReady(false);
     }
+
+    setImageLoaded(false);
 
 
     getProduct(productId)
@@ -170,13 +180,7 @@ export default function ProductPage(){
       }
 
 
-      if (!hadFullDetails) {
-
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => setDetailsVisible(true));
-        });
-
-      }
+      setDataReady(true);
 
 
     })
@@ -190,6 +194,8 @@ export default function ProductPage(){
         "PRODUCT ERROR",
         error
       );
+
+      setDataReady(true);
 
 
     })
@@ -437,13 +443,16 @@ export default function ProductPage(){
 
       <div
 
-        className="
+        className={`
         bg-[#151515]
         rounded-3xl
         border
         border-white/10
         overflow-hidden
-        "
+        transition-opacity
+        duration-300
+        ${contentReady ? "opacity-100" : "opacity-0"}
+        `}
 
       >
 
@@ -473,6 +482,10 @@ export default function ProductPage(){
             src={image}
 
             alt={product.name}
+
+            onLoad={() => setImageLoaded(true)}
+
+            onError={() => setImageLoaded(true)}
 
             className="
             max-h-64
@@ -644,13 +657,6 @@ export default function ProductPage(){
 
 
 
-          <div className={`
-          transition-opacity
-          duration-300
-          ${detailsVisible ? "opacity-100" : "opacity-0"}
-          `}
-          >
-
           <div className="
           mt-6
           "
@@ -785,8 +791,6 @@ export default function ProductPage(){
             )
 
           }
-
-          </div>
 
           <button
 
