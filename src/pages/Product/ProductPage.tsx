@@ -160,6 +160,12 @@ export default function ProductPage(){
 
     setImageLoaded(false);
 
+    // Подстраховка: если картинка по какой-то причине не пришлёт onLoad
+    // (медленная сеть, странный формат), не держим карточку скрытой вечно.
+    const imageSafetyTimer = setTimeout(() => {
+      setImageLoaded(true);
+    }, 2500);
+
 
     getProduct(productId)
 
@@ -211,6 +217,8 @@ export default function ProductPage(){
     });
 
 
+    return () => clearTimeout(imageSafetyTimer);
+
 
   },[productId]);
 
@@ -228,8 +236,11 @@ export default function ProductPage(){
     return(
 
       <div className="
-      p-6
+      min-h-screen
+      bg-[#080808]
       text-white
+      pt-[122px]
+      px-6
       "
       >
 
@@ -255,8 +266,11 @@ export default function ProductPage(){
     return(
 
       <div className="
-      p-6
+      min-h-screen
+      bg-[#080808]
       text-white
+      pt-[122px]
+      px-6
       "
       >
 
