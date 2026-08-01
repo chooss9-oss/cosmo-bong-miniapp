@@ -4,11 +4,48 @@
 
 import { useEffect, useState, useRef } from "react";
 
+import { useNavigate } from "react-router-dom";
+
 import ProductCard from "../../components/ProductCard";
 
-import { getProducts, getCachedProducts } from "../../api/storelandApi";
+import {
+  getProducts,
+  getCategories,
+  getCachedProducts,
+  getCachedCategories
+} from "../../api/storelandApi";
 
 import { readStoredFilter, writeStoredFilter } from "../../utils/filterStorage";
+
+
+type Category = {
+
+  "#text": string;
+
+  "@_id": string;
+
+  "@_parentId"?: string;
+
+};
+
+
+const mainCategoryNames = [
+
+  "Бонги и Водники",
+  "Запчасти и Тюнинг",
+  "Сувенирные трубки",
+  "Гриндеры и Прессы",
+  "Для самокруток",
+  "Аксессуары",
+  "Аксессуары для Wax",
+  "КБД (cbd) / Мицелий",
+  "Гроу",
+  "Чайная Лавка",
+  "Благовония",
+  "Мерч Космо Бонг",
+  "Напасы"
+
+];
 
 
 type Product = {
@@ -51,8 +88,17 @@ function computeCachedSaleProducts(): Product[] {
 function Sales() {
 
 
+  const navigate = useNavigate();
+
+
   const [products, setProducts] = useState<Product[]>(
     () => computeCachedSaleProducts()
+  );
+
+  const [categories, setCategories] = useState<Category[]>(
+    () => (getCachedCategories() ?? []).filter(
+      (cat: Category) => mainCategoryNames.includes(cat["#text"])
+    )
   );
 
   const [loading, setLoading] = useState(
@@ -86,7 +132,10 @@ useEffect(() => {
 
       try {
 
-        const data: Product[] = await getProducts();
+        const [data, categoriesData]: [Product[], Category[]] = await Promise.all([
+          getProducts(),
+          getCategories()
+        ]);
 
         const saleProducts = data.filter(
   (product) =>
@@ -96,6 +145,12 @@ useEffect(() => {
 );
 
         setProducts(saleProducts);
+
+        setCategories(
+          categoriesData.filter(
+            (cat: Category) => mainCategoryNames.includes(cat["#text"])
+          )
+        );
 
       } catch (error) {
 
@@ -132,9 +187,47 @@ useEffect(() => {
 
     <div className="min-h-screen bg-[#080808] text-white pt-[57px] px-5 pb-24">
 
-      
+      {/* ЛИПКИЕ КАТЕГОРИИ */}
 
-      <div className="sticky top-[57px] z-20 bg-[#080808] flex gap-2 py-2 mt-4 flex-wrap">
+      <div className="sticky top-[57px] z-30 bg-[#080808] py-1">
+
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+
+          {categories.map(cat => (
+
+            <button
+
+              key={cat["@_id"]}
+
+              onClick={() => navigate(`/category/${cat["@_id"]}`)}
+
+              className="
+              flex-shrink-0
+              px-3
+              py-1.5
+              rounded-full
+              bg-[#151515]
+              border
+              border-[#58BB43]
+              text-xs
+              font-semibold
+              text-gray-300
+              transition
+              "
+
+            >
+
+              {cat["#text"]}
+
+            </button>
+
+          ))}
+
+        </div>
+
+      </div>
+
+      <div className="sticky top-[94px] z-20 bg-[#080808] flex gap-2 py-2 mt-1 flex-wrap">
 
         <button
 
