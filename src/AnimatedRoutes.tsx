@@ -55,23 +55,48 @@ export default function AnimatedRoutes() {
 
       const saved = scrollPositions.get(location.key) ?? 0;
 
-      let attempts = 0;
-      const maxAttempts = 120; // до 6 сек — каталог рендерит много карточек и может не успеть за 2 сек
+      if (saved <= 0) {
+        window.scrollTo(0, 0);
+        return;
+      }
 
-      const interval = setInterval(() => {
+      // Не ждём один раз "достаточной высоты", а на каждом кадре подтягиваем
+      // скролл к нужной позиции, пока страница дорисовывается (карточки,
+      // картинки). Так работает даже если каталог грузится дольше 1-2 сек.
+      let rafId: number;
+      let stableFrames = 0;
+      const start = Date.now();
+      const maxDuration = 5000;
 
-        attempts++;
+      function tick() {
 
-        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+        const maxScroll = Math.max(
+          document.documentElement.scrollHeight - window.innerHeight,
+          0
+        );
 
-        if (maxScroll >= saved || attempts >= maxAttempts) {
-          window.scrollTo(0, Math.min(saved, maxScroll));
-          clearInterval(interval);
+        const target = Math.min(saved, maxScroll);
+
+        window.scrollTo(0, target);
+
+        const reachedFullTarget =
+          maxScroll >= saved - 2 && Math.abs(window.scrollY - target) < 2;
+
+        stableFrames = reachedFullTarget ? stableFrames + 1 : 0;
+
+        const timeUp = Date.now() - start > maxDuration;
+
+        if ((stableFrames > 8) || timeUp) {
+          return;
         }
 
-      }, 50);
+        rafId = requestAnimationFrame(tick);
 
-      return () => clearInterval(interval);
+      }
+
+      rafId = requestAnimationFrame(tick);
+
+      return () => cancelAnimationFrame(rafId);
 
     }
 
