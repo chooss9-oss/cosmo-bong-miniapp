@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { getProduct } from "../api/storelandApi";
 
 
 type Product = {
@@ -60,11 +61,16 @@ function ProductCard({
     <div
 
 
-      onClick={() =>
+      onClick={() => {
+        // Запускаем загрузку полных данных товара (описание, варианты) чуть
+        // раньше — в момент клика, ещё до перехода. Пока едет анимация
+        // перехода, часто успевает прийти ответ, и описание не "выскакивает"
+        // с задержкой после открытия карточки.
+        getProduct(product.id).catch(() => {});
         navigate(
           `/product/${product.id}`
         )
-      }
+      }}
 
 
       className="
