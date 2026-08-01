@@ -365,6 +365,12 @@ setLoading
 );
 
 
+// Названия ВСЕХ категорий/подкатегорий (не только основных, которые
+// показаны чипами) — чтобы поиск находил товары по названию подкатегории,
+// например "с перколятором" или "со льдом", даже если этих слов нет в
+// названии/описании конкретного товара.
+const [categoryNameById, setCategoryNameById] = useState<Record<string,string>>({});
+
 const [onlyDiscount, setOnlyDiscount] = useState(
   () => readStoredFilter("catalogFilters:onlyDiscount", false)
 );
@@ -461,6 +467,16 @@ mainCategories
 
 
 
+const nameById:Record<string,string> = {};
+
+categoriesData.forEach((cat:Category)=>{
+  nameById[cat["@_id"]] = cat["#text"] || "";
+});
+
+setCategoryNameById(nameById);
+
+
+
 }
 
 catch(error){
@@ -531,24 +547,32 @@ return;
 const stopWords=[
 
 "с",
+"со",
 "и",
 "для",
 "на",
 "по",
 "от",
 "из",
+"изо",
 "в",
+"во",
 "у",
 "о",
 "об",
+"обо",
 "до",
 "за",
 "под",
+"подо",
 "над",
+"надо",
 "при",
 "через",
 "между",
 "без",
+"безо",
+"ко",
 "как",
 "что",
 "это",
@@ -638,11 +662,29 @@ product.description
 
 
 
+const categoryNames =
+
+(product.categoryIds || [])
+
+.map(id=>categoryNameById[id] || "")
+
+.join(" ")
+
+.toLowerCase();
+
+
+
+const searchableText =
+
+`${name} ${description} ${categoryNames}`;
+
+
+
 const fullText =
 
 normalizeWord(
 
-`${name} ${description}`
+searchableText
 
 );
 
@@ -650,7 +692,7 @@ normalizeWord(
 
 const textTokens =
 
-`${name} ${description}`
+searchableText
 
 .split(/\s+/)
 
@@ -682,7 +724,8 @@ result
 
 },[
 search,
-products
+products,
+categoryNameById
 ]);
 
 
