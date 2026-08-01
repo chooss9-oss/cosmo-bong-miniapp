@@ -12,7 +12,8 @@ import {
 } from "../../context/CartContext";
 
 import {
-  getCachedProductPreview
+  getCachedProductPreview,
+  getProduct
 } from "../../api/storelandApi";
 
 import FadeImage from "../../components/FadeImage";
@@ -112,6 +113,21 @@ export default function ProductPage(){
 
 
 
+  // Описание и варианты приходят только с полного запроса товара (в отличие
+  // от превью из кэша каталога). Плавно проявляем этот блок, когда данные
+  // приезжают, вместо резкого "выскакивания".
+  const [
+    detailsVisible,
+    setDetailsVisible
+  ] = useState(
+    () => {
+      const preview = getCachedProductPreview(productId ?? "");
+      return Boolean(preview?.description || preview?.variants);
+    }
+  );
+
+
+
 
 
 
@@ -123,32 +139,19 @@ export default function ProductPage(){
       return;
 
 
+    // Если для этого товара уже показывается превью без описания —
+    // на момент прихода полных данных проиграем fade-in для этого блока.
+    const hadFullDetails = Boolean(
+      getCachedProductPreview(productId)?.description ||
+      getCachedProductPreview(productId)?.variants
+    );
 
-    fetch(
-  `/api/product/${productId}`,
-  {
-    cache:"no-store"
-  }
-)
-
-
-    .then(async response=>{
-
-
-      if(!response.ok){
-
-        throw new Error(
-          "Товар не найден"
-        );
-
-      }
+    if (!hadFullDetails) {
+      setDetailsVisible(false);
+    }
 
 
-      return response.json();
-
-
-    })
-
+    getProduct(productId)
 
 
     .then(data=>{
@@ -163,6 +166,15 @@ export default function ProductPage(){
         setSelectedVariant(
           data.variants[0]
         );
+
+      }
+
+
+      if (!hadFullDetails) {
+
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => setDetailsVisible(true));
+        });
 
       }
 
@@ -632,6 +644,13 @@ export default function ProductPage(){
 
 
 
+          <div className={`
+          transition-opacity
+          duration-300
+          ${detailsVisible ? "opacity-100" : "opacity-0"}
+          `}
+          >
+
           <div className="
           mt-6
           "
@@ -766,6 +785,8 @@ export default function ProductPage(){
             )
 
           }
+
+          </div>
 
           <button
 
