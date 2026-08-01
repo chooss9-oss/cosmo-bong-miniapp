@@ -113,26 +113,6 @@ export default function ProductPage(){
 
 
 
-  // Карточка товара (картинка + название + цена + описание) появляется
-  // одним общим fade-in, когда готовы ОБА условия: картинка прогрузилась
-  // и полные данные (описание/варианты) приехали с сервера. Так текст и
-  // картинка не появляются вразнобой.
-  const [
-    imageLoaded,
-    setImageLoaded
-  ] = useState(false);
-
-  const [
-    dataReady,
-    setDataReady
-  ] = useState(
-    () => {
-      const preview = getCachedProductPreview(productId ?? "");
-      return Boolean(preview?.description || preview?.variants);
-    }
-  );
-
-  const contentReady = imageLoaded && dataReady;
 
 
 
@@ -145,26 +125,6 @@ export default function ProductPage(){
 
     if(!productId)
       return;
-
-
-    // Если для этого товара уже показывается превью без описания —
-    // на момент прихода полных данных проиграем fade-in для этого блока.
-    const hadFullDetails = Boolean(
-      getCachedProductPreview(productId)?.description ||
-      getCachedProductPreview(productId)?.variants
-    );
-
-    if (!hadFullDetails) {
-      setDataReady(false);
-    }
-
-    setImageLoaded(false);
-
-    // Подстраховка: если картинка по какой-то причине не пришлёт onLoad
-    // (медленная сеть, странный формат), не держим карточку скрытой вечно.
-    const imageSafetyTimer = setTimeout(() => {
-      setImageLoaded(true);
-    }, 2500);
 
 
     getProduct(productId)
@@ -186,9 +146,6 @@ export default function ProductPage(){
       }
 
 
-      setDataReady(true);
-
-
     })
 
 
@@ -200,8 +157,6 @@ export default function ProductPage(){
         "PRODUCT ERROR",
         error
       );
-
-      setDataReady(true);
 
 
     })
@@ -215,9 +170,6 @@ export default function ProductPage(){
 
 
     });
-
-
-    return () => clearTimeout(imageSafetyTimer);
 
 
   },[productId]);
@@ -457,16 +409,13 @@ export default function ProductPage(){
 
       <div
 
-        className={`
+        className="
         bg-[#151515]
         rounded-3xl
         border
         border-white/10
         overflow-hidden
-        transition-opacity
-        duration-300
-        ${contentReady ? "opacity-100" : "opacity-0"}
-        `}
+        "
 
       >
 
@@ -496,10 +445,6 @@ export default function ProductPage(){
             src={image}
 
             alt={product.name}
-
-            onLoad={() => setImageLoaded(true)}
-
-            onError={() => setImageLoaded(true)}
 
             className="
             max-h-64
