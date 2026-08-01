@@ -1,5 +1,6 @@
 import {
-  useState
+  useState,
+  useEffect
 } from "react";
 
 import {
@@ -26,6 +27,24 @@ function Header(){
 
   const isHome =
     location.pathname === "/";
+
+
+
+  // Держим строку поиска в синхронизации с адресной строкой — если
+  // пользователь открыл каталог с поиском (например, вернулся назад),
+  // строка поиска отображает актуальный запрос.
+  useEffect(()=>{
+
+    if(location.pathname !== "/catalog"){
+      return;
+    }
+
+    const params = new URLSearchParams(location.search);
+    const urlSearch = params.get("search") || "";
+
+    setSearch(urlSearch);
+
+  },[location.pathname, location.search]);
 
 
 
@@ -61,9 +80,6 @@ function Header(){
       navigate(
         `/catalog?search=${encodeURIComponent(value)}`
       );
-
-
-      setSearch("");
 
 
     }
