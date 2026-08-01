@@ -504,43 +504,6 @@ mt-2
 
 
 
-<button
-
-  onClick={()=>{
-
-    const tg = (window as any).Telegram?.WebApp;
-
-    const botLink = "https://t.me/csmbngshop_bot";
-
-    if(tg?.openTelegramLink){
-      tg.openTelegramLink(botLink);
-    } else {
-      window.open(botLink, "_blank");
-    }
-
-  }}
-
-  className="
-  mt-4
-  w-full
-  flex
-  items-center
-  justify-center
-  gap-2
-  text-gray-400
-  text-sm
-  py-2
-  "
-
->
-
-  💬 Нажмите, чтобы получать уведомления о заказе в Telegram
-
-</button>
-
-
-
-
 
 <button
 
