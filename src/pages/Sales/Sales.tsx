@@ -8,6 +8,8 @@ import ProductCard from "../../components/ProductCard";
 
 import { getProducts, getCachedProducts } from "../../api/storelandApi";
 
+import { readStoredFilter, writeStoredFilter } from "../../utils/filterStorage";
+
 
 type Product = {
 
@@ -57,7 +59,13 @@ function Sales() {
     () => getCachedProducts() === null
   );
 
-  const [sortBy, setSortBy] = useState<"none" | "price_asc" | "price_desc">("none");
+  const [sortBy, setSortBy] = useState<"none" | "price_asc" | "price_desc">(
+    () => readStoredFilter("salesFilters:sortBy", "none" as "none" | "price_asc" | "price_desc")
+  );
+
+  useEffect(() => {
+    writeStoredFilter("salesFilters:sortBy", sortBy);
+  }, [sortBy]);
 
 const isFirstFilterRender = useRef(true);
 

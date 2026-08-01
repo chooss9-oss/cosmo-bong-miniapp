@@ -21,6 +21,11 @@ import {
   getCachedCategories
 } from "../../api/storelandApi";
 
+import {
+  readStoredFilter,
+  writeStoredFilter
+} from "../../utils/filterStorage";
+
 
 
 
@@ -288,9 +293,21 @@ setLoading
 );
 
 
-const [onlyDiscount, setOnlyDiscount] = useState(false);
+const [onlyDiscount, setOnlyDiscount] = useState(
+  () => readStoredFilter(`categoryFilters:${categoryId}:onlyDiscount`, false)
+);
 
-const [sortBy, setSortBy] = useState<"none" | "price_asc" | "price_desc">("none");
+const [sortBy, setSortBy] = useState<"none" | "price_asc" | "price_desc">(
+  () => readStoredFilter(`categoryFilters:${categoryId}:sortBy`, "none" as "none" | "price_asc" | "price_desc")
+);
+
+useEffect(() => {
+  writeStoredFilter(`categoryFilters:${categoryId}:onlyDiscount`, onlyDiscount);
+}, [onlyDiscount, categoryId]);
+
+useEffect(() => {
+  writeStoredFilter(`categoryFilters:${categoryId}:sortBy`, sortBy);
+}, [sortBy, categoryId]);
 
 const isFirstFilterRender = useRef(true);
 
