@@ -587,6 +587,21 @@ app.get("/api/refresh-catalog", async (req, res) => {
 // ==============================
 // ALL PRODUCTS
 // ==============================
+// Превращает HTML-описание в короткий текст без тегов — этого достаточно,
+// чтобы поиск в каталоге находил товары по словам из описания ("для льда",
+// "медуза" и т.д.), но не раздувает основной список товаров полным HTML.
+function descriptionToSearchText(html) {
+  if (!html) return "";
+  return html
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+    .slice(0, 600);
+}
+
 app.get("/api/products", async (req, res) => {
   try {
     const redisSalesData = await readSalesCacheFromRedis();
@@ -611,7 +626,8 @@ app.get("/api/products", async (req, res) => {
         price: product.price,
         images: product.images,
         categoryIds: product.categoryIds,
-        inStock
+        inStock,
+        descriptionText: descriptionToSearchText(product.description)
       };
 
       if (saleInfo) {

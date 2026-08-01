@@ -50,6 +50,8 @@ type Product = {
 
   description?:string;
 
+  descriptionText?:string;
+
 };
 
 
@@ -656,6 +658,12 @@ product.description
 )
 
 :
+
+product.descriptionText
+
+?.toLowerCase()
+
+||
 
 "";
 
