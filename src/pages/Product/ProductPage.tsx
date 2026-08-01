@@ -459,11 +459,10 @@ export default function ProductPage(){
             w-11
             h-11
             object-contain
-            [filter:drop-shadow(0_0_2px_#58BB43)_drop-shadow(0_0_2px_#58BB43)_drop-shadow(0_1px_3px_rgba(0,0,0,0.7))]
             ${
               productId && isFavorite(productId)
-              ? "opacity-100"
-              : "opacity-50 grayscale"
+              ? "[filter:drop-shadow(0_0_2px_#E53935)_drop-shadow(0_0_2px_#E53935)_drop-shadow(0_1px_3px_rgba(0,0,0,0.7))] opacity-100"
+              : "[filter:drop-shadow(0_0_2px_#58BB43)_drop-shadow(0_0_2px_#58BB43)_drop-shadow(0_1px_3px_rgba(0,0,0,0.7))] opacity-50 grayscale"
             }
             `}
 
