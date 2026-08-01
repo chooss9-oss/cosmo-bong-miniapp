@@ -6,6 +6,10 @@ import {
   useCart
 } from "../../context/CartContext";
 
+import {
+  getTelegramUser
+} from "../../utils/telegram";
+
 
 
 
@@ -25,7 +29,9 @@ clearCart
 const [
 username,
 setUsername
-]=useState("");
+]=useState(
+  () => getTelegramUser()?.username || ""
+);
 
 
 

@@ -253,6 +253,47 @@ setLoading
 );
 
 
+// Каталог рендерит товары порциями (а не все 538 разом) — так первая
+// отрисовка быстрее, особенно на слабых телефонах. Количество уже
+// подгруженных товаров запоминаем в sessionStorage, чтобы при возврате
+// назад со страницы товара список не "схлопывался" обратно к началу.
+const CHUNK_SIZE = 40;
+
+const [visibleCount, setVisibleCount] = useState(
+  () => readStoredFilter("catalogVisibleCount", CHUNK_SIZE)
+);
+
+const sentinelRef = useRef<HTMLDivElement>(null);
+
+useEffect(() => {
+  writeStoredFilter("catalogVisibleCount", visibleCount);
+}, [visibleCount]);
+
+useEffect(() => {
+
+  const el = sentinelRef.current;
+  if (!el) return;
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting) {
+        setVisibleCount(count => count + CHUNK_SIZE);
+      }
+    },
+    { rootMargin: "600px" }
+  );
+
+  observer.observe(el);
+
+  return () => observer.disconnect();
+
+// Пересоздаём наблюдатель, когда меняется loading (сторожевой блок
+// появляется в DOM только после того, как товары загрузились) и когда
+// растёт visibleCount (чтобы всегда следить за актуальным сторожевым
+// блоком в конце списка).
+}, [loading, visibleCount]);
+
+
 const [onlyDiscount, setOnlyDiscount] = useState(
   () => readStoredFilter("catalogFilters:onlyDiscount", false)
 );
@@ -279,8 +320,22 @@ useEffect(() => {
   }
 
   window.scrollTo(0, 0);
+  setVisibleCount(CHUNK_SIZE);
 
 }, [sortBy, onlyDiscount]);
+
+const isFirstSearchRender = useRef(true);
+
+useEffect(() => {
+
+  if (isFirstSearchRender.current) {
+    isFirstSearchRender.current = false;
+    return;
+  }
+
+  setVisibleCount(CHUNK_SIZE);
+
+}, [search]);
 
 
 
@@ -558,6 +613,8 @@ else if(sortBy === "price_desc"){
   displayedProducts = [...displayedProducts].sort((a, b) => b.price - a.price);
 
 }
+
+const visibleProducts = displayedProducts.slice(0, visibleCount);
 
 
 
@@ -862,7 +919,7 @@ gap-3
 
 {
 
-displayedProducts.map(product=>(
+visibleProducts.map(product=>(
 
 
 <ProductCard
@@ -884,10 +941,11 @@ product={product}
 </div>
 
 
-
-
-
-
+{
+  visibleCount < displayedProducts.length && (
+    <div ref={sentinelRef} className="h-10" />
+  )
+}
 
 
 
