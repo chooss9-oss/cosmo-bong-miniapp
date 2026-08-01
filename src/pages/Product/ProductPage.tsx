@@ -466,8 +466,13 @@ export default function ProductPage(){
             h-11
             object-contain
             drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]
-            ${mounted ? "transition-all" : ""}
-            ${productId && isFavorite(productId) ? "opacity-100" : "opacity-40 grayscale"}
+            ${
+              !mounted
+              ? "opacity-0"
+              : productId && isFavorite(productId)
+              ? "opacity-100"
+              : "opacity-40 grayscale"
+            }
             `}
 
           />
