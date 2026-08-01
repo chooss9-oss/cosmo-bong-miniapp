@@ -230,7 +230,7 @@ function Header(){
             <img
               src="/nav-icons/search.png"
               alt=""
-              className="w-5 h-5 object-contain opacity-80"
+              className="w-7 h-7 object-contain opacity-90"
             />
 
 

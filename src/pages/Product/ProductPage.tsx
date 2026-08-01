@@ -438,14 +438,11 @@ export default function ProductPage(){
           top-3
           left-3
           z-10
-          w-9
-          h-9
+          w-11
+          h-11
           flex
           items-center
           justify-center
-          rounded-full
-          bg-black/40
-          backdrop-blur
           "
 
         >
@@ -457,9 +454,10 @@ export default function ProductPage(){
             alt=""
 
             className={`
-            w-6
-            h-6
+            w-11
+            h-11
             object-contain
+            drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]
             transition-all
             ${productId && isFavorite(productId) ? "opacity-100" : "opacity-40 grayscale"}
             `}

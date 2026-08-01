@@ -111,14 +111,11 @@ function ProductCard({
         top-3
         left-3
         z-10
-        w-8
-        h-8
+        w-9
+        h-9
         flex
         items-center
         justify-center
-        rounded-full
-        bg-black/40
-        backdrop-blur
         "
 
       >
@@ -130,9 +127,10 @@ function ProductCard({
           alt=""
 
           className={`
-          w-5
-          h-5
+          w-9
+          h-9
           object-contain
+          drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]
           transition-all
           ${favorite ? "opacity-100" : "opacity-40 grayscale"}
           `}
