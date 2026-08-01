@@ -1,6 +1,23 @@
 const API_URL = "/api";
 
 
+// Кэш в памяти модуля — переживает возврат назад (компонент страницы
+// пересоздаётся, а модуль — нет). Позволяет отрисовать список товаров
+// мгновенно из кэша, пока в фоне идёт свежий запрос.
+let productsCache: any[] | null = null;
+let categoriesCache: any[] | null = null;
+
+
+export function getCachedProducts() {
+  return productsCache;
+}
+
+
+export function getCachedCategories() {
+  return categoriesCache;
+}
+
+
 export async function getProducts() {
 
   const response = await fetch(
@@ -15,7 +32,11 @@ export async function getProducts() {
   }
 
 
-  return response.json();
+  const data = await response.json();
+
+  productsCache = data;
+
+  return data;
 
 }
 
@@ -36,7 +57,11 @@ export async function getCategories() {
   }
 
 
-  return response.json();
+  const data = await response.json();
+
+  categoriesCache = data;
+
+  return data;
 
 }
 

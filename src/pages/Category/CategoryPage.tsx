@@ -16,7 +16,9 @@ import ProductCard from "../../components/ProductCard";
 
 import {
   getProducts,
-  getCategories
+  getCategories,
+  getCachedProducts,
+  getCachedCategories
 } from "../../api/storelandApi";
 
 
@@ -168,6 +170,41 @@ categories:Category[]
 
 
 
+// Синхронно считает товары категории из кэша (если он уже есть),
+// чтобы при возврате назад страница отрисовалась сразу, без ожидания сети.
+function computeCachedCategoryProducts(
+  categoryId: string | undefined
+): Product[] {
+
+  const cachedProducts = getCachedProducts();
+  const cachedCategories = getCachedCategories();
+
+  if (!cachedProducts || !cachedCategories || !categoryId) {
+    return [];
+  }
+
+  const currentCategory = cachedCategories.find(
+    (cat: Category) => String(cat["@_id"]) === String(categoryId)
+  );
+
+  if (!currentCategory) {
+    return [];
+  }
+
+  const childIds = getChildCategoryIds(
+    String(currentCategory["@_id"]),
+    cachedCategories
+  );
+
+  const allowedIds = [String(currentCategory["@_id"]), ...childIds];
+
+  return cachedProducts.filter((product: Product) =>
+    product.categoryIds?.some(id => allowedIds.includes(String(id)))
+  );
+
+}
+
+
 export default function CategoryPage(){
 
 
@@ -194,7 +231,9 @@ products,
 
 setProducts
 
-]=useState<Product[]>([]);
+]=useState<Product[]>(
+  () => computeCachedCategoryProducts(categoryId)
+);
 
 
 
@@ -206,7 +245,11 @@ categories,
 
 setCategories
 
-]=useState<Category[]>([]);
+]=useState<Category[]>(
+  () => (getCachedCategories() ?? []).filter(
+    (cat: Category) => mainCategoryNames.includes(cat["#text"])
+  )
+);
 
 
 
@@ -218,7 +261,17 @@ category,
 
 setCategory
 
-]=useState<Category|null>(null);
+]=useState<Category|null>(
+  () => {
+    const cachedCategories = getCachedCategories();
+    if (!cachedCategories || !categoryId) return null;
+    return (
+      cachedCategories.find(
+        (cat: Category) => String(cat["@_id"]) === String(categoryId)
+      ) || null
+    );
+  }
+);
 
 
 
@@ -230,7 +283,9 @@ loading,
 
 setLoading
 
-]=useState(true);
+]=useState(
+  () => getCachedProducts() === null
+);
 
 
 const [onlyDiscount, setOnlyDiscount] = useState(false);

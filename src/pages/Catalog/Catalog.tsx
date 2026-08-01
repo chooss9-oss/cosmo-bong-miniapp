@@ -16,7 +16,9 @@ import ProductCard from "../../components/ProductCard";
 
 import {
   getProducts,
-  getCategories
+  getCategories,
+  getCachedProducts,
+  getCachedCategories
 } from "../../api/storelandApi";
 
 
@@ -199,7 +201,9 @@ products,
 
 setProducts
 
-]=useState<Product[]>([]);
+]=useState<Product[]>(
+  () => getCachedProducts() ?? []
+);
 
 
 
@@ -211,7 +215,9 @@ categories,
 
 setCategories
 
-]=useState<Category[]>([]);
+]=useState<Category[]>(
+  () => getCachedCategories() ?? []
+);
 
 
 
@@ -223,7 +229,9 @@ filteredProducts,
 
 setFilteredProducts
 
-]=useState<Product[]>([]);
+]=useState<Product[]>(
+  () => getCachedProducts() ?? []
+);
 
 
 
@@ -235,7 +243,9 @@ loading,
 
 setLoading
 
-]=useState(true);
+]=useState(
+  () => getCachedProducts() === null
+);
 
 
 const [onlyDiscount, setOnlyDiscount] = useState(false);
