@@ -446,12 +446,25 @@ export default function ProductPage(){
           rounded-full
           bg-black/40
           backdrop-blur
-          text-lg
           "
 
         >
 
-          {productId && isFavorite(productId) ? "❤️" : "🤍"}
+          <img
+
+            src="/nav-icons/favorites.png"
+
+            alt=""
+
+            className={`
+            w-6
+            h-6
+            object-contain
+            transition-all
+            ${productId && isFavorite(productId) ? "opacity-100" : "opacity-40 grayscale"}
+            `}
+
+          />
 
         </button>
 

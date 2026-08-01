@@ -23,8 +23,9 @@ function PromoBanner() {
               ГОРЯЧИЕ ПРЕДЛОЖЕНИЯ
             </p>
 
-            <h2 className="text-3xl font-extrabold mt-2">
-              🔥 СКИДКИ
+            <h2 className="text-3xl font-extrabold mt-2 flex items-center gap-2">
+              <img src="/nav-icons/promotions.png" alt="" className="w-8 h-8 object-contain" />
+              СКИДКИ
             </h2>
 
             <p className="mt-3 text-sm">

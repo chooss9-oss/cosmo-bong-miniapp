@@ -1,11 +1,21 @@
 function Profile() {
 
   return (
-    <div className="px-5 pt-6">
+    <div className="px-5 pt-[80px] pb-24">
 
-      <h1 className="text-3xl font-bold">
-        Профиль
-      </h1>
+      <div className="flex items-center gap-3">
+
+        <img
+          src="/nav-icons/profile.png"
+          alt=""
+          className="w-14 h-14 object-contain"
+        />
+
+        <h1 className="text-3xl font-bold">
+          Профиль
+        </h1>
+
+      </div>
 
 
       <p className="mt-4 text-gray-400">
@@ -25,8 +35,9 @@ function Profile() {
         "
       >
 
-        <h2 className="text-xl font-bold">
-          👤 Ваш аккаунт
+        <h2 className="text-xl font-bold flex items-center gap-2">
+          <img src="/nav-icons/profile.png" alt="" className="w-6 h-6 object-contain" />
+          Ваш аккаунт
         </h2>
 
 

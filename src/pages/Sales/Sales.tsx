@@ -283,8 +283,9 @@ useEffect(() => {
 
       </div>
 
-<h1 className="text-3xl font-bold">
-  🔥 Акции Cosmo Bong
+<h1 className="text-3xl font-bold flex items-center gap-2">
+  <img src="/nav-icons/promotions.png" alt="" className="w-8 h-8 object-contain" />
+  Акции Cosmo Bong
 </h1>
 
 <p className="mt-3 text-gray-400">

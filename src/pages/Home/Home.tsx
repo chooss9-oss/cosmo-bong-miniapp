@@ -574,11 +574,15 @@ mb-5
 className="
 text-xl
 font-bold
+flex
+items-center
+gap-2
 "
 
 >
 
-🔥 Акции
+<img src="/nav-icons/promotions.png" alt="" className="w-6 h-6 object-contain" />
+Акции
 
 </h2>
 

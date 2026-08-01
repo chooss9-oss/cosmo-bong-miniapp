@@ -119,12 +119,25 @@ function ProductCard({
         rounded-full
         bg-black/40
         backdrop-blur
-        text-base
         "
 
       >
 
-        {favorite ? "❤️" : "🤍"}
+        <img
+
+          src="/nav-icons/favorites.png"
+
+          alt=""
+
+          className={`
+          w-5
+          h-5
+          object-contain
+          transition-all
+          ${favorite ? "opacity-100" : "opacity-40 grayscale"}
+          `}
+
+        />
 
       </button>
 
@@ -146,15 +159,21 @@ function ProductCard({
             text-black
             text-xs
             font-black
-            px-3
+            pl-1.5
+            pr-3
             py-1
             rounded-full
             shadow-lg
+            flex
+            items-center
+            gap-0.5
             "
 
           >
 
-            🔥 -
+            <img src="/nav-icons/promotions.png" alt="" className="w-4 h-4 object-contain" />
+
+            -
             {
               product.discount
             }

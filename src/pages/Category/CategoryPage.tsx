@@ -689,6 +689,9 @@ onClick={() => setOnlyDiscount(v => !v)}
 
 className={`
 flex-shrink-0
+flex
+items-center
+gap-1
 px-3
 py-1.5
 rounded-full
@@ -705,7 +708,8 @@ ${
 
 >
 
-🔥 Со скидкой
+<img src="/nav-icons/promotions.png" alt="" className="w-4 h-4 object-contain" />
+Со скидкой
 
 </button>
 

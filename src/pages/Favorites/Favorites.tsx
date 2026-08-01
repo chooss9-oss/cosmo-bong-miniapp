@@ -76,8 +76,9 @@ function Favorites() {
 
     <div className="min-h-screen bg-[#080808] text-white pt-[57px] px-5 pb-24">
 
-      <h1 className="text-3xl font-bold mt-4">
-        ❤️ Избранное
+      <h1 className="text-3xl font-bold mt-4 flex items-center gap-2">
+        <img src="/nav-icons/favorites.png" alt="" className="w-8 h-8 object-contain" />
+        Избранное
       </h1>
 
       <p className="mt-3 text-gray-400">
@@ -99,8 +100,9 @@ function Favorites() {
       </div>
 
       {!loading && favoriteProducts.length === 0 && (
-        <div className="text-gray-400 text-center mt-10">
-          Пока пусто — нажмите на 🤍 на карточке товара, чтобы добавить сюда
+        <div className="text-gray-400 text-center mt-10 flex flex-col items-center gap-3">
+          <img src="/nav-icons/favorites.png" alt="" className="w-12 h-12 object-contain opacity-40 grayscale" />
+          Пока пусто — нажмите на сердечко на карточке товара, чтобы добавить сюда
         </div>
       )}
 

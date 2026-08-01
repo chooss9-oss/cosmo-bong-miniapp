@@ -347,13 +347,14 @@ text-center
 <div
 
 className="
-text-5xl
 mb-5
+flex
+justify-center
 "
 
 >
 
-🛒
+<img src="/nav-icons/cart.png" alt="" className="w-16 h-16 object-contain opacity-70" />
 
 </div>
 
