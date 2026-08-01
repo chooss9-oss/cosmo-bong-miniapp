@@ -371,7 +371,7 @@ if (telegramUserId) {
 
 💰 Сумма: ${Number(total).toLocaleString()} ₽`;
 
-    await fetch(
+    const customerResponse = await fetch(
       `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
       {
         method: "POST",
@@ -392,6 +392,20 @@ if (telegramUserId) {
         })
       }
     );
+
+    const customerData = await customerResponse.json();
+
+    if (!customerData.ok) {
+
+      // Telegram ответил ошибкой (не бросает исключение сам fetch) —
+      // логируем полностью, чтобы видеть точную причину в Vercel.
+      console.log(
+        "CUSTOMER MESSAGE REJECTED:",
+        telegramUserId,
+        JSON.stringify(customerData)
+      );
+
+    }
 
   } catch (customerMessageError) {
 
