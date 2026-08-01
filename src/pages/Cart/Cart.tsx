@@ -7,6 +7,8 @@ import {
   useCart
 } from "../../context/CartContext";
 
+import { cleanProductName } from "../../utils/productName";
+
 
 import {
   useNavigate
@@ -515,7 +517,7 @@ item.images?.[0] ||
 item.images?.[0]
 }
 
-alt={item.name}
+alt={cleanProductName(item.name)}
 
 className="
 max-h-24
@@ -544,7 +546,7 @@ text-sm
 line-clamp-2
 ">
 
-{item.name}
+{cleanProductName(item.name)}
 
 </h2>
 

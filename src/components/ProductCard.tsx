@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { getProduct } from "../api/storelandApi";
 import { useFavorites } from "../context/FavoritesContext";
+import { cleanProductName } from "../utils/productName";
 
 
 type Product = {
@@ -250,12 +251,11 @@ function ProductCard({
         text-sm
         font-bold
         leading-snug
-        line-clamp-3
         "
 
       >
 
-        {product.name}
+        {cleanProductName(product.name)}
 
 
       </h3>

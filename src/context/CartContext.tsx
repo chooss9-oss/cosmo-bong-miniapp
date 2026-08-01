@@ -4,6 +4,8 @@ import {
   useState
 } from "react";
 
+import { cleanProductName } from "../utils/productName";
+
 
 
 type Product = {
@@ -294,7 +296,7 @@ saveCart(newCart);
 
 showToast(
 
-`✅ ${product.name} добавлен в корзину`
+`✅ ${cleanProductName(product.name)} добавлен в корзину`
 
 );
 

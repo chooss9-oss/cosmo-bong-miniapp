@@ -22,6 +22,8 @@ import {
 
 import FadeImage from "../../components/FadeImage";
 
+import { cleanProductName } from "../../utils/productName";
+
 interface Variant {
 
   id:string;
@@ -351,7 +353,7 @@ export default function ProductPage(){
       id:String(product.id),
 
 
-      name:product.name,
+      name:cleanProductName(product.name),
 
 
       price,
@@ -604,7 +606,7 @@ export default function ProductPage(){
 
           >
 
-            {product.name}
+            {cleanProductName(product.name)}
 
 
           </h1>
