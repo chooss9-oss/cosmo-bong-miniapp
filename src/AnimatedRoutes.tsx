@@ -56,7 +56,7 @@ export default function AnimatedRoutes() {
       const saved = scrollPositions.get(location.key) ?? 0;
 
       let attempts = 0;
-      const maxAttempts = 40;
+      const maxAttempts = 120; // до 6 сек — каталог рендерит много карточек и может не успеть за 2 сек
 
       const interval = setInterval(() => {
 
