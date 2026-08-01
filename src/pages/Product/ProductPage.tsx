@@ -628,7 +628,7 @@ export default function ProductPage(){
 
             (
 
-            <>
+            <div className="fade-in-fast">
 
             <h2 className="
             font-bold
@@ -708,7 +708,7 @@ export default function ProductPage(){
             </div>
 
 
-            </>
+            </div>
 
             )
 
@@ -737,6 +737,7 @@ export default function ProductPage(){
               text-sm
               leading-relaxed
               product-description
+              fade-in-fast
               "
               dangerouslySetInnerHTML={{
 
