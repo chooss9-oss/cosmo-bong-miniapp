@@ -87,6 +87,14 @@ export default function ProductPage(){
     toggleFavorite
   } = useFavorites();
 
+  // Не проигрываем CSS-переход на первом кадре — иначе сердечко на миг
+  // мелькает "неправильной" яркостью, пока применяются стили.
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
 
 
 
@@ -458,7 +466,7 @@ export default function ProductPage(){
             h-11
             object-contain
             drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]
-            transition-all
+            ${mounted ? "transition-all" : ""}
             ${productId && isFavorite(productId) ? "opacity-100" : "opacity-40 grayscale"}
             `}
 

@@ -175,6 +175,8 @@ username,
 
 telegramUsername: getTelegramUsername(),
 
+telegramUserId: getTelegramUser()?.id,
+
 phone,
 
 comment,

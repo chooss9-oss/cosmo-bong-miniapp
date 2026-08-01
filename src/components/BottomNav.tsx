@@ -252,8 +252,8 @@ src={item.icon}
 alt=""
 
 className={`
-w-10
-h-10
+w-8
+h-8
 object-contain
 transition-all
 duration-200

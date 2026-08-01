@@ -80,6 +80,8 @@ username,
 
 telegramUsername,
 
+telegramUserId,
+
 phone,
 
 comment,
@@ -351,6 +353,43 @@ error:"Telegram send failed"
 
 }
 
+
+// ==============================
+// Подтверждение клиенту в личку с ботом (необязательно — если не
+// получится, например бот заблокирован, заказ всё равно считается
+// оформленным)
+// ==============================
+if (telegramUserId) {
+
+  try {
+
+    const customerMessage =
+`✅ Ваш заказ принят!
+
+Спасибо за покупку в Cosmo Bong 🌿
+Мы получили заказ и скоро свяжемся с вами.
+
+💰 Сумма: ${Number(total).toLocaleString()} ₽`;
+
+    await fetch(
+      `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: telegramUserId,
+          text: customerMessage
+        })
+      }
+    );
+
+  } catch (customerMessageError) {
+
+    console.log("CUSTOMER MESSAGE ERROR:", customerMessageError.message);
+
+  }
+
+}
 
 
 

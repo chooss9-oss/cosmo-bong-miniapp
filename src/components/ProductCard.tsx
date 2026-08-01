@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { getProduct } from "../api/storelandApi";
 import { useFavorites } from "../context/FavoritesContext";
 
@@ -42,6 +42,14 @@ function ProductCard({
   const { isFavorite, toggleFavorite } = useFavorites();
 
   const favorite = isFavorite(product.id);
+
+  // Не проигрываем CSS-переход на самом первом кадре — иначе иконка
+  // на миг мелькает "неправильным" состоянием, пока применяются стили.
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
 
 
@@ -111,8 +119,8 @@ function ProductCard({
         top-3
         left-3
         z-10
-        w-9
-        h-9
+        w-7
+        h-7
         flex
         items-center
         justify-center
@@ -127,11 +135,11 @@ function ProductCard({
           alt=""
 
           className={`
-          w-9
-          h-9
+          w-7
+          h-7
           object-contain
           drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]
-          transition-all
+          ${mounted ? "transition-all" : ""}
           ${favorite ? "opacity-100" : "opacity-40 grayscale"}
           `}
 
