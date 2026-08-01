@@ -118,7 +118,7 @@ path:"/profile",
 
 label:"Профиль",
 
-icon:"👤"
+icon:"🦁"
 
 }
 
@@ -160,12 +160,12 @@ h-20
 <div
 
 className="
-max-w-md
 mx-auto
 h-full
 flex
 items-center
-justify-around
+justify-between
+px-1
 "
 
 >
@@ -192,6 +192,10 @@ className={({isActive})=>
 
 relative
 
+flex-1
+
+min-w-0
+
 flex
 
 flex-col
@@ -200,9 +204,9 @@ items-center
 
 justify-center
 
-gap-1
+gap-0.5
 
-text-xs
+text-[10px]
 
 transition
 
@@ -233,7 +237,7 @@ isActive
 
 className="
 relative
-text-2xl
+text-lg
 "
 
 >
@@ -346,7 +350,15 @@ px-1
 
 
 
-<span>
+<span
+
+className="
+truncate
+max-w-full
+leading-none
+"
+
+>
 
 {item.label}
 
