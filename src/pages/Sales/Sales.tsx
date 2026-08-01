@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 
 import ProductCard from "../../components/ProductCard";
 
-import { getProducts } from "../../api/storelandApi";
+import { getProducts, getCachedProducts } from "../../api/storelandApi";
 
 
 type Product = {
@@ -30,12 +30,32 @@ type Product = {
 };
 
 
+function computeCachedSaleProducts(): Product[] {
+
+  const cached = getCachedProducts();
+
+  if (!cached) return [];
+
+  return cached.filter(
+    (product: Product) =>
+      product.oldPrice &&
+      product.oldPrice > product.price &&
+      product.inStock !== false
+  );
+
+}
+
+
 function Sales() {
 
 
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(
+    () => computeCachedSaleProducts()
+  );
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(
+    () => getCachedProducts() === null
+  );
 
   const [sortBy, setSortBy] = useState<"none" | "price_asc" | "price_desc">("none");
 

@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 
 type Product = {
@@ -33,6 +34,8 @@ function ProductCard({
 
 
   const navigate = useNavigate();
+
+  const [imgLoaded, setImgLoaded] = useState(false);
 
 
 
@@ -152,13 +155,17 @@ function ProductCard({
           loading="lazy"
 
 
-          className="
+          onLoad={() => setImgLoaded(true)}
+
+
+          className={`
           max-h-36
           object-contain
           hover:scale-105
-          transition-transform
+          transition-all
           duration-300
-          "
+          ${imgLoaded ? "opacity-100" : "opacity-0"}
+          `}
 
         />
 
