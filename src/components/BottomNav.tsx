@@ -58,7 +58,7 @@ path:"/",
 
 label:"Главная",
 
-icon:"🏠"
+icon:"/nav-icons/home.png"
 
 },
 
@@ -70,7 +70,7 @@ path:"/catalog",
 
 label:"Каталог",
 
-icon:"📂"
+icon:"/nav-icons/catalog.png"
 
 },
 
@@ -82,7 +82,7 @@ path:"/sales",
 
 label:"Акции",
 
-icon:"🔥"
+icon:"/nav-icons/promotions.png"
 
 },
 
@@ -94,7 +94,7 @@ path:"/favorites",
 
 label:"Избранное",
 
-icon:"❤️"
+icon:"/nav-icons/favorites.png"
 
 },
 
@@ -106,7 +106,7 @@ path:"/cart",
 
 label:"Корзина",
 
-icon:"🛒"
+icon:"/nav-icons/cart.png"
 
 },
 
@@ -118,7 +118,7 @@ path:"/profile",
 
 label:"Профиль",
 
-icon:"🦁"
+icon:"/nav-icons/profile.png"
 
 }
 
@@ -232,18 +232,35 @@ isActive
 
 >
 
+{({isActive}) => (
+
+<>
 
 <div
 
 className="
 relative
-text-lg
 "
 
 >
 
 
-{item.icon}
+<img
+
+src={item.icon}
+
+alt=""
+
+className={`
+w-7
+h-7
+object-contain
+transition-all
+duration-200
+${isActive ? "opacity-100 scale-110" : "opacity-60"}
+`}
+
+/>
 
 
 
@@ -364,8 +381,9 @@ leading-none
 
 </span>
 
+</>
 
-
+)}
 
 
 </NavLink>
