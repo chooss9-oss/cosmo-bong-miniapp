@@ -18,8 +18,30 @@ import Checkout from "./pages/Checkout/Checkout";
 import Success from "./pages/Success/Success";
 
 
-// Запомненные позиции скролла для каждой записи в истории (по location.key)
+// Запомненные позиции скролла для каждой записи в истории (по location.key).
+// Дублируем в sessionStorage: на тяжёлых страницах (весь каталог разом)
+// WebView Telegram иногда перезагружает страницу при возврате назад —
+// обычный JS Map при этом теряется, а sessionStorage переживает перезагрузку.
 const scrollPositions = new Map<string, number>();
+
+const STORAGE_PREFIX = "scrollPos:";
+
+function readStoredScroll(key: string): number | undefined {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_PREFIX + key);
+    return raw !== null ? Number(raw) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeStoredScroll(key: string, y: number) {
+  try {
+    sessionStorage.setItem(STORAGE_PREFIX + key, String(y));
+  } catch {
+    // sessionStorage недоступен — тихо игнорируем
+  }
+}
 
 
 export default function AnimatedRoutes() {
@@ -39,6 +61,7 @@ export default function AnimatedRoutes() {
 
     function handleScroll() {
       scrollPositions.set(key, window.scrollY);
+      writeStoredScroll(key, window.scrollY);
     }
 
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -53,7 +76,10 @@ export default function AnimatedRoutes() {
 
     if (navigationType === "POP") {
 
-      const saved = scrollPositions.get(location.key) ?? 0;
+      const saved =
+        scrollPositions.get(location.key) ??
+        readStoredScroll(location.key) ??
+        0;
 
       if (saved <= 0) {
         window.scrollTo(0, 0);
@@ -102,6 +128,7 @@ export default function AnimatedRoutes() {
 
     window.scrollTo(0, 0);
     scrollPositions.set(location.key, 0);
+    writeStoredScroll(location.key, 0);
 
   }, [location.key, navigationType]);
 
