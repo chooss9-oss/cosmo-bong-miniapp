@@ -378,7 +378,17 @@ if (telegramUserId) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: telegramUserId,
-          text: customerMessage
+          text: customerMessage,
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "🛍 Открыть магазин",
+                  url: "https://t.me/CSMBNGSHOP_bot/csmbngshop"
+                }
+              ]
+            ]
+          }
         })
       }
     );
