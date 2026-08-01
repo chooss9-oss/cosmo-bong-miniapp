@@ -382,7 +382,7 @@ export default function ProductPage(){
       text-white
       px-4
       pt-[122px]
-      pb-28
+      pb-40
       "
 
     >
@@ -752,28 +752,48 @@ export default function ProductPage(){
 
           }
 
-          <button
-
-            onClick={addProduct}
-
-            className="
-            w-full
-            mt-6
-            bg-[#58BB43]
-            text-black
-            font-bold
-            py-3
-            rounded-xl
-            text-base
-            "
-
-          >
-
-            Добавить в корзину
-
-          </button>
-
         </div>
+
+      </div>
+
+      {/* ПРИЛИПШАЯ КНОПКА "В КОРЗИНУ" — всегда доступна, не нужно листать
+      длинное описание, чтобы её найти */}
+
+      <div
+        className="
+        fixed
+        bottom-20
+        left-0
+        right-0
+        z-40
+        bg-[#080808]/95
+        backdrop-blur
+        border-t
+        border-white/10
+        px-4
+        py-3
+        "
+      >
+
+        <button
+
+          onClick={addProduct}
+
+          className="
+          w-full
+          bg-[#58BB43]
+          text-black
+          font-bold
+          py-3
+          rounded-xl
+          text-base
+          "
+
+        >
+
+          Добавить в корзину
+
+        </button>
 
       </div>
 
