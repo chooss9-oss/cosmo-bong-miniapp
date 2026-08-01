@@ -155,6 +155,87 @@ return word
 
 
 
+// Расстояние Левенштейна — чтобы находить товары даже с опечаткой
+// в поисковом запросе (например "прекулет" вместо "прекулер").
+function levenshtein(
+a:string,
+b:string
+){
+
+const m = a.length;
+const n = b.length;
+
+if(m === 0) return n;
+if(n === 0) return m;
+
+let prevRow = new Array(n + 1);
+let currRow = new Array(n + 1);
+
+for(let j = 0; j <= n; j++){
+  prevRow[j] = j;
+}
+
+for(let i = 1; i <= m; i++){
+
+  currRow[0] = i;
+
+  for(let j = 1; j <= n; j++){
+
+    const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+
+    currRow[j] = Math.min(
+      currRow[j - 1] + 1,
+      prevRow[j] + 1,
+      prevRow[j - 1] + cost
+    );
+
+  }
+
+  [prevRow, currRow] = [currRow, prevRow];
+
+}
+
+return prevRow[n];
+
+}
+
+
+
+
+// Ищем слово по подстроке, а если не нашли — допускаем небольшую опечатку
+// (порог зависит от длины слова, чтобы не ловить случайные совпадения).
+function wordMatchesText(
+searchWord:string,
+fullText:string,
+textTokens:string[]
+){
+
+if(fullText.includes(searchWord)){
+  return true;
+}
+
+const maxDistance =
+  searchWord.length <= 4
+  ? 1
+  : searchWord.length <= 8
+  ? 2
+  : 3;
+
+return textTokens.some(token=>{
+
+  if(Math.abs(token.length - searchWord.length) > maxDistance){
+    return false;
+  }
+
+  return levenshtein(searchWord, token) <= maxDistance;
+
+});
+
+}
+
+
+
+
 
 
 
@@ -508,9 +589,21 @@ normalizeWord(
 
 
 
+const textTokens =
+
+`${name} ${description}`
+
+.split(/\s+/)
+
+.map(token=>normalizeWord(token))
+
+.filter(token=>token.length>1);
+
+
+
 return searchWords.every(word=>
 
-fullText.includes(word)
+wordMatchesText(word, fullText, textTokens)
 
 );
 
