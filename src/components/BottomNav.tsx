@@ -165,7 +165,7 @@ h-full
 flex
 items-center
 justify-between
-px-1
+px-0.5
 "
 
 >
@@ -252,8 +252,8 @@ src={item.icon}
 alt=""
 
 className={`
-w-8
-h-8
+w-6
+h-6
 object-contain
 transition-all
 duration-200
