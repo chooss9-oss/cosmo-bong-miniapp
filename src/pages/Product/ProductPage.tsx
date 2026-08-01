@@ -431,17 +431,26 @@ export default function ProductPage(){
 
           onClick={() => productId && toggleFavorite(productId)}
 
-          className="
+          className={`
           absolute
           top-3
-          left-3
+          right-3
           z-10
           w-11
           h-11
+          rounded-full
           flex
           items-center
           justify-center
-          "
+          border-2
+          bg-black/45
+          backdrop-blur-sm
+          ${
+            productId && isFavorite(productId)
+            ? "border-[#58BB43]"
+            : "border-[#58BB43]/50"
+          }
+          `}
 
         >
 
@@ -454,14 +463,13 @@ export default function ProductPage(){
             decoding="sync"
 
             className={`
-            w-11
-            h-11
+            w-7
+            h-7
             object-contain
-            drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]
             ${
               productId && isFavorite(productId)
               ? "opacity-100"
-              : "opacity-40 grayscale"
+              : "opacity-50 grayscale"
             }
             `}
 
