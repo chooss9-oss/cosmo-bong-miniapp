@@ -119,6 +119,53 @@ return tg?.initDataUnsafe?.user?.username || "";
 
 }
 
+
+
+
+// Спрашиваем нативным окном Telegram разрешение боту писать пользователю —
+// чтобы уведомление о заказе пришло сразу, без отдельного захода в чат с
+// ботом. Если разрешение уже выдано раньше — окно не покажется повторно.
+function requestNotificationAccess(){
+
+  const attempt = new Promise<void>((resolve)=>{
+
+    const tg = window.Telegram?.WebApp;
+
+    if(!tg || !tg.requestWriteAccess){
+      resolve();
+      return;
+    }
+
+    if(tg.initDataUnsafe?.user?.allows_write_to_pm){
+      resolve();
+      return;
+    }
+
+    try{
+
+      tg.requestWriteAccess(()=>{
+        resolve();
+      });
+
+    } catch {
+      resolve();
+    }
+
+  });
+
+  // На случай, если нативное окно Telegram по какой-то причине не вызовет
+  // callback — не даём этому заблокировать оформление заказа.
+  const timeout = new Promise<void>((resolve)=>{
+    setTimeout(resolve, 8000);
+  });
+
+  return Promise.race([attempt, timeout]);
+
+}
+
+
+
+
 async function sendOrder(){
 
 
@@ -132,6 +179,10 @@ alert(
 return;
 
 }
+
+
+
+await requestNotificationAccess();
 
 
 

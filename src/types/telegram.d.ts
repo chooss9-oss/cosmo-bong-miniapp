@@ -8,6 +8,8 @@ interface TelegramWebAppUser {
 
   username?: string;
 
+  allows_write_to_pm?: boolean;
+
 }
 
 
@@ -23,6 +25,9 @@ interface TelegramWebApp {
 
 
   ready(): void;
+
+
+  requestWriteAccess(callback?: (granted: boolean) => void): void;
 
 
 }
