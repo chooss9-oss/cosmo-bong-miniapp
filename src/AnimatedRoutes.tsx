@@ -59,6 +59,8 @@ export default function AnimatedRoutes() {
 
     const key = location.key;
 
+    console.log("[scroll-debug] attach listener for key", key);
+
     function handleScroll() {
       scrollPositions.set(key, window.scrollY);
       writeStoredScroll(key, window.scrollY);
@@ -80,6 +82,17 @@ export default function AnimatedRoutes() {
         scrollPositions.get(location.key) ??
         readStoredScroll(location.key) ??
         0;
+
+      console.log(
+        "[scroll-debug] POP restore start",
+        JSON.stringify({
+          key: location.key,
+          saved,
+          fromMap: scrollPositions.get(location.key),
+          fromStorage: readStoredScroll(location.key),
+          h0: document.documentElement.scrollHeight,
+        })
+      );
 
       if (saved <= 0) {
         window.scrollTo(0, 0);
@@ -113,6 +126,17 @@ export default function AnimatedRoutes() {
         const timeUp = Date.now() - start > maxDuration;
 
         if ((stableFrames > 8) || timeUp) {
+          console.log(
+            "[scroll-debug] POP restore end",
+            JSON.stringify({
+              key: location.key,
+              finalY: window.scrollY,
+              target,
+              maxScroll,
+              stableFrames,
+              timeUp,
+            })
+          );
           return;
         }
 
@@ -125,6 +149,11 @@ export default function AnimatedRoutes() {
       return () => cancelAnimationFrame(rafId);
 
     }
+
+    console.log(
+      "[scroll-debug] reset (non-POP)",
+      JSON.stringify({ key: location.key, navigationType })
+    );
 
     window.scrollTo(0, 0);
     scrollPositions.set(location.key, 0);
