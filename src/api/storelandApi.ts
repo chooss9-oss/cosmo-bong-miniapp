@@ -6,6 +6,7 @@ const API_URL = "/api";
 // мгновенно из кэша, пока в фоне идёт свежий запрос.
 let productsCache: any[] | null = null;
 let categoriesCache: any[] | null = null;
+const productCache = new Map<string, any>();
 
 
 export function getCachedProducts() {
@@ -15,6 +16,20 @@ export function getCachedProducts() {
 
 export function getCachedCategories() {
   return categoriesCache;
+}
+
+
+// Быстрая "превью"-версия товара из уже загруженного списка каталога —
+// у неё есть имя/цена/картинка, но нет описания и вариантов.
+// Достаточно, чтобы карточка товара отрисовалась мгновенно, пока грузятся
+// полные данные.
+export function getCachedProductPreview(id: string) {
+  if (productCache.has(id)) {
+    return productCache.get(id);
+  }
+  return (
+    productsCache?.find((p: any) => String(p.id) === String(id)) ?? null
+  );
 }
 
 
@@ -83,6 +98,10 @@ export async function getProduct(id: string) {
   }
 
 
-  return response.json();
+  const data = await response.json();
+
+  productCache.set(id, data);
+
+  return data;
 
 }

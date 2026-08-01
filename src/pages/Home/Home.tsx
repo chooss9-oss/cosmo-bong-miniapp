@@ -8,6 +8,12 @@ import {
 } from "react-router-dom";
 
 import ProductCard from "../../components/ProductCard";
+import FadeImage from "../../components/FadeImage";
+
+import {
+  getCachedProducts,
+  getCachedCategories
+} from "../../api/storelandApi";
 
 
 
@@ -222,14 +228,18 @@ const navigate = useNavigate();
 const [
 categories,
 setCategories
-]=useState<Category[]>([]);
+]=useState<Category[]>(
+  () => getCachedCategories() ?? []
+);
 
 
 
 const [
 products,
 setProducts
-]=useState<Product[]>([]);
+]=useState<Product[]>(
+  () => getCachedProducts() ?? []
+);
 
 
 
@@ -465,7 +475,7 @@ mb-8
 
 >
 
-<img
+<FadeImage
 
 
 src="/banner.PNG"
@@ -732,7 +742,7 @@ justify-center
 
 
 
-<img
+<FadeImage
 
 
 src={

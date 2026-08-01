@@ -11,6 +11,12 @@ import {
   useCart
 } from "../../context/CartContext";
 
+import {
+  getCachedProductPreview
+} from "../../api/storelandApi";
+
+import FadeImage from "../../components/FadeImage";
+
 interface Variant {
 
   id:string;
@@ -77,14 +83,18 @@ export default function ProductPage(){
   const [
     loading,
     setLoading
-  ] = useState(true);
+  ] = useState(
+    () => !getCachedProductPreview(productId ?? "")
+  );
 
 
 
   const [
     product,
     setProduct
-  ] = useState<Product | null>(null);
+  ] = useState<Product | null>(
+    () => getCachedProductPreview(productId ?? "")
+  );
 
 
 
@@ -444,7 +454,9 @@ export default function ProductPage(){
         >
 
 
-          <img
+          <FadeImage
+
+            key={image}
 
             src={image}
 

@@ -12,6 +12,8 @@ import {
   useNavigate
 } from "react-router-dom";
 
+import FadeImage from "../../components/FadeImage";
+
 
 
 
@@ -505,7 +507,7 @@ rounded-2xl
 &&
 
 
-<img
+<FadeImage
 
 src={
 item.images?.[0] ||
