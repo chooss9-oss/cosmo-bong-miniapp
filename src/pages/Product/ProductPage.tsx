@@ -113,21 +113,6 @@ export default function ProductPage(){
 
 
 
-  // Пока едет запрос полных данных (описание/варианты), показываем
-  // скелетон-заглушку — она появляется сразу вместе с картинкой и ценой,
-  // без задержки, и просто сменяется на текст, когда данные готовы.
-  const [
-    detailsLoaded,
-    setDetailsLoaded
-  ] = useState(
-    () => {
-      const preview = getCachedProductPreview(productId ?? "");
-      return Boolean(preview?.description || preview?.variants);
-    }
-  );
-
-
-
 
 
 
@@ -140,13 +125,6 @@ export default function ProductPage(){
 
     if(!productId)
       return;
-
-
-    const preview = getCachedProductPreview(productId);
-
-    if (!(preview?.description || preview?.variants)) {
-      setDetailsLoaded(false);
-    }
 
 
     getProduct(productId)
@@ -168,9 +146,6 @@ export default function ProductPage(){
       }
 
 
-      setDetailsLoaded(true);
-
-
     })
 
 
@@ -182,8 +157,6 @@ export default function ProductPage(){
         "PRODUCT ERROR",
         error
       );
-
-      setDetailsLoaded(true);
 
 
     })
@@ -643,37 +616,9 @@ export default function ProductPage(){
 
 
 
-          {
-
-            !detailsLoaded && (
-
-              <div
-
-                className="
-                mt-6
-                space-y-2
-                animate-pulse
-                "
-
-              >
-
-                <div className="h-4 w-2/3 bg-white/10 rounded" />
-
-                <div className="h-4 w-full bg-white/10 rounded" />
-
-                <div className="h-4 w-5/6 bg-white/10 rounded" />
-
-              </div>
-
-            )
-
-          }
-
-
-          <div className={`
+          <div className="
           mt-6
-          ${detailsLoaded ? "" : "hidden"}
-          `}
+          "
           >
 
           {
