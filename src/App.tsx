@@ -20,6 +20,7 @@ import SwipeBack from "./components/SwipeBack";
 
 
 import { CartProvider } from "./context/CartContext";
+import { FavoritesProvider } from "./context/FavoritesContext";
 
 if ("scrollRestoration" in window.history) {
   window.history.scrollRestoration = "manual";
@@ -32,6 +33,7 @@ function App() {
     <BrowserRouter>
 
       <CartProvider>
+      <FavoritesProvider>
 
         <SwipeBack />
 
@@ -49,6 +51,7 @@ function App() {
 
         </div>
 
+      </FavoritesProvider>
       </CartProvider>
 
     </BrowserRouter>

@@ -6,6 +6,10 @@ import {
   useCart
 } from "../context/CartContext";
 
+import {
+  useFavorites
+} from "../context/FavoritesContext";
+
 
 
 
@@ -17,6 +21,10 @@ function BottomNav(){
 const {
   cart
 }=useCart();
+
+const {
+  favorites
+}=useFavorites();
 
 
 
@@ -82,11 +90,35 @@ icon:"🔥"
 
 {
 
+path:"/favorites",
+
+label:"Избранное",
+
+icon:"❤️"
+
+},
+
+
+
+{
+
 path:"/cart",
 
 label:"Корзина",
 
 icon:"🛒"
+
+},
+
+
+
+{
+
+path:"/profile",
+
+label:"Профиль",
+
+icon:"👤"
 
 }
 
@@ -248,6 +280,51 @@ px-1
 
 
 {cartCount}
+
+
+
+</span>
+
+
+)
+
+}
+
+
+{
+
+item.path === "/favorites"
+
+&&
+
+favorites.length > 0
+
+&& (
+
+
+<span
+
+className="
+absolute
+-left-3
+-top-2
+bg-[#58BB43]
+text-black
+text-[10px]
+font-bold
+min-w-5
+h-5
+rounded-full
+flex
+items-center
+justify-center
+px-1
+"
+
+>
+
+
+{favorites.length}
 
 
 

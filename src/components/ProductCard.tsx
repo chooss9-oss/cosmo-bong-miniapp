@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { getProduct } from "../api/storelandApi";
+import { useFavorites } from "../context/FavoritesContext";
 
 
 type Product = {
@@ -37,6 +38,10 @@ function ProductCard({
   const navigate = useNavigate();
 
   const [imgLoaded, setImgLoaded] = useState(false);
+
+  const { isFavorite, toggleFavorite } = useFavorites();
+
+  const favorite = isFavorite(product.id);
 
 
 
@@ -90,6 +95,38 @@ function ProductCard({
     >
 
 
+
+
+      {/* ИЗБРАННОЕ */}
+
+      <button
+
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleFavorite(product.id);
+        }}
+
+        className="
+        absolute
+        top-3
+        left-3
+        z-10
+        w-8
+        h-8
+        flex
+        items-center
+        justify-center
+        rounded-full
+        bg-black/40
+        backdrop-blur
+        text-base
+        "
+
+      >
+
+        {favorite ? "❤️" : "🤍"}
+
+      </button>
 
 
       {/* SALE BADGE */}

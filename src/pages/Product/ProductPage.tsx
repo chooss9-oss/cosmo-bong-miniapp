@@ -12,6 +12,10 @@ import {
 } from "../../context/CartContext";
 
 import {
+  useFavorites
+} from "../../context/FavoritesContext";
+
+import {
   getCachedProductPreview,
   getProduct
 } from "../../api/storelandApi";
@@ -77,6 +81,11 @@ export default function ProductPage(){
   const {
     addToCart
   } = useCart();
+
+  const {
+    isFavorite,
+    toggleFavorite
+  } = useFavorites();
 
 
 
@@ -410,6 +419,7 @@ export default function ProductPage(){
       <div
 
         className="
+        relative
         bg-[#151515]
         rounded-3xl
         border
@@ -419,7 +429,31 @@ export default function ProductPage(){
 
       >
 
+        <button
 
+          onClick={() => productId && toggleFavorite(productId)}
+
+          className="
+          absolute
+          top-3
+          left-3
+          z-10
+          w-9
+          h-9
+          flex
+          items-center
+          justify-center
+          rounded-full
+          bg-black/40
+          backdrop-blur
+          text-lg
+          "
+
+        >
+
+          {productId && isFavorite(productId) ? "❤️" : "🤍"}
+
+        </button>
 
 
 

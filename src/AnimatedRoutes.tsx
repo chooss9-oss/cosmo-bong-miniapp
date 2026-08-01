@@ -11,6 +11,7 @@ import Home from "./pages/Home/Home";
 import Catalog from "./pages/Catalog/Catalog";
 import Sales from "./pages/Sales/Sales";
 import Profile from "./pages/Profile/Profile";
+import Favorites from "./pages/Favorites/Favorites";
 import CategoryPage from "./pages/Category/CategoryPage";
 import ProductPage from "./pages/Product/ProductPage";
 import Cart from "./pages/Cart/Cart";
@@ -168,6 +169,8 @@ export default function AnimatedRoutes() {
         <Route path="/sales" element={<Sales />} />
 
         <Route path="/profile" element={<Profile />} />
+
+        <Route path="/favorites" element={<Favorites />} />
 
         <Route path="/category/:categoryId" element={<CategoryPage />} />
 
