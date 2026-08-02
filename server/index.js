@@ -782,6 +782,13 @@ app.post("/api/telegram-webhook", async (req, res) => {
       chatId === adminId
     );
 
+    // Клиент просто запустил бота (/start) — это не сообщение для админа,
+    // ничего не пересылаем и не уведомляем.
+    if (chatId !== adminId && message.text && message.text.trim().startsWith("/start")) {
+      res.sendStatus(200);
+      return;
+    }
+
     if (chatId === adminId) {
 
       // Админ отвечает на запрос трек-номера — это отдельный поток,
