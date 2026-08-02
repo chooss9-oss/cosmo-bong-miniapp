@@ -826,17 +826,9 @@ app.post("/api/telegram-webhook", async (req, res) => {
 
     }
 
-    // Сообщение от клиента — пересылаем админу с пояснением, кто это
-    const forwarded = await telegramApi("forwardMessage", {
-      chat_id: adminId,
-      from_chat_id: chatId,
-      message_id: message.message_id
-    });
-
-    if (!forwarded.ok) {
-      console.log("TELEGRAM WEBHOOK: forwardMessage FAILED:", JSON.stringify(forwarded));
-    }
-
+    // Сообщение от клиента — пересылаем админу с пояснением, кто это.
+    // forwardMessage и sendMessage не зависят друг от друга — шлём их
+    // параллельно, а не по очереди, чтобы не ждать вдвое дольше.
     const user = message.from || {};
 
     const label =
@@ -844,24 +836,33 @@ app.post("/api/telegram-webhook", async (req, res) => {
       ? `@${user.username}`
       : [user.first_name, user.last_name].filter(Boolean).join(" ") || "клиент";
 
-    const info = await telegramApi("sendMessage", {
-      chat_id: adminId,
-      text: `☝️ Сообщение от ${label}.\nОтветьте на него (Reply), чтобы ответ ушёл клиенту.`
-    });
+    const [forwarded, info] = await Promise.all([
+      telegramApi("forwardMessage", {
+        chat_id: adminId,
+        from_chat_id: chatId,
+        message_id: message.message_id
+      }),
+      telegramApi("sendMessage", {
+        chat_id: adminId,
+        text: `☝️ Сообщение от ${label}.\nОтветьте на него (Reply), чтобы ответ ушёл клиенту.`
+      })
+    ]);
+
+    if (!forwarded.ok) {
+      console.log("TELEGRAM WEBHOOK: forwardMessage FAILED:", JSON.stringify(forwarded));
+    }
 
     if (!info.ok) {
       console.log("TELEGRAM WEBHOOK: info sendMessage FAILED:", JSON.stringify(info));
     }
 
-    if (forwarded.ok) {
-      await saveReplyMapping(forwarded.result.message_id, chatId);
-      console.log("TELEGRAM WEBHOOK: saved mapping", forwarded.result.message_id, "->", chatId);
-    }
+    // Сохраняем обе привязки тоже параллельно
+    await Promise.all([
+      forwarded.ok ? saveReplyMapping(forwarded.result.message_id, chatId) : null,
+      info.ok ? saveReplyMapping(info.result.message_id, chatId) : null
+    ]);
 
-    if (info.ok) {
-      await saveReplyMapping(info.result.message_id, chatId);
-      console.log("TELEGRAM WEBHOOK: saved mapping", info.result.message_id, "->", chatId);
-    }
+    console.log("TELEGRAM WEBHOOK: mappings saved for chat", chatId);
 
     res.sendStatus(200);
 
