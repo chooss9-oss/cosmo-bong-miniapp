@@ -342,7 +342,7 @@ useEffect(() => {
 
   window.scrollTo(0, 0);
 
-}, [sortBy, onlyDiscount]);
+}, [sortBy, onlyDiscount, activeSubcategoryId]);
 
 
 
@@ -578,15 +578,6 @@ load();
 
 
 
-useEffect(() => {
-
-  if (categoryScrollRef.current) {
-    categoryScrollRef.current.scrollLeft = 0;
-  }
-
-}, [categoryId]);
-
-
 const subcategories = allCategoriesFull.filter(
   cat => String(cat["@_parentId"]) === String(categoryId)
 );
@@ -679,19 +670,21 @@ pb-5
         onClick={() =>
           navigate(`/category/${cat["@_id"]}`)
         }
-        className="
+        className={`
         flex-shrink-0
         px-3
         py-1.5
         rounded-full
-        bg-[#151515]
         border
-        border-[#58BB43]
         text-xs
         font-semibold
-        text-gray-300
         transition
-        "
+        ${
+          String(cat["@_id"]) === String(categoryId)
+          ? "bg-[#58BB43] border-[#58BB43] text-black"
+          : "bg-[#151515] border-[#58BB43] text-gray-300"
+        }
+        `}
       >
         {cat["#text"]}
       </button>
