@@ -750,82 +750,114 @@ app.get("/api/setup-webhook", async (req, res) => {
 });
 
 // Telegram шлёт сюда все входящие сообщения боту
-app.post("/api/telegram-webhook", (req, res) => {
+app.post("/api/telegram-webhook", async (req, res) => {
 
-  // Telegram ждёт быстрый ответ 200 OK — саму обработку делаем в фоне
-  res.sendStatus(200);
+  // Делаем всё СИНХРОННО до ответа — в serverless-окружении фоновая работа
+  // после res.sendStatus(200) может быть прервана до завершения, из-за
+  // этого ответы могли не доходить. Telegram спокойно ждёт несколько секунд.
+  try {
 
-  const task = (async () => {
+    const update = req.body;
+    const message = update.message;
 
-    try {
+    if (!message) {
+      res.sendStatus(200);
+      return;
+    }
 
-      const update = req.body;
-      const message = update.message;
+    const adminId = String(process.env.ADMIN_ID);
+    const chatId = String(message.chat.id);
 
-      if (!message) return;
+    console.log("TELEGRAM WEBHOOK: incoming message from chat", chatId);
 
-      const adminId = String(process.env.ADMIN_ID);
-      const chatId = String(message.chat.id);
+    if (chatId === adminId) {
 
-      if (chatId === adminId) {
+      // Админ отвечает на пересланное сообщение клиента
+      if (message.reply_to_message && message.text) {
 
-        // Админ отвечает на пересланное сообщение клиента
-        if (message.reply_to_message && message.text) {
+        console.log(
+          "TELEGRAM WEBHOOK: admin reply to message_id",
+          message.reply_to_message.message_id
+        );
 
-          const customerChatId = await getReplyMapping(
-            message.reply_to_message.message_id
-          );
+        const customerChatId = await getReplyMapping(
+          message.reply_to_message.message_id
+        );
 
-          if (customerChatId) {
-            await telegramApi("sendMessage", {
-              chat_id: customerChatId,
-              text: message.text
-            });
+        console.log("TELEGRAM WEBHOOK: resolved customerChatId =", customerChatId);
+
+        if (customerChatId) {
+
+          const sendResult = await telegramApi("sendMessage", {
+            chat_id: customerChatId,
+            text: message.text
+          });
+
+          if (!sendResult.ok) {
+            console.log("TELEGRAM WEBHOOK: reply to customer FAILED:", JSON.stringify(sendResult));
+          } else {
+            console.log("TELEGRAM WEBHOOK: reply delivered to customer", customerChatId);
           }
+
+        } else {
+
+          console.log(
+            "TELEGRAM WEBHOOK: no mapping found for message_id",
+            message.reply_to_message.message_id,
+            "— ответьте именно на пересланное сообщение клиента, не на старое"
+          );
 
         }
 
-        return;
-
       }
 
-      // Сообщение от клиента — пересылаем админу с пояснением, кто это
-      const forwarded = await telegramApi("forwardMessage", {
-        chat_id: adminId,
-        from_chat_id: chatId,
-        message_id: message.message_id
-      });
+      res.sendStatus(200);
+      return;
 
-      const user = message.from || {};
-
-      const label =
-        user.username
-        ? `@${user.username}`
-        : [user.first_name, user.last_name].filter(Boolean).join(" ") || "клиент";
-
-      const info = await telegramApi("sendMessage", {
-        chat_id: adminId,
-        text: `☝️ Сообщение от ${label}.\nОтветьте на него (Reply), чтобы ответ ушёл клиенту.`
-      });
-
-      if (forwarded.ok) {
-        await saveReplyMapping(forwarded.result.message_id, chatId);
-      }
-
-      if (info.ok) {
-        await saveReplyMapping(info.result.message_id, chatId);
-      }
-
-    } catch (error) {
-      console.error("❌ TELEGRAM WEBHOOK ERROR:", error.message);
     }
 
-  })();
+    // Сообщение от клиента — пересылаем админу с пояснением, кто это
+    const forwarded = await telegramApi("forwardMessage", {
+      chat_id: adminId,
+      from_chat_id: chatId,
+      message_id: message.message_id
+    });
 
-  try {
-    waitUntil(task);
-  } catch (e) {
-    // waitUntil доступен только в среде Vercel
+    if (!forwarded.ok) {
+      console.log("TELEGRAM WEBHOOK: forwardMessage FAILED:", JSON.stringify(forwarded));
+    }
+
+    const user = message.from || {};
+
+    const label =
+      user.username
+      ? `@${user.username}`
+      : [user.first_name, user.last_name].filter(Boolean).join(" ") || "клиент";
+
+    const info = await telegramApi("sendMessage", {
+      chat_id: adminId,
+      text: `☝️ Сообщение от ${label}.\nОтветьте на него (Reply), чтобы ответ ушёл клиенту.`
+    });
+
+    if (!info.ok) {
+      console.log("TELEGRAM WEBHOOK: info sendMessage FAILED:", JSON.stringify(info));
+    }
+
+    if (forwarded.ok) {
+      await saveReplyMapping(forwarded.result.message_id, chatId);
+      console.log("TELEGRAM WEBHOOK: saved mapping", forwarded.result.message_id, "->", chatId);
+    }
+
+    if (info.ok) {
+      await saveReplyMapping(info.result.message_id, chatId);
+      console.log("TELEGRAM WEBHOOK: saved mapping", info.result.message_id, "->", chatId);
+    }
+
+    res.sendStatus(200);
+
+  } catch (error) {
+    console.error("❌ TELEGRAM WEBHOOK ERROR:", error.message);
+    res.sendStatus(200);
   }
 
 });
