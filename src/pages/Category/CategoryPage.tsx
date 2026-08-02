@@ -683,6 +683,25 @@ pb-5
   "
 >
 
+    <button
+      onClick={() => navigate("/catalog")}
+      className="
+      flex-shrink-0
+      px-3
+      py-1.5
+      rounded-full
+      border
+      text-xs
+      font-semibold
+      transition
+      bg-[#151515]
+      border-[#58BB43]
+      text-gray-300
+      "
+    >
+      Все
+    </button>
+
     {categories.map(cat => (
 
       <button
