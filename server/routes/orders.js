@@ -351,6 +351,9 @@ text:message,
 reply_markup:{
   inline_keyboard:[
     [
+      { text:"✅ Принять заказ", callback_data:`order_accept:${order.id}` }
+    ],
+    [
       { text:"💰 Оплачен", callback_data:`order_paid:${order.id}` },
       { text:"📦 Отправлен", callback_data:`order_shipped:${order.id}` }
     ]

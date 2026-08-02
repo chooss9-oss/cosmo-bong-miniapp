@@ -19,11 +19,14 @@ const {
 
 const {
   STATUS_LABELS,
-  updateOrderStatus,
-  getOrdersForUser,
-  saveTrackingRequest,
-  getTrackingRequest
+  getOrdersForUser
 } = require("./orderStore");
+
+const {
+  handleOrderCallback,
+  tryHandleTrackingReply,
+  tryHandleShippingData
+} = require("./orderFlow");
 
 const app = express();
 
@@ -749,93 +752,12 @@ app.post("/api/telegram-webhook", async (req, res) => {
 
     const update = req.body;
 
-    // Нажатие на кнопку "Оплачен"/"Отправлен" под уведомлением о заказе
+    // Нажатие на любую из кнопок сценария заказа (принять/подтверждаю/
+    // доставка и оплата/способ доставки/посчитать/оплачен/отправлен)
     if (update.callback_query) {
-
-      const callbackQuery = update.callback_query;
-
-      const adminIdForCallback = String(process.env.ADMIN_ID || "").replace(/\D/g, "");
-      const fromId = String(callbackQuery.from?.id || "").replace(/\D/g, "");
-
-      if (fromId !== adminIdForCallback) {
-        await telegramApi("answerCallbackQuery", {
-          callback_query_id: callbackQuery.id,
-          text: "Недоступно"
-        });
-        res.sendStatus(200);
-        return;
-      }
-
-      const [action, orderId] = String(callbackQuery.data || "").split(":");
-
-      if (!orderId) {
-        await telegramApi("answerCallbackQuery", { callback_query_id: callbackQuery.id });
-        res.sendStatus(200);
-        return;
-      }
-
-      // "Отправлен" — статус не ставим сразу, сперва спрашиваем трек-номер
-      if (action === "order_shipped") {
-
-        await telegramApi("answerCallbackQuery", { callback_query_id: callbackQuery.id });
-
-        const askResult = await telegramApi("sendMessage", {
-          chat_id: process.env.ADMIN_ID,
-          text: `📦 Введите трек-номер отправления для заказа #${orderId} (ответьте на это сообщение):`,
-          reply_markup: { force_reply: true }
-        });
-
-        if (askResult.ok) {
-          await saveTrackingRequest(askResult.result.message_id, orderId);
-        }
-
-        res.sendStatus(200);
-        return;
-
-      }
-
-      if (action !== "order_paid") {
-        await telegramApi("answerCallbackQuery", { callback_query_id: callbackQuery.id });
-        res.sendStatus(200);
-        return;
-      }
-
-      const updatedOrder = await updateOrderStatus(orderId, "paid");
-
-      if (!updatedOrder) {
-        await telegramApi("answerCallbackQuery", {
-          callback_query_id: callbackQuery.id,
-          text: "Заказ не найден"
-        });
-        res.sendStatus(200);
-        return;
-      }
-
-      await telegramApi("answerCallbackQuery", {
-        callback_query_id: callbackQuery.id,
-        text: `Статус обновлён: ${STATUS_LABELS.paid.label}`
-      });
-
-      if (updatedOrder.telegramUserId) {
-
-        const sendResult = await telegramApi("sendMessage", {
-          chat_id: updatedOrder.telegramUserId,
-          text: `✅ Ваш заказ успешно оплачен!
-
-Отправим в течение 3 дней, но обычно отправляем в день оплаты. Как только упакуем и отправим, пришлём трек-номер для отслеживания.
-
-Историю всех заказов вы всегда можете посмотреть в разделе «Профиль» в мини-приложении.`
-        });
-
-        if (!sendResult.ok) {
-          console.log("TELEGRAM WEBHOOK: status update to customer FAILED:", JSON.stringify(sendResult));
-        }
-
-      }
-
+      await handleOrderCallback(update.callback_query);
       res.sendStatus(200);
       return;
-
     }
 
     const message = update.message;
@@ -864,54 +786,11 @@ app.post("/api/telegram-webhook", async (req, res) => {
 
       // Админ отвечает на запрос трек-номера — это отдельный поток,
       // проверяем его раньше обычной пересылки ответа клиенту
-      if (message.reply_to_message && message.text) {
+      const handledTracking = await tryHandleTrackingReply(message);
 
-        const orderIdForTracking = await getTrackingRequest(
-          message.reply_to_message.message_id
-        );
-
-        if (orderIdForTracking) {
-
-          const trackingNumber = message.text.trim();
-
-          const shippedOrder = await updateOrderStatus(orderIdForTracking, "shipped", {
-            trackingNumber
-          });
-
-          if (shippedOrder) {
-
-            await telegramApi("sendMessage", {
-              chat_id: adminId,
-              text: `✅ Заказ #${orderIdForTracking} отмечен как отправленный. Трек-номер: ${trackingNumber}`
-            });
-
-            if (shippedOrder.telegramUserId) {
-
-              const sendResult = await telegramApi("sendMessage", {
-                chat_id: shippedOrder.telegramUserId,
-                text: `📦 Ваш заказ отправлен!\n\nТрек-номер: ${trackingNumber}`
-              });
-
-              if (!sendResult.ok) {
-                console.log("TELEGRAM WEBHOOK: tracking number to customer FAILED:", JSON.stringify(sendResult));
-              }
-
-            }
-
-          } else {
-
-            await telegramApi("sendMessage", {
-              chat_id: adminId,
-              text: `⚠️ Не удалось найти заказ #${orderIdForTracking}, статус не обновлён.`
-            });
-
-          }
-
-          res.sendStatus(200);
-          return;
-
-        }
-
+      if (handledTracking) {
+        res.sendStatus(200);
+        return;
       }
 
       // Админ отвечает на пересланное сообщение клиента
@@ -974,6 +853,15 @@ app.post("/api/telegram-webhook", async (req, res) => {
       res.sendStatus(200);
       return;
 
+    }
+
+    // Если клиент ранее выбрал СДЭК/Почту — это сообщение, скорее всего,
+    // данные получателя, а не обычный вопрос. Обрабатываем отдельно.
+    const handledShippingData = await tryHandleShippingData(message);
+
+    if (handledShippingData) {
+      res.sendStatus(200);
+      return;
     }
 
     // Сообщение от клиента — пересылаем админу с пояснением, кто это.
