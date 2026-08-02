@@ -13,6 +13,10 @@ const orderRouter = require("./routes/orders");
 
 const app = express();
 
+// За прокси Vercel req.protocol иначе всегда показывает "http" —
+// доверяем заголовку X-Forwarded-Proto, чтобы получать реальную схему
+app.set("trust proxy", true);
+
 app.use(cors());
 app.use(express.json());
 
@@ -735,7 +739,9 @@ async function telegramApi(method, payload) {
 // после деплоя (и заново, если поменяется домен).
 app.get("/api/setup-webhook", async (req, res) => {
   try {
-    const webhookUrl = `${req.protocol}://${req.get("host")}/api/telegram-webhook`;
+    const host = req.get("host");
+    const protocol = host.includes("localhost") ? req.protocol : "https";
+    const webhookUrl = `${protocol}://${host}/api/telegram-webhook`;
     const result = await telegramApi("setWebhook", { url: webhookUrl });
     res.json({ webhookUrl, result });
   } catch (error) {
