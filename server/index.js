@@ -17,6 +17,12 @@ const {
   telegramApi
 } = require("./replyMapping");
 
+const {
+  STATUS_LABELS,
+  updateOrderStatus,
+  getOrdersForUser
+} = require("./orderStore");
+
 const app = express();
 
 // За прокси Vercel req.protocol иначе всегда показывает "http" —
@@ -691,6 +697,29 @@ app.get("/api/categories", (req, res) => {
 });
 
 // ==============================
+// MY ORDERS (история заказов в профиле)
+// ==============================
+app.get("/api/my-orders", async (req, res) => {
+
+  const telegramUserId = req.query.telegramUserId;
+
+  if (!telegramUserId) {
+    return res.json([]);
+  }
+
+  const orders = await getOrdersForUser(String(telegramUserId));
+
+  const withLabels = orders.map(order => ({
+    ...order,
+    statusLabel: (STATUS_LABELS[order.status] || STATUS_LABELS.accepted).label,
+    statusEmoji: (STATUS_LABELS[order.status] || STATUS_LABELS.accepted).emoji
+  }));
+
+  res.json(withLabels);
+
+});
+
+// ==============================
 // TELEGRAM WEBHOOK — пересылка сообщений от клиентов админу и ответы обратно
 // ==============================
 
@@ -717,6 +746,80 @@ app.post("/api/telegram-webhook", async (req, res) => {
   try {
 
     const update = req.body;
+
+    // Нажатие на кнопку "Оплачен"/"Отправлен" под уведомлением о заказе
+    if (update.callback_query) {
+
+      const callbackQuery = update.callback_query;
+
+      const adminIdForCallback = String(process.env.ADMIN_ID || "").replace(/\D/g, "");
+      const fromId = String(callbackQuery.from?.id || "").replace(/\D/g, "");
+
+      if (fromId !== adminIdForCallback) {
+        await telegramApi("answerCallbackQuery", {
+          callback_query_id: callbackQuery.id,
+          text: "Недоступно"
+        });
+        res.sendStatus(200);
+        return;
+      }
+
+      const [action, orderId] = String(callbackQuery.data || "").split(":");
+
+      const statusByAction = {
+        order_paid: "paid",
+        order_shipped: "shipped"
+      };
+
+      const newStatus = statusByAction[action];
+
+      if (!newStatus || !orderId) {
+        await telegramApi("answerCallbackQuery", { callback_query_id: callbackQuery.id });
+        res.sendStatus(200);
+        return;
+      }
+
+      const updatedOrder = await updateOrderStatus(orderId, newStatus);
+
+      if (!updatedOrder) {
+        await telegramApi("answerCallbackQuery", {
+          callback_query_id: callbackQuery.id,
+          text: "Заказ не найден"
+        });
+        res.sendStatus(200);
+        return;
+      }
+
+      const statusInfo = STATUS_LABELS[newStatus];
+
+      await telegramApi("answerCallbackQuery", {
+        callback_query_id: callbackQuery.id,
+        text: `Статус обновлён: ${statusInfo.label}`
+      });
+
+      if (updatedOrder.telegramUserId) {
+
+        const customerStatusText =
+          newStatus === "paid"
+          ? "💰 Ваш заказ оплачен, спасибо!"
+          : "📦 Ваш заказ отправлен!";
+
+        const sendResult = await telegramApi("sendMessage", {
+          chat_id: updatedOrder.telegramUserId,
+          text: customerStatusText
+        });
+
+        if (!sendResult.ok) {
+          console.log("TELEGRAM WEBHOOK: status update to customer FAILED:", JSON.stringify(sendResult));
+        }
+
+      }
+
+      res.sendStatus(200);
+      return;
+
+    }
+
     const message = update.message;
 
     if (!message) {

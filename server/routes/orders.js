@@ -2,6 +2,7 @@ const express = require("express");
 const axios = require("axios");
 
 const { saveReplyMapping } = require("../replyMapping");
+const { createOrder } = require("../orderStore");
 
 const router = express.Router();
 
@@ -306,6 +307,21 @@ telegramUserId
 
 
 
+// Сохраняем заказ — используется историей заказов в профиле клиента
+// и кнопками статуса ниже
+const order = await createOrder({
+  telegramUserId,
+  items: cart.map(item => ({
+    name: item.name,
+    quantity: item.quantity,
+    price: item.price
+  })),
+  total,
+  storelandOrderNum
+});
+
+
+
 
 
 
@@ -330,7 +346,16 @@ body:JSON.stringify({
 
 chat_id:process.env.ADMIN_ID,
 
-text:message
+text:message,
+
+reply_markup:{
+  inline_keyboard:[
+    [
+      { text:"💰 Оплачен", callback_data:`order_paid:${order.id}` },
+      { text:"📦 Отправлен", callback_data:`order_shipped:${order.id}` }
+    ]
+  ]
+}
 
 })
 
