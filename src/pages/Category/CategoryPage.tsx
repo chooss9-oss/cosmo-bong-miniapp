@@ -27,6 +27,13 @@ import {
 } from "../../utils/filterStorage";
 
 
+// Позиция горизонтального скролла строки категорий — храним вне компонента,
+// т.к. при каждом переходе (в т.ч. между категориями) AnimatedRoutes
+// пересоздаёт CategoryPage заново (анимация переходов держит key={location.key}),
+// поэтому обычный useRef/useState внутри компонента каждый раз обнуляется.
+let savedCategoryScrollX = 0;
+
+
 
 
 
@@ -577,6 +584,17 @@ load();
 },[categoryId]);
 
 
+// Восстанавливаем горизонтальный скролл строки категорий сразу после
+// монтирования (компонент пересоздаётся на каждый переход — см. комментарий
+// у savedCategoryScrollX выше)
+useEffect(() => {
+
+  if (categoryScrollRef.current) {
+    categoryScrollRef.current.scrollLeft = savedCategoryScrollX;
+  }
+
+}, []);
+
 
 const subcategories = allCategoriesFull.filter(
   cat => String(cat["@_parentId"]) === String(categoryId)
@@ -654,6 +672,8 @@ pb-5
   <div
 
   ref={categoryScrollRef}
+
+  onScroll={e => { savedCategoryScrollX = e.currentTarget.scrollLeft; }}
 
   className="
   flex
