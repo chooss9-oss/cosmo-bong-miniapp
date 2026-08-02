@@ -820,7 +820,11 @@ app.post("/api/telegram-webhook", async (req, res) => {
 
         const sendResult = await telegramApi("sendMessage", {
           chat_id: updatedOrder.telegramUserId,
-          text: "💰 Ваш заказ оплачен, спасибо!"
+          text: `✅ Ваш заказ успешно оплачен!
+
+Отправим в течение 3 дней, но обычно отправляем в день оплаты. Как только упакуем и отправим, пришлём трек-номер для отслеживания.
+
+Историю всех заказов вы всегда можете посмотреть в разделе «Профиль» в мини-приложении.`
         });
 
         if (!sendResult.ok) {
