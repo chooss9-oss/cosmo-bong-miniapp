@@ -279,6 +279,18 @@ setCategory
 );
 
 
+// Полный (нефильтрованный) список категорий — нужен, чтобы находить
+// подкатегории текущей категории (у них "@_parentId" === categoryId)
+const [allCategoriesFull, setAllCategoriesFull] = useState<Category[]>(
+  () => getCachedCategories() ?? []
+);
+
+
+const [activeSubcategoryId, setActiveSubcategoryId] = useState<string | null>(
+  () => readStoredFilter(`categoryFilters:${categoryId}:subcategoryId`, null as string | null)
+);
+
+
 
 
 
@@ -308,6 +320,16 @@ useEffect(() => {
 useEffect(() => {
   writeStoredFilter(`categoryFilters:${categoryId}:sortBy`, sortBy);
 }, [sortBy, categoryId]);
+
+useEffect(() => {
+  setActiveSubcategoryId(
+    readStoredFilter(`categoryFilters:${categoryId}:subcategoryId`, null as string | null)
+  );
+}, [categoryId]);
+
+useEffect(() => {
+  writeStoredFilter(`categoryFilters:${categoryId}:subcategoryId`, activeSubcategoryId);
+}, [activeSubcategoryId, categoryId]);
 
 const isFirstFilterRender = useRef(true);
 
@@ -382,6 +404,14 @@ cat["#text"]
 setCategories(
 
 mainCategories
+
+);
+
+
+
+setAllCategoriesFull(
+
+categoriesData
 
 );
 
@@ -557,7 +587,22 @@ useEffect(() => {
 }, [categoryId]);
 
 
+const subcategories = allCategoriesFull.filter(
+  cat => String(cat["@_parentId"]) === String(categoryId)
+);
+
 let displayedProducts = products.filter(product => product.inStock !== false);
+
+if(activeSubcategoryId){
+
+  const subChildIds = getChildCategoryIds(activeSubcategoryId, allCategoriesFull);
+  const allowedSubIds = [activeSubcategoryId, ...subChildIds];
+
+  displayedProducts = displayedProducts.filter(product =>
+    product.categoryIds?.some(id => allowedSubIds.includes(String(id)))
+  );
+
+}
 
 if(onlyDiscount){
 
@@ -658,18 +703,100 @@ pb-5
 </div>
 
 
+{/* ПОДКАТЕГОРИИ ГОРИЗОНТАЛЬНЫМ СКРОЛОМ */}
+
+{subcategories.length > 0 && (
+
+<div
+  className="
+  sticky
+  top-[94px]
+  z-[25]
+  bg-[#080808]
+  py-1
+  "
+>
+
+  <div
+  className="
+  flex
+  gap-2
+  overflow-x-auto
+  scrollbar-hide
+  "
+>
+
+    <button
+      onClick={() => setActiveSubcategoryId(null)}
+      className={`
+      flex-shrink-0
+      px-3
+      py-1.5
+      rounded-full
+      border
+      text-xs
+      font-semibold
+      transition
+      ${
+        activeSubcategoryId === null
+        ? "bg-[#58BB43] border-[#58BB43] text-black"
+        : "bg-[#151515] border-white/10 text-gray-300"
+      }
+      `}
+    >
+      Все
+    </button>
+
+    {subcategories.map(sub => (
+
+      <button
+        key={sub["@_id"]}
+        onClick={() =>
+          setActiveSubcategoryId(
+            activeSubcategoryId === sub["@_id"] ? null : sub["@_id"]
+          )
+        }
+        className={`
+        flex-shrink-0
+        px-3
+        py-1.5
+        rounded-full
+        border
+        text-xs
+        font-semibold
+        transition
+        ${
+          activeSubcategoryId === sub["@_id"]
+          ? "bg-[#58BB43] border-[#58BB43] text-black"
+          : "bg-[#151515] border-white/10 text-gray-300"
+        }
+        `}
+      >
+        {sub["#text"]}
+      </button>
+
+    ))}
+
+  </div>
+
+</div>
+
+)}
+
+
 {/* ЛИПКИЕ ФИЛЬТРЫ */}
 
 <div
 
 className="
 sticky
-top-[94px]
 z-20
 bg-[#080808]
 py-1
 mb-3
 "
+
+style={{ top: subcategories.length > 0 ? "138px" : "94px" }}
 
 >
 
