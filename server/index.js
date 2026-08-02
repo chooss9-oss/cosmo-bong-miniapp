@@ -59,6 +59,71 @@ const CATEGORY_SLUGS = {
   "Мерч Космо Бонг": "Merch"
 };
 
+// id подкатегории (как в cache/categories.json, "@_id") -> её URL-слаг на
+// сайте. Раньше товары получали в categoryIds только id ГЛАВНОЙ категории
+// (см. scrapeNewProducts ниже) — подкатегория никуда не сохранялась, из-за
+// этого фильтр по подкатегориям в приложении показывал пусто, хотя в
+// админке Storeland товары разложены по подкатегориям. Список сопоставлен
+// вручную по названиям (сверено с боковым меню каталога на сайте).
+const SUBCATEGORY_SLUGS = {
+
+  // Бонги и Водники
+  "8961655": "Steklyannye",
+  "9323547": "S-perkolyatorom",
+  "9323684": "Silikonovye-bongi",
+  "9323710": "Vodniki",
+  "9323722": "Prochie",          // в кэше "Необычные", на сайте сейчас "Нестандартные"
+  "9324152": "Akrilovye",
+
+  // Запчасти и Тюнинг
+  "9324282": "Shlify",
+  "9324283": "Chashi-kolpaki",
+  "9324284": "Prekulery",
+  "9324286": "Dopy-adaptery-perehodniki",
+
+  // Сувенирные трубки
+  "9324871": "Steklo",
+  "9330102": "Metall",
+  "9330144": "Silikon",
+  "9330146": "Keramika",
+  "9330170": "Derevo",
+  "9330171": "Neobychnye",
+
+  // Гриндеры и Прессы
+  "9331486": "Grindery",
+  "9331487": "Pressy",
+
+  // Для самокруток
+  "9331619": "Bumazhki",
+  "9331620": "Konusy",
+  "9331621": "Blanty",
+  "9331622": "Filtry",
+  "9331623": "Dopolnitelno",
+
+  // Аксессуары
+  "9345087": "Setki",
+  "9345088": "Chistka-i-uhod",
+  "9345089": "Zazhigalki",
+  "9345090": "Vesy-karmannye",
+  "9345091": "Hranenie-i-bezopasnost",
+  "9345092": "Snuff-devajsy",
+  "9345093": "Podnosy-i-miksboly",
+
+  // КБД (cbd) / Мицелий
+  "9640111": "CBD-produkciya",
+  "9725205": "Micelij-Gribov",
+
+  // Гроу
+  "9338427": "Grouboksy",
+  "9338428": "Ventilyaciya",
+  "9338429": "Udobreniya-i-stimulyatory",
+  "9338437": "Osveshhenie",
+  "9338438": "Ph-i-TDS",
+  "9338439": "Substraty-i-Gorshki",
+  "9338440": "Aksessuary-i-inventar"
+
+};
+
 // ==============================
 // REDIS (постоянное хранилище скидок, наличия и новых товаров)
 // getRedisClient/saveReplyMapping/getReplyMapping/telegramApi теперь в
@@ -130,6 +195,34 @@ async function writeStockOffsetToRedis(offset) {
     await client.set("stockCheckOffset", String(offset));
   } catch (error) {
     console.error("❌ Не удалось записать offset наличия:", error.message);
+  }
+}
+
+// subcategoryCache: { productId: [subCategoryId, ...] } — дополнение к
+// основному categoryIds товара, которое достаём отдельным сканом (см.
+// scrapeSubcategories) и подмешиваем на выдаче в /api/products и
+// /api/product/:id, не трогая исходный статический кэш cache/products.json.
+async function readSubcategoryCacheFromRedis() {
+  try {
+    const client = await getRedisClient();
+    const stored = await client.get("subcategoryCache");
+
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (error) {
+    console.error("❌ Не удалось прочитать подкатегории из Redis:", error.message);
+  }
+
+  return {};
+}
+
+async function writeSubcategoryCacheToRedis(data) {
+  try {
+    const client = await getRedisClient();
+    await client.set("subcategoryCache", JSON.stringify(data));
+  } catch (error) {
+    console.error("❌ Не удалось записать подкатегории в Redis:", error.message);
   }
 }
 
@@ -464,6 +557,81 @@ async function scrapeNewProducts() {
 }
 
 // ==============================
+// СКАН ПОДКАТЕГОРИЙ — дополняет уже известные товары id-шниками
+// подкатегорий, заходя на страницу каждой подкатегории на сайте и сверяя
+// список товаров там со уже известными по url (без похода на страницу
+// каждого товара отдельно — экономит запросы).
+// ==============================
+async function scrapeSubcategories() {
+  console.log("🔄 Скан подкатегорий...");
+
+  const newProducts = await readNewProductsFromRedis();
+  const allKnownProducts = products.concat(newProducts);
+
+  const urlToIds = new Map();
+
+  for (const p of allKnownProducts) {
+    if (!p.url) continue;
+    const key = p.url.split("?")[0];
+    if (!urlToIds.has(key)) urlToIds.set(key, []);
+    urlToIds.get(key).push(String(p.id));
+  }
+
+  const result = {};
+  let totalLinks = 0;
+
+  const entries = Object.entries(SUBCATEGORY_SLUGS);
+
+  const BATCH_SIZE = 8;
+
+  for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+
+    const batch = entries.slice(i, i + BATCH_SIZE);
+
+    await Promise.allSettled(
+
+      batch.map(async ([subId, slug]) => {
+
+        try {
+
+          const { data: html } = await axios.get(`https://cosmo-bong.ru/catalog/${slug}`, {
+            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+            timeout: 15000
+          });
+
+          const urlMatches = [...html.matchAll(/https:\/\/cosmo-bong\.ru\/goods\/[^"'\s?]+/g)];
+          const foundUrls = [...new Set(urlMatches.map(m => m[0]))];
+
+          for (const url of foundUrls) {
+
+            const ids = urlToIds.get(url);
+            if (!ids) continue;
+
+            for (const id of ids) {
+              if (!result[id]) result[id] = [];
+              if (!result[id].includes(subId)) result[id].push(subId);
+            }
+
+          }
+
+          totalLinks += foundUrls.length;
+
+        } catch (error) {
+          console.log(`⚠️ Не удалось загрузить подкатегорию ${slug}:`, error.message);
+        }
+
+      })
+
+    );
+
+  }
+
+  console.log(`✅ Скан подкатегорий завершён: обработано ссылок — ${totalLinks}, товаров с найденной подкатегорией — ${Object.keys(result).length}.`);
+
+  return result;
+}
+
+// ==============================
 // LOAD CACHE
 // ==============================
 function loadCache() {
@@ -591,6 +759,34 @@ app.get("/api/refresh-catalog", async (req, res) => {
 });
 
 // ==============================
+// REFRESH SUBCATEGORIES
+// ==============================
+app.get("/api/refresh-subcategories", async (req, res) => {
+  if (req.query.secret !== process.env.REFRESH_SECRET) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  res.json({ success: true, status: "started" });
+
+  const task = scrapeSubcategories()
+    .then(async result => {
+
+      await writeSubcategoryCacheToRedis(result);
+
+      console.log(`✅ Подкатегории обновлены в фоне: товаров с подкатегорией — ${Object.keys(result).length}.`);
+    })
+    .catch(error => {
+      console.error("❌ Ошибка скана подкатегорий:", error.message);
+    });
+
+  try {
+    waitUntil(task);
+  } catch (e) {
+    // waitUntil доступен только в среде Vercel
+  }
+});
+
+// ==============================
 // ALL PRODUCTS
 // ==============================
 // Превращает HTML-описание в короткий текст без тегов — этого достаточно,
@@ -614,6 +810,7 @@ app.get("/api/products", async (req, res) => {
     const salesData = redisSalesData || salesCache;
     const stockData = await readStockCacheFromRedis();
     const newProducts = await readNewProductsFromRedis();
+    const subcategoryData = await readSubcategoryCacheFromRedis();
 
     if (!redisSalesData) {
       refreshSalesDataInBackground();
@@ -626,12 +823,17 @@ app.get("/api/products", async (req, res) => {
       const stockValue = stockData ? stockData[product.id] : undefined;
       const inStock = stockValue === undefined ? true : stockValue > 0;
 
+      const extraSubIds = subcategoryData[product.id] || [];
+      const categoryIds = extraSubIds.length
+        ? [...new Set([...(product.categoryIds || []), ...extraSubIds])]
+        : product.categoryIds;
+
       const lightProduct = {
         id: product.id,
         name: product.name,
         price: product.price,
         images: product.images,
-        categoryIds: product.categoryIds,
+        categoryIds,
         inStock,
         descriptionText: descriptionToSearchText(product.description)
       };
@@ -681,6 +883,12 @@ app.get("/api/product/:id", async (req, res) => {
   const stockValue = stockData ? stockData[id] : undefined;
   const inStock = stockValue === undefined ? true : stockValue > 0;
 
+  const subcategoryData = await readSubcategoryCacheFromRedis();
+  const extraSubIds = subcategoryData[id] || [];
+  const categoryIds = extraSubIds.length
+    ? [...new Set([...(product.categoryIds || []), ...extraSubIds])]
+    : (product.categoryIds || []);
+
   res.json({
     id: product.id,
     name: product.name,
@@ -690,7 +898,7 @@ app.get("/api/product/:id", async (req, res) => {
     inStock,
     description: product.description || "",
     images: product.images ? product.images : (product.image ? [product.image] : []),
-    categoryIds: product.categoryIds || []
+    categoryIds
   });
 });
 
