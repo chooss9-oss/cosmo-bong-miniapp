@@ -773,7 +773,15 @@ app.post("/api/telegram-webhook", async (req, res) => {
           console.log(`TELEGRAM WEBHOOK: sendMessage to customer took ${Date.now() - t1}ms`);
 
           if (!sendResult.ok) {
+
             console.log("TELEGRAM WEBHOOK: reply to customer FAILED:", JSON.stringify(sendResult));
+
+            // Даём знать админу прямо в чат — иначе он решит, что ответ ушёл
+            await telegramApi("sendMessage", {
+              chat_id: adminId,
+              text: "⚠️ Не удалось отправить ваш ответ клиенту через бота (скорее всего, он не разрешил боту писать). Свяжитесь по телефону, указанному в заказе."
+            });
+
           } else {
             console.log("TELEGRAM WEBHOOK: reply delivered to customer", customerChatId, `(total ${Date.now() - t0}ms)`);
           }

@@ -125,38 +125,38 @@ return tg?.initDataUnsafe?.user?.username || "";
 // Спрашиваем нативным окном Telegram разрешение боту писать пользователю —
 // чтобы уведомление о заказе пришло сразу, без отдельного захода в чат с
 // ботом. Если разрешение уже выдано раньше — окно не покажется повторно.
-function requestNotificationAccess(){
+function requestNotificationAccess(): Promise<boolean> {
 
-  const attempt = new Promise<void>((resolve)=>{
+  const attempt = new Promise<boolean>((resolve)=>{
 
     const tg = window.Telegram?.WebApp;
 
     if(!tg || !tg.requestWriteAccess){
-      resolve();
+      resolve(false);
       return;
     }
 
     if(tg.initDataUnsafe?.user?.allows_write_to_pm){
-      resolve();
+      resolve(true);
       return;
     }
 
     try{
 
-      tg.requestWriteAccess(()=>{
-        resolve();
+      tg.requestWriteAccess((granted)=>{
+        resolve(!!granted);
       });
 
     } catch {
-      resolve();
+      resolve(false);
     }
 
   });
 
   // На случай, если нативное окно Telegram по какой-то причине не вызовет
   // callback — не даём этому заблокировать оформление заказа.
-  const timeout = new Promise<void>((resolve)=>{
-    setTimeout(resolve, 8000);
+  const timeout = new Promise<boolean>((resolve)=>{
+    setTimeout(()=>resolve(false), 8000);
   });
 
   return Promise.race([attempt, timeout]);
@@ -182,7 +182,7 @@ return;
 
 
 
-await requestNotificationAccess();
+const notificationsAllowed = await requestNotificationAccess();
 
 
 
@@ -227,6 +227,8 @@ username,
 telegramUsername: getTelegramUsername(),
 
 telegramUserId: getTelegramUser()?.id,
+
+notificationsAllowed,
 
 phone,
 

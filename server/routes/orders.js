@@ -84,6 +84,8 @@ telegramUsername,
 
 telegramUserId,
 
+notificationsAllowed,
+
 phone,
 
 comment,
@@ -283,6 +285,24 @@ storelandOrderNum
 :
 
 `\n⚠️ Не удалось создать заказ в Storeland, оформите вручную!\n`;
+
+
+
+message +=
+
+telegramUserId
+
+?
+
+(
+  notificationsAllowed
+  ? `\n🔔 Клиент разрешил уведомления боту — можно ответить на это сообщение (Reply).\n`
+  : `\n🔕 Клиент НЕ разрешил уведомления боту — Reply может не дойти, лучше связаться по телефону.\n`
+)
+
+:
+
+`\n🔕 Telegram ID клиента неизвестен — написать через бота не получится.\n`;
 
 
 
