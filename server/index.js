@@ -58,7 +58,9 @@ async function getRedisClient() {
     console.error("❌ Redis Client Error:", err.message);
   });
 
+  const connectStart = Date.now();
   await redisClient.connect();
+  console.log(`Redis connect() took ${Date.now() - connectStart}ms`);
 
   return redisClient;
 }
@@ -785,6 +787,8 @@ app.post("/api/telegram-webhook", async (req, res) => {
       // Админ отвечает на пересланное сообщение клиента
       if (message.reply_to_message && message.text) {
 
+        const t0 = Date.now();
+
         console.log(
           "TELEGRAM WEBHOOK: admin reply to message_id",
           message.reply_to_message.message_id
@@ -794,19 +798,27 @@ app.post("/api/telegram-webhook", async (req, res) => {
           message.reply_to_message.message_id
         );
 
-        console.log("TELEGRAM WEBHOOK: resolved customerChatId =", customerChatId);
+        console.log(
+          "TELEGRAM WEBHOOK: resolved customerChatId =",
+          customerChatId,
+          `(redis lookup took ${Date.now() - t0}ms)`
+        );
 
         if (customerChatId) {
+
+          const t1 = Date.now();
 
           const sendResult = await telegramApi("sendMessage", {
             chat_id: customerChatId,
             text: message.text
           });
 
+          console.log(`TELEGRAM WEBHOOK: sendMessage to customer took ${Date.now() - t1}ms`);
+
           if (!sendResult.ok) {
             console.log("TELEGRAM WEBHOOK: reply to customer FAILED:", JSON.stringify(sendResult));
           } else {
-            console.log("TELEGRAM WEBHOOK: reply delivered to customer", customerChatId);
+            console.log("TELEGRAM WEBHOOK: reply delivered to customer", customerChatId, `(total ${Date.now() - t0}ms)`);
           }
 
         } else {
