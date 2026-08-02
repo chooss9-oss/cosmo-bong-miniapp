@@ -765,12 +765,20 @@ app.post("/api/telegram-webhook", async (req, res) => {
       return;
     }
 
-    // На всякий случай чистим значение из env — если там случайно оказались
-    // кавычки или пробелы, сравнение ниже не должно из-за этого ломаться.
-    const adminId = String(process.env.ADMIN_ID || "").trim().replace(/^["']|["']$/g, "");
-    const chatId = String(message.chat.id);
+    // Оба значения — числовые id, поэтому для сравнения оставляем только
+    // цифры. Это защищает от любых скрытых символов, кавычек или пробелов
+    // в переменной окружения ADMIN_ID, даже если они не видны в логах.
+    const adminId = String(process.env.ADMIN_ID || "").replace(/\D/g, "");
+    const chatId = String(message.chat.id).replace(/\D/g, "");
 
-    console.log("TELEGRAM WEBHOOK: incoming message from chat", chatId, "adminId =", adminId);
+    console.log(
+      "TELEGRAM WEBHOOK: incoming message from chat",
+      chatId,
+      "adminId =",
+      adminId,
+      "equal =",
+      chatId === adminId
+    );
 
     if (chatId === adminId) {
 
