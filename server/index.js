@@ -20,7 +20,9 @@ const {
 const {
   STATUS_LABELS,
   updateOrderStatus,
-  getOrdersForUser
+  getOrdersForUser,
+  saveTrackingRequest,
+  getTrackingRequest
 } = require("./orderStore");
 
 const app = express();
@@ -766,20 +768,39 @@ app.post("/api/telegram-webhook", async (req, res) => {
 
       const [action, orderId] = String(callbackQuery.data || "").split(":");
 
-      const statusByAction = {
-        order_paid: "paid",
-        order_shipped: "shipped"
-      };
-
-      const newStatus = statusByAction[action];
-
-      if (!newStatus || !orderId) {
+      if (!orderId) {
         await telegramApi("answerCallbackQuery", { callback_query_id: callbackQuery.id });
         res.sendStatus(200);
         return;
       }
 
-      const updatedOrder = await updateOrderStatus(orderId, newStatus);
+      // "Отправлен" — статус не ставим сразу, сперва спрашиваем трек-номер
+      if (action === "order_shipped") {
+
+        await telegramApi("answerCallbackQuery", { callback_query_id: callbackQuery.id });
+
+        const askResult = await telegramApi("sendMessage", {
+          chat_id: process.env.ADMIN_ID,
+          text: `📦 Введите трек-номер отправления для заказа #${orderId} (ответьте на это сообщение):`,
+          reply_markup: { force_reply: true }
+        });
+
+        if (askResult.ok) {
+          await saveTrackingRequest(askResult.result.message_id, orderId);
+        }
+
+        res.sendStatus(200);
+        return;
+
+      }
+
+      if (action !== "order_paid") {
+        await telegramApi("answerCallbackQuery", { callback_query_id: callbackQuery.id });
+        res.sendStatus(200);
+        return;
+      }
+
+      const updatedOrder = await updateOrderStatus(orderId, "paid");
 
       if (!updatedOrder) {
         await telegramApi("answerCallbackQuery", {
@@ -790,23 +811,16 @@ app.post("/api/telegram-webhook", async (req, res) => {
         return;
       }
 
-      const statusInfo = STATUS_LABELS[newStatus];
-
       await telegramApi("answerCallbackQuery", {
         callback_query_id: callbackQuery.id,
-        text: `Статус обновлён: ${statusInfo.label}`
+        text: `Статус обновлён: ${STATUS_LABELS.paid.label}`
       });
 
       if (updatedOrder.telegramUserId) {
 
-        const customerStatusText =
-          newStatus === "paid"
-          ? "💰 Ваш заказ оплачен, спасибо!"
-          : "📦 Ваш заказ отправлен!";
-
         const sendResult = await telegramApi("sendMessage", {
           chat_id: updatedOrder.telegramUserId,
-          text: customerStatusText
+          text: "💰 Ваш заказ оплачен, спасибо!"
         });
 
         if (!sendResult.ok) {
@@ -843,6 +857,58 @@ app.post("/api/telegram-webhook", async (req, res) => {
     );
 
     if (chatId === adminId) {
+
+      // Админ отвечает на запрос трек-номера — это отдельный поток,
+      // проверяем его раньше обычной пересылки ответа клиенту
+      if (message.reply_to_message && message.text) {
+
+        const orderIdForTracking = await getTrackingRequest(
+          message.reply_to_message.message_id
+        );
+
+        if (orderIdForTracking) {
+
+          const trackingNumber = message.text.trim();
+
+          const shippedOrder = await updateOrderStatus(orderIdForTracking, "shipped", {
+            trackingNumber
+          });
+
+          if (shippedOrder) {
+
+            await telegramApi("sendMessage", {
+              chat_id: adminId,
+              text: `✅ Заказ #${orderIdForTracking} отмечен как отправленный. Трек-номер: ${trackingNumber}`
+            });
+
+            if (shippedOrder.telegramUserId) {
+
+              const sendResult = await telegramApi("sendMessage", {
+                chat_id: shippedOrder.telegramUserId,
+                text: `📦 Ваш заказ отправлен!\n\nТрек-номер: ${trackingNumber}`
+              });
+
+              if (!sendResult.ok) {
+                console.log("TELEGRAM WEBHOOK: tracking number to customer FAILED:", JSON.stringify(sendResult));
+              }
+
+            }
+
+          } else {
+
+            await telegramApi("sendMessage", {
+              chat_id: adminId,
+              text: `⚠️ Не удалось найти заказ #${orderIdForTracking}, статус не обновлён.`
+            });
+
+          }
+
+          res.sendStatus(200);
+          return;
+
+        }
+
+      }
 
       // Админ отвечает на пересланное сообщение клиента
       if (message.reply_to_message && message.text) {

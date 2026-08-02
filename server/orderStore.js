@@ -51,7 +51,7 @@ async function createOrder({ telegramUserId, items, total, storelandOrderNum }) 
   return order;
 }
 
-async function updateOrderStatus(id, status) {
+async function updateOrderStatus(id, status, extra = {}) {
 
   try {
 
@@ -63,6 +63,7 @@ async function updateOrderStatus(id, status) {
     const order = JSON.parse(raw);
     order.status = status;
     order.updatedAt = Date.now();
+    Object.assign(order, extra);
 
     await client.set(`order:${id}`, JSON.stringify(order), { EX: ORDER_TTL_SECONDS });
 
@@ -73,6 +74,27 @@ async function updateOrderStatus(id, status) {
     return null;
   }
 
+}
+
+// Привязка "сообщение-запрос трек-номера у админа -> id заказа" — недолгая,
+// нужна только пока админ не ответит трек-номером
+async function saveTrackingRequest(messageId, orderId) {
+  try {
+    const client = await getRedisClient();
+    await client.set(`trackingRequest:${messageId}`, orderId, { EX: 60 * 60 * 24 });
+  } catch (error) {
+    console.error("❌ Не удалось сохранить trackingRequest в Redis:", error.message);
+  }
+}
+
+async function getTrackingRequest(messageId) {
+  try {
+    const client = await getRedisClient();
+    return await client.get(`trackingRequest:${messageId}`);
+  } catch (error) {
+    console.error("❌ Не удалось прочитать trackingRequest из Redis:", error.message);
+    return null;
+  }
 }
 
 async function getOrdersForUser(telegramUserId) {
@@ -99,5 +121,7 @@ module.exports = {
   STATUS_LABELS,
   createOrder,
   updateOrderStatus,
-  getOrdersForUser
+  getOrdersForUser,
+  saveTrackingRequest,
+  getTrackingRequest
 };

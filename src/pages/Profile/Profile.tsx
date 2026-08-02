@@ -15,6 +15,7 @@ interface Order {
   statusLabel: string;
   statusEmoji: string;
   createdAt: number;
+  trackingNumber?: string;
 }
 
 function Profile() {
@@ -157,6 +158,15 @@ function Profile() {
                     <div className="mt-2 text-[#58BB43] font-bold">
                       {order.total.toLocaleString("ru-RU")} ₽
                     </div>
+
+
+                    {
+                      order.trackingNumber && (
+                        <div className="mt-2 text-xs text-gray-400">
+                          Трек-номер: <span className="text-white">{order.trackingNumber}</span>
+                        </div>
+                      )
+                    }
 
                   </div>
 
