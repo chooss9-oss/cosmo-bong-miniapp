@@ -26,6 +26,11 @@ import {
   writeStoredFilter
 } from "../../utils/filterStorage";
 
+import {
+  getCategoryScrollX,
+  setCategoryScrollX
+} from "../../utils/categoryScrollMemory";
+
 
 
 
@@ -388,6 +393,18 @@ useEffect(() => {
 useEffect(() => {
   writeStoredFilter("catalogFilters:sortBy", sortBy);
 }, [sortBy]);
+
+const categoryScrollRef = useRef<HTMLDivElement>(null);
+
+// Восстанавливаем горизонтальный скролл строки категорий сразу после
+// монтирования — та же лента, что и на странице категории, позиция
+// хранится в общем модуле src/utils/categoryScrollMemory.ts, т.к.
+// AnimatedRoutes пересоздаёт страницу заново при каждом переходе.
+useEffect(() => {
+  if (categoryScrollRef.current) {
+    categoryScrollRef.current.scrollLeft = getCategoryScrollX();
+  }
+}, []);
 
 const isFirstFilterRender = useRef(true);
 
@@ -812,6 +829,10 @@ py-1
 
 
 <div
+
+ref={categoryScrollRef}
+
+onScroll={e => setCategoryScrollX(e.currentTarget.scrollLeft)}
 
 className="
 flex

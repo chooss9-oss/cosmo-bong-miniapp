@@ -26,12 +26,12 @@ import {
   writeStoredFilter
 } from "../../utils/filterStorage";
 
-
-// Позиция горизонтального скролла строки категорий — храним вне компонента,
-// т.к. при каждом переходе (в т.ч. между категориями) AnimatedRoutes
-// пересоздаёт CategoryPage заново (анимация переходов держит key={location.key}),
-// поэтому обычный useRef/useState внутри компонента каждый раз обнуляется.
-let savedCategoryScrollX = 0;
+import {
+  getCategoryScrollX,
+  setCategoryScrollX,
+  getSubcategoryScrollX,
+  setSubcategoryScrollX
+} from "../../utils/categoryScrollMemory";
 
 
 
@@ -228,6 +228,7 @@ categoryId
 }=useParams();
 
 const categoryScrollRef = useRef<HTMLDivElement>(null);
+const subcategoryScrollRef = useRef<HTMLDivElement>(null);
 
 
 const navigate =
@@ -584,13 +585,18 @@ load();
 },[categoryId]);
 
 
-// Восстанавливаем горизонтальный скролл строки категорий сразу после
-// монтирования (компонент пересоздаётся на каждый переход — см. комментарий
-// у savedCategoryScrollX выше)
+// Восстанавливаем горизонтальный скролл строк категорий/подкатегорий сразу
+// после монтирования — компонент пересоздаётся на каждый переход (в товар
+// и обратно, между категориями), поэтому позицию храним вне компонента,
+// в src/utils/categoryScrollMemory.ts
 useEffect(() => {
 
   if (categoryScrollRef.current) {
-    categoryScrollRef.current.scrollLeft = savedCategoryScrollX;
+    categoryScrollRef.current.scrollLeft = getCategoryScrollX();
+  }
+
+  if (subcategoryScrollRef.current) {
+    subcategoryScrollRef.current.scrollLeft = getSubcategoryScrollX(categoryId);
   }
 
 }, []);
@@ -673,7 +679,7 @@ pb-5
 
   ref={categoryScrollRef}
 
-  onScroll={e => { savedCategoryScrollX = e.currentTarget.scrollLeft; }}
+  onScroll={e => setCategoryScrollX(e.currentTarget.scrollLeft)}
 
   className="
   flex
@@ -707,7 +713,9 @@ pb-5
       <button
         key={cat["@_id"]}
         onClick={() =>
-          navigate(`/category/${cat["@_id"]}`)
+          String(cat["@_id"]) === String(categoryId)
+          ? navigate("/catalog")
+          : navigate(`/category/${cat["@_id"]}`)
         }
         className={`
         flex-shrink-0
@@ -750,6 +758,8 @@ pb-5
 >
 
   <div
+  ref={subcategoryScrollRef}
+  onScroll={e => setSubcategoryScrollX(categoryId, e.currentTarget.scrollLeft)}
   className="
   flex
   gap-2
