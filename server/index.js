@@ -696,6 +696,135 @@ app.get("/api/categories", (req, res) => {
 });
 
 // ==============================
+// TELEGRAM WEBHOOK — пересылка сообщений от клиентов админу и ответы обратно
+// ==============================
+
+async function saveReplyMapping(messageId, customerChatId) {
+  try {
+    const client = await getRedisClient();
+    // Храним 14 дней — достаточно для переписки по заказу, дальше само сотрётся
+    await client.set(`replyMap:${messageId}`, String(customerChatId), { EX: 60 * 60 * 24 * 14 });
+  } catch (error) {
+    console.error("❌ Не удалось сохранить replyMap в Redis:", error.message);
+  }
+}
+
+async function getReplyMapping(messageId) {
+  try {
+    const client = await getRedisClient();
+    return await client.get(`replyMap:${messageId}`);
+  } catch (error) {
+    console.error("❌ Не удалось прочитать replyMap из Redis:", error.message);
+    return null;
+  }
+}
+
+async function telegramApi(method, payload) {
+  const response = await fetch(
+    `https://api.telegram.org/bot${process.env.BOT_TOKEN}/${method}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }
+  );
+  return response.json();
+}
+
+// Разово регистрирует адрес вебхука в Telegram — открыть один раз в браузере
+// после деплоя (и заново, если поменяется домен).
+app.get("/api/setup-webhook", async (req, res) => {
+  try {
+    const webhookUrl = `${req.protocol}://${req.get("host")}/api/telegram-webhook`;
+    const result = await telegramApi("setWebhook", { url: webhookUrl });
+    res.json({ webhookUrl, result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Telegram шлёт сюда все входящие сообщения боту
+app.post("/api/telegram-webhook", (req, res) => {
+
+  // Telegram ждёт быстрый ответ 200 OK — саму обработку делаем в фоне
+  res.sendStatus(200);
+
+  const task = (async () => {
+
+    try {
+
+      const update = req.body;
+      const message = update.message;
+
+      if (!message) return;
+
+      const adminId = String(process.env.ADMIN_ID);
+      const chatId = String(message.chat.id);
+
+      if (chatId === adminId) {
+
+        // Админ отвечает на пересланное сообщение клиента
+        if (message.reply_to_message && message.text) {
+
+          const customerChatId = await getReplyMapping(
+            message.reply_to_message.message_id
+          );
+
+          if (customerChatId) {
+            await telegramApi("sendMessage", {
+              chat_id: customerChatId,
+              text: message.text
+            });
+          }
+
+        }
+
+        return;
+
+      }
+
+      // Сообщение от клиента — пересылаем админу с пояснением, кто это
+      const forwarded = await telegramApi("forwardMessage", {
+        chat_id: adminId,
+        from_chat_id: chatId,
+        message_id: message.message_id
+      });
+
+      const user = message.from || {};
+
+      const label =
+        user.username
+        ? `@${user.username}`
+        : [user.first_name, user.last_name].filter(Boolean).join(" ") || "клиент";
+
+      const info = await telegramApi("sendMessage", {
+        chat_id: adminId,
+        text: `☝️ Сообщение от ${label}.\nОтветьте на него (Reply), чтобы ответ ушёл клиенту.`
+      });
+
+      if (forwarded.ok) {
+        await saveReplyMapping(forwarded.result.message_id, chatId);
+      }
+
+      if (info.ok) {
+        await saveReplyMapping(info.result.message_id, chatId);
+      }
+
+    } catch (error) {
+      console.error("❌ TELEGRAM WEBHOOK ERROR:", error.message);
+    }
+
+  })();
+
+  try {
+    waitUntil(task);
+  } catch (e) {
+    // waitUntil доступен только в среде Vercel
+  }
+
+});
+
+// ==============================
 // START
 // ==============================
 loadCache();
