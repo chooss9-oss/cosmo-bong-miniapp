@@ -153,7 +153,9 @@ async function handleOrderCallback(callbackQuery) {
 
   }
 
-  // ---- Клиент подтверждает заказ ----
+  // ---- Клиент подтверждает заказ — сразу отправляем выбор доставки/оплаты ----
+  // (наличие уже проверено админом на шаге "Принять заказ", поэтому
+  // дополнительного шага подтверждения от админа здесь не нужно)
   if (action === "order_confirm") {
 
     const orderId = parts[1];
@@ -168,42 +170,9 @@ async function handleOrderCallback(callbackQuery) {
     await clearButtons(fromChatId, messageId);
     await updateOrderStatus(orderId, "confirmed");
 
-    await notifyCustomer(order, "Спасибо, что подтвердили заказ! Уже сообщаем менеджеру 🙌");
-
     const orderLabel = order.storelandOrderNum || order.id;
 
-    const adminResult = await notifyAdmin(
-      `✅ Клиент подтвердил заказ №${orderLabel}.`,
-      { inline_keyboard: [[{ text: "🚚 Доставка и оплата", callback_data: `order_deliverypay:${orderId}` }]] }
-    );
-
-    if (adminResult.ok && order.telegramUserId) {
-      await saveReplyMapping(adminResult.result.message_id, order.telegramUserId);
-    }
-
-    return;
-
-  }
-
-  // ---- Админ открывает выбор доставки/оплаты для клиента ----
-  if (action === "order_deliverypay") {
-
-    const orderId = parts[1];
-
-    if (clickerId !== adminId) {
-      await ack("Недоступно");
-      return;
-    }
-
-    const order = await getOrder(orderId);
-
-    if (!order) {
-      await ack("Заказ не найден");
-      return;
-    }
-
-    await ack("Отправлено клиенту");
-    await clearButtons(fromChatId, messageId);
+    await notifyAdmin(`✅ Клиент подтвердил заказ №${orderLabel}. Отправил ему выбор способа доставки и оплаты.`);
 
     const text =
 `Отлично! Как вам удобнее оплатить и получить заказ?
@@ -367,7 +336,20 @@ async function handleOrderCallback(callbackQuery) {
     }
 
     await ack(`Статус обновлён: ${STATUS_LABELS.paid.label}`);
-    await clearButtons(fromChatId, messageId);
+
+    // Кнопка "Отправлен" должна остаться доступна — убираем только
+    // саму кнопку "Оплачен"
+    await telegramApi("editMessageReplyMarkup", {
+      chat_id: fromChatId,
+      message_id: messageId,
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "📦 Отправлен", callback_data: `order_shipped:${orderId}` }
+          ]
+        ]
+      }
+    });
 
     await notifyCustomer(
       order,
@@ -375,7 +357,7 @@ async function handleOrderCallback(callbackQuery) {
 
 Отправим в течение 3 дней, но обычно отправляем в день оплаты. Как только упакуем и отправим, пришлём трек-номер для отслеживания.
 
-Историю всех заказов вы всегда можете посмотреть в разделе «Профиль» в мини-приложении.`
+Историю всех заказов вы всегда можете посмотреть в разделе «Профиль» в мини-приложении магазина.`
     );
 
     return;
@@ -480,8 +462,6 @@ async function tryHandleShippingData(message) {
   if (adminResult.ok && order.telegramUserId) {
     await saveReplyMapping(adminResult.result.message_id, order.telegramUserId);
   }
-
-  await notifyCustomer(order, "Данные получили, спасибо! Считаем доставку ⏳");
 
   return true;
 
