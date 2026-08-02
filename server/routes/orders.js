@@ -1,6 +1,8 @@
 const express = require("express");
 const axios = require("axios");
 
+const { saveReplyMapping } = require("../replyMapping");
+
 const router = express.Router();
 
 const STORELAND_API_URL = "https://cosmo-bong.ru/api/v1";
@@ -351,6 +353,14 @@ error:"Telegram send failed"
 });
 
 
+}
+
+
+// Привязываем это сообщение у админа к чату клиента — так админ сможет
+// ответить (Reply) прямо на уведомление о заказе, даже если клиент сам
+// ещё ничего не писал боту.
+if (telegramUserId && telegramData.result) {
+  await saveReplyMapping(telegramData.result.message_id, telegramUserId);
 }
 
 

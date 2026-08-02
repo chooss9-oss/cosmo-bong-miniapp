@@ -7,9 +7,15 @@ const path = require("path");
 const axios = require("axios");
 const cheerio = require("cheerio");
 const { waitUntil } = require("@vercel/functions");
-const { createClient } = require("redis");
 
 const orderRouter = require("./routes/orders");
+
+const {
+  getRedisClient,
+  saveReplyMapping,
+  getReplyMapping,
+  telegramApi
+} = require("./replyMapping");
 
 const app = express();
 
@@ -44,26 +50,9 @@ const CATEGORY_SLUGS = {
 
 // ==============================
 // REDIS (постоянное хранилище скидок, наличия и новых товаров)
+// getRedisClient/saveReplyMapping/getReplyMapping/telegramApi теперь в
+// ./replyMapping.js — общий модуль, им пользуется и orders.js
 // ==============================
-let redisClient = null;
-
-async function getRedisClient() {
-  if (redisClient && redisClient.isOpen) {
-    return redisClient;
-  }
-
-  redisClient = createClient({ url: process.env.REDIS_URL });
-
-  redisClient.on("error", (err) => {
-    console.error("❌ Redis Client Error:", err.message);
-  });
-
-  const connectStart = Date.now();
-  await redisClient.connect();
-  console.log(`Redis connect() took ${Date.now() - connectStart}ms`);
-
-  return redisClient;
-}
 
 async function readSalesCacheFromRedis() {
   try {
@@ -704,38 +693,6 @@ app.get("/api/categories", (req, res) => {
 // ==============================
 // TELEGRAM WEBHOOK — пересылка сообщений от клиентов админу и ответы обратно
 // ==============================
-
-async function saveReplyMapping(messageId, customerChatId) {
-  try {
-    const client = await getRedisClient();
-    // Храним 14 дней — достаточно для переписки по заказу, дальше само сотрётся
-    await client.set(`replyMap:${messageId}`, String(customerChatId), { EX: 60 * 60 * 24 * 14 });
-  } catch (error) {
-    console.error("❌ Не удалось сохранить replyMap в Redis:", error.message);
-  }
-}
-
-async function getReplyMapping(messageId) {
-  try {
-    const client = await getRedisClient();
-    return await client.get(`replyMap:${messageId}`);
-  } catch (error) {
-    console.error("❌ Не удалось прочитать replyMap из Redis:", error.message);
-    return null;
-  }
-}
-
-async function telegramApi(method, payload) {
-  const response = await fetch(
-    `https://api.telegram.org/bot${process.env.BOT_TOKEN}/${method}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    }
-  );
-  return response.json();
-}
 
 // Разово регистрирует адрес вебхука в Telegram — открыть один раз в браузере
 // после деплоя (и заново, если поменяется домен).
