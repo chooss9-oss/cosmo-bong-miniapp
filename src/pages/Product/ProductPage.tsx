@@ -538,19 +538,24 @@ export default function ProductPage(){
 
 
 
-      {/* ХЛЕБНАЯ КРОШКА: категория -> подкатегория товара */}
+      {/* ХЛЕБНАЯ КРОШКА: категория -> подкатегория товара — липкая, сразу под строкой поиска */}
 
       {
         mainCategory && (
 
           <div
             className="
+            sticky
+            top-[57px]
+            z-30
+            bg-[#080808]
             flex
             items-center
             flex-wrap
             gap-1
             text-xs
-            mb-3
+            py-2
+            mb-1
             "
           >
 

@@ -850,6 +850,13 @@ scrollbar-hide
 
 key="all"
 
+onClick={() => {
+  setCategoryScrollX(0);
+  if(categoryScrollRef.current){
+    categoryScrollRef.current.scrollLeft = 0;
+  }
+}}
+
 className="
 flex-shrink-0
 px-3

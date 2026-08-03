@@ -690,7 +690,10 @@ pb-5
 >
 
     <button
-      onClick={() => navigate("/catalog")}
+      onClick={() => {
+        setCategoryScrollX(0);
+        navigate("/catalog");
+      }}
       className="
       flex-shrink-0
       px-3
@@ -712,11 +715,14 @@ pb-5
 
       <button
         key={cat["@_id"]}
-        onClick={() =>
-          String(cat["@_id"]) === String(categoryId)
-          ? navigate("/catalog")
-          : navigate(`/category/${cat["@_id"]}`)
-        }
+        onClick={() => {
+          if(String(cat["@_id"]) === String(categoryId)){
+            setCategoryScrollX(0);
+            navigate("/catalog");
+          } else {
+            navigate(`/category/${cat["@_id"]}`);
+          }
+        }}
         className={`
         flex-shrink-0
         px-3
