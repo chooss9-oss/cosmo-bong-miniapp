@@ -326,7 +326,7 @@ export default function ProductPage(){
       min-h-screen
       bg-[#080808]
       text-white
-      pt-[122px]
+      pt-[57px]
       px-6
       "
       >
@@ -356,7 +356,7 @@ export default function ProductPage(){
       min-h-screen
       bg-[#080808]
       text-white
-      pt-[122px]
+      pt-[57px]
       px-6
       "
       >
@@ -516,7 +516,7 @@ export default function ProductPage(){
       bg-[#080808]
       text-white
       px-4
-      pt-[122px]
+      pt-[57px]
       pb-40
       "
 

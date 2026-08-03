@@ -846,6 +846,35 @@ scrollbar-hide
 
 {
 
+<button
+
+key="all"
+
+className="
+flex-shrink-0
+px-3
+py-1.5
+rounded-full
+bg-[#58BB43]
+border
+border-[#58BB43]
+text-xs
+font-semibold
+text-black
+transition
+"
+
+>
+
+Все
+
+</button>
+
+}
+
+
+{
+
 categories.map(cat=>(
 
 
