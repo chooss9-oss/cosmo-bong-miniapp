@@ -3,6 +3,7 @@ const axios = require("axios");
 
 const { saveReplyMapping } = require("../replyMapping");
 const { createOrder } = require("../orderStore");
+const { getBonusBalance, getMaxRedeemable, deductBonusPoints } = require("../bonusStore");
 
 const router = express.Router();
 
@@ -93,10 +94,28 @@ comment,
 
 cart,
 
-total
+total,
+
+pointsUsed
 
 
 }=req.body;
+
+
+
+
+// Проверяем списание баллов заново на сервере (не доверяем сумме с
+// клиента) — не больше 50% суммы заказа и не больше реального баланса
+let appliedPoints = 0;
+
+if (telegramUserId && pointsUsed) {
+
+  const balance = await getBonusBalance(String(telegramUserId));
+  appliedPoints = getMaxRedeemable(total, Math.min(Number(pointsUsed) || 0, balance));
+
+}
+
+const amountToPay = Number(total) - appliedPoints;
 
 
 
@@ -259,6 +278,16 @@ message +=
 
 
 
+if (appliedPoints > 0) {
+
+  message +=
+
+  `🎁 Списано баллами: -${appliedPoints.toLocaleString()} ₽\n💳 К оплате: ${amountToPay.toLocaleString()} ₽\n`;
+
+}
+
+
+
 
 
 
@@ -317,8 +346,14 @@ const order = await createOrder({
     price: item.price
   })),
   total,
-  storelandOrderNum
+  storelandOrderNum,
+  pointsUsed: appliedPoints
 });
+
+// Списываем баллы только после того, как заказ реально создан
+if (appliedPoints > 0) {
+  await deductBonusPoints(String(telegramUserId), appliedPoints);
+}
 
 
 

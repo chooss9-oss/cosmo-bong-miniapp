@@ -18,7 +18,7 @@ function generateOrderId() {
   return `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 }
 
-async function createOrder({ telegramUserId, items, total, storelandOrderNum }) {
+async function createOrder({ telegramUserId, items, total, storelandOrderNum, pointsUsed }) {
 
   const id = generateOrderId();
 
@@ -27,6 +27,7 @@ async function createOrder({ telegramUserId, items, total, storelandOrderNum }) 
     telegramUserId: telegramUserId ? String(telegramUserId) : null,
     items: items || [],
     total: Number(total) || 0,
+    pointsUsed: Number(pointsUsed) || 0,
     storelandOrderNum: storelandOrderNum || null,
     status: "accepted",
     // deliveryMethod: "cdek" | "pochta" | "pickup_yar" | "delivery_yar"

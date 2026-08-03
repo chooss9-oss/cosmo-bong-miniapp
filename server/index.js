@@ -28,6 +28,11 @@ const {
   tryHandleShippingData
 } = require("./orderFlow");
 
+const {
+  getBonusBalance,
+  getMaxRedeemable
+} = require("./bonusStore");
+
 const app = express();
 
 // За прокси Vercel req.protocol иначе всегда показывает "http" —
@@ -929,6 +934,28 @@ app.get("/api/my-orders", async (req, res) => {
   }));
 
   res.json(withLabels);
+
+});
+
+// ==============================
+// BONUS BALANCE (баллы кэшбэка)
+// ==============================
+app.get("/api/bonus-balance", async (req, res) => {
+
+  const telegramUserId = req.query.telegramUserId;
+
+  if (!telegramUserId) {
+    return res.json({ balance: 0 });
+  }
+
+  const balance = await getBonusBalance(String(telegramUserId));
+
+  const total = req.query.total ? Number(req.query.total) : null;
+
+  res.json({
+    balance,
+    maxRedeemable: total !== null ? getMaxRedeemable(total, balance) : null
+  });
 
 });
 

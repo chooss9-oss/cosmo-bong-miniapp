@@ -1,5 +1,6 @@
 import {
-  useState
+  useState,
+  useEffect
 } from "react";
 
 import {
@@ -63,6 +64,12 @@ setSuccess
 
 
 
+const [bonusBalance, setBonusBalance] = useState(0);
+const [usePoints, setUsePoints] = useState(false);
+const [pointsUsedInOrder, setPointsUsedInOrder] = useState(0);
+
+
+
 
 const [
 orderTotal,
@@ -104,6 +111,27 @@ item.quantity,
 0
 
 );
+
+
+
+const maxRedeemable = Math.min(bonusBalance, Math.floor(total * 0.5));
+
+const amountToPay = usePoints ? total - maxRedeemable : total;
+
+
+
+useEffect(() => {
+
+  const telegramUserId = getTelegramUser()?.id;
+
+  if (!telegramUserId) return;
+
+  fetch(`/api/bonus-balance?telegramUserId=${telegramUserId}`)
+    .then(res => res.json())
+    .then(data => setBonusBalance(typeof data?.balance === "number" ? data.balance : 0))
+    .catch(() => setBonusBalance(0));
+
+}, []);
 
 
 
@@ -236,7 +264,9 @@ comment,
 
 cart,
 
-total
+total,
+
+pointsUsed: usePoints ? maxRedeemable : 0
 
 
 })
@@ -280,6 +310,8 @@ if(data.success){
 
 
 setOrderTotal(total);
+
+setPointsUsedInOrder(usePoints ? maxRedeemable : 0);
 
 
 
@@ -501,6 +533,14 @@ mt-2
 
 
 </div>
+
+{
+  pointsUsedInOrder > 0 && (
+    <div className="mt-2 text-sm text-gray-400">
+      Списано баллами: {pointsUsedInOrder.toLocaleString()} ₽
+    </div>
+  )
+}
 
 </div>
 
@@ -744,6 +784,55 @@ text-[#58BB43]
 
 </div>
 
+
+{
+  bonusBalance > 0 && (
+
+    <div
+      className="
+      mt-4
+      pt-4
+      border-t
+      border-white/10
+      "
+    >
+
+      <label
+        className="
+        flex
+        items-center
+        justify-between
+        gap-3
+        cursor-pointer
+        "
+      >
+
+        <span className="text-sm text-gray-300">
+          🎁 Списать баллы (доступно {maxRedeemable.toLocaleString()} ₽ из {bonusBalance.toLocaleString()} ₽)
+        </span>
+
+        <input
+          type="checkbox"
+          checked={usePoints}
+          onChange={e => setUsePoints(e.target.checked)}
+          className="w-5 h-5 accent-[#58BB43] flex-shrink-0"
+        />
+
+      </label>
+
+      {
+        usePoints && (
+          <div className="mt-3 flex justify-between text-sm">
+            <span className="text-gray-400">К оплате</span>
+            <span className="text-[#58BB43] font-bold">{amountToPay.toLocaleString()} ₽</span>
+          </div>
+        )
+      }
+
+    </div>
+
+  )
+}
 
 
 <p
