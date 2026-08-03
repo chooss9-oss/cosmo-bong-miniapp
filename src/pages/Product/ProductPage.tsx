@@ -4,7 +4,8 @@ import {
 } from "react";
 
 import {
-  useParams
+  useParams,
+  useNavigate
 } from "react-router-dom";
 
 import {
@@ -19,14 +20,17 @@ import {
   getCachedProductPreview,
   getProduct,
   getCachedProducts,
-  getProducts
+  getProducts,
+  getCachedCategories,
+  getCategories
 } from "../../api/storelandApi";
 
 import FadeImage from "../../components/FadeImage";
 import ProductCard from "../../components/ProductCard";
 
 import { cleanProductName } from "../../utils/productName";
-import { pickCrossSellProducts } from "../../utils/crossSell";
+import { pickCrossSellProducts, resolveMainCategoryId } from "../../utils/crossSell";
+import { writeStoredFilter } from "../../utils/filterStorage";
 
 interface Variant {
 
@@ -81,6 +85,13 @@ interface CrossSellProduct {
 }
 
 
+interface Category {
+  "@_id": string;
+  "@_parentId"?: string;
+  "#text": string;
+}
+
+
 
 
 
@@ -91,6 +102,8 @@ export default function ProductPage(){
   const {
     productId
   } = useParams();
+
+  const navigate = useNavigate();
 
 
 
@@ -143,6 +156,14 @@ export default function ProductPage(){
     crossSell,
     setCrossSell
   ] = useState<CrossSellProduct[]>([]);
+
+
+  const [
+    categories,
+    setCategories
+  ] = useState<Category[]>(
+    () => getCachedCategories() ?? []
+  );
 
 
 
@@ -242,6 +263,51 @@ export default function ProductPage(){
     return ()=>{ cancelled = true; };
 
   },[product?.id, product?.categoryIds]);
+
+
+  // Категории нужны только чтобы построить "хлебную крошку" — подгружаем
+  // один раз, кэш переживает переходы между товарами.
+  useEffect(()=>{
+
+    if(categories.length > 0) return;
+
+    getCategories()
+      .then(data => setCategories(data))
+      .catch(()=>{});
+
+  },[]);
+
+
+  // Путь товара: главная категория -> подкатегория (если есть), для
+  // "хлебной крошки" сверху карточки товара
+  const mainCategoryId = resolveMainCategoryId(product?.categoryIds);
+
+  const mainCategory = mainCategoryId
+    ? categories.find(c => String(c["@_id"]) === String(mainCategoryId))
+    : null;
+
+  const subCategory = mainCategoryId && product?.categoryIds
+    ? categories.find(c =>
+        String(c["@_parentId"]) === String(mainCategoryId) &&
+        product.categoryIds!.some(id => String(id) === String(c["@_id"]))
+      )
+    : null;
+
+
+  function goToMainCategory(){
+    if(!mainCategory) return;
+    navigate(`/category/${mainCategory["@_id"]}`);
+  }
+
+
+  function goToSubCategory(){
+    if(!mainCategory || !subCategory) return;
+    writeStoredFilter(
+      `categoryFilters:${mainCategory["@_id"]}:subcategoryId`,
+      subCategory["@_id"]
+    );
+    navigate(`/category/${mainCategory["@_id"]}`);
+  }
 
 
 
@@ -470,6 +536,52 @@ export default function ProductPage(){
 
 
 
+
+
+      {/* ХЛЕБНАЯ КРОШКА: категория -> подкатегория товара */}
+
+      {
+        mainCategory && (
+
+          <div
+            className="
+            flex
+            items-center
+            flex-wrap
+            gap-1
+            text-xs
+            mb-3
+            "
+          >
+
+            <button
+              onClick={goToMainCategory}
+              className={`
+              font-bold
+              ${subCategory ? "text-gray-400" : "text-[#58BB43]"}
+              `}
+            >
+              {mainCategory["#text"]}
+            </button>
+
+            {
+              subCategory && (
+                <>
+                  <span className="text-gray-600">›</span>
+                  <button
+                    onClick={goToSubCategory}
+                    className="font-bold text-[#58BB43]"
+                  >
+                    {subCategory["#text"]}
+                  </button>
+                </>
+              )
+            }
+
+          </div>
+
+        )
+      }
 
 
       {/* PRODUCT */}
