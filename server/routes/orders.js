@@ -2,7 +2,7 @@ const express = require("express");
 const axios = require("axios");
 
 const { saveReplyMapping } = require("../replyMapping");
-const { createOrder } = require("../orderStore");
+const { createOrder, updateOrder } = require("../orderStore");
 const { getBonusBalance, getMaxRedeemable, deductBonusPoints } = require("../bonusStore");
 
 const router = express.Router();
@@ -444,6 +444,12 @@ error:"Telegram send failed"
 // ещё ничего не писал боту.
 if (telegramUserId && telegramData.result) {
   await saveReplyMapping(telegramData.result.message_id, telegramUserId);
+}
+
+// Запоминаем id этого сообщения — понадобится, чтобы поменять кнопку
+// "Отправлен" на "Собран", если клиент позже выберет самовывоз
+if (telegramData.result) {
+  await updateOrder(order.id, { adminMessageId: telegramData.result.message_id });
 }
 
 

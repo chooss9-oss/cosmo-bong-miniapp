@@ -244,8 +244,49 @@ async function handleOrderCallback(callbackQuery) {
 
     const orderLabel = order.storelandOrderNum || order.id;
 
-    // Самовывоз/доставка по Ярославлю — дальше вручную через Reply
-    if (methodCode === "pickup_yar" || methodCode === "delivery_yar") {
+    // Самовывоз в Ярославле — адрес и часы работы отправляем сразу
+    // автоматически, плюс меняем кнопку "Отправлен" у админа на "Собран"
+    if (methodCode === "pickup_yar") {
+
+      await notifyCustomer(
+        order,
+        `Наш магазин работает с 13:00 до 18:30 со вторника по субботу по адресу Депутатский переулок 6, вход с левого торца здания.
+
+Как только заказ будет собран, вам придёт соответствующее уведомление.`
+      );
+
+      const adminResult = await notifyAdmin(
+        `📍 Клиент по заказу №${orderLabel} выбрал: ${METHOD_LABELS[methodCode]}.\nОтветьте на это сообщение (Reply), чтобы написать клиенту напрямую.`
+      );
+
+      if (adminResult.ok && order.telegramUserId) {
+        await saveReplyMapping(adminResult.result.message_id, order.telegramUserId);
+      }
+
+      // Меняем "Отправлен" на "Собран" в исходном уведомлении о заказе
+      if (order.adminMessageId) {
+
+        await telegramApi("editMessageReplyMarkup", {
+          chat_id: process.env.ADMIN_ID,
+          message_id: order.adminMessageId,
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "💰 Оплачен", callback_data: `order_paid:${orderId}` },
+                { text: "✅ Собран", callback_data: `order_ready:${orderId}` }
+              ]
+            ]
+          }
+        });
+
+      }
+
+      return;
+
+    }
+
+    // Доставка по Ярославлю — дальше вручную через Reply
+    if (methodCode === "delivery_yar") {
 
       await notifyCustomer(order, "Секунду, уже пишем вам 🙂");
 
@@ -342,16 +383,19 @@ async function handleOrderCallback(callbackQuery) {
 
     await ack(`Статус обновлён: ${STATUS_LABELS.paid.label}`);
 
-    // Кнопка "Отправлен" должна остаться доступна — убираем только
-    // саму кнопку "Оплачен"
+    // Кнопка "Отправлен"/"Собран" должна остаться доступна — убираем
+    // только саму кнопку "Оплачен". Для самовывоза показываем "Собран"
+    const secondButton =
+      order.deliveryMethod === "pickup_yar"
+      ? { text: "✅ Собран", callback_data: `order_ready:${orderId}` }
+      : { text: "📦 Отправлен", callback_data: `order_shipped:${orderId}` };
+
     await telegramApi("editMessageReplyMarkup", {
       chat_id: fromChatId,
       message_id: messageId,
       reply_markup: {
         inline_keyboard: [
-          [
-            { text: "📦 Отправлен", callback_data: `order_shipped:${orderId}` }
-          ]
+          [ secondButton ]
         ]
       }
     });
@@ -399,6 +443,37 @@ async function handleOrderCallback(callbackQuery) {
 
   }
 
+  // ---- Собран (самовывоз) — сообщаем клиенту, что можно забрать заказ ----
+  if (action === "order_ready") {
+
+    const orderId = parts[1];
+
+    if (clickerId !== adminId) {
+      await ack("Недоступно");
+      return;
+    }
+
+    const order = await updateOrderStatus(orderId, "ready");
+
+    if (!order) {
+      await ack("Заказ не найден");
+      return;
+    }
+
+    await ack(`Статус обновлён: ${STATUS_LABELS.ready.label}`);
+    await clearButtons(fromChatId, messageId);
+
+    await notifyCustomer(
+      order,
+      `✅ Ваш заказ собран и доступен к самовывозу.
+
+Оплатить заказ можно в магазине наличными, картой, по QR-коду или переводом. Ждём вас!`
+    );
+
+    return;
+
+  }
+
   // Неизвестное действие
   await ack();
 
@@ -422,11 +497,13 @@ async function tryHandleTrackingReply(message) {
 
   if (order) {
 
-    await notifyAdmin(`✅ Заказ #${orderId} отмечен как отправленный. Трек-номер: ${trackingNumber}`);
+    const orderLabel = order.storelandOrderNum || order.id;
+
+    await notifyAdmin(`✅ Заказ №${orderLabel} отмечен как отправленный. Трек-номер: ${trackingNumber}`);
 
     await notifyCustomer(
       order,
-      `📦 Ваш заказ отправлен!\n\nТрек-номер: ${trackingNumber}`
+      `📦 Ваш заказ №${orderLabel} отправлен!\n\nТрек-номер: ${trackingNumber}`
     );
 
   } else {

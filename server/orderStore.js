@@ -11,7 +11,8 @@ const STATUS_LABELS = {
   accepted: { label: "Заказ принят", emoji: "🆕" },
   confirmed: { label: "Подтверждён", emoji: "✅" },
   paid: { label: "Оплачен", emoji: "💰" },
-  shipped: { label: "Отправлен", emoji: "📦" }
+  shipped: { label: "Отправлен", emoji: "📦" },
+  ready: { label: "Готов к самовывозу", emoji: "📍" }
 };
 
 function generateOrderId() {
