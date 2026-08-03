@@ -17,12 +17,16 @@ import {
 
 import {
   getCachedProductPreview,
-  getProduct
+  getProduct,
+  getCachedProducts,
+  getProducts
 } from "../../api/storelandApi";
 
 import FadeImage from "../../components/FadeImage";
+import ProductCard from "../../components/ProductCard";
 
 import { cleanProductName } from "../../utils/productName";
+import { pickCrossSellProducts } from "../../utils/crossSell";
 
 interface Variant {
 
@@ -60,6 +64,20 @@ interface Product {
 
   variants?:Variant[];
 
+  categoryIds?:string[];
+
+}
+
+
+interface CrossSellProduct {
+  id: string;
+  name: string;
+  price: number;
+  oldPrice?: number;
+  discount?: number;
+  images?: string[];
+  categoryIds?: string[];
+  inStock?: boolean;
 }
 
 
@@ -119,6 +137,12 @@ export default function ProductPage(){
     currentImage,
     setCurrentImage
   ] = useState(0);
+
+
+  const [
+    crossSell,
+    setCrossSell
+  ] = useState<CrossSellProduct[]>([]);
 
 
 
@@ -182,6 +206,42 @@ export default function ProductPage(){
 
 
   },[productId]);
+
+
+  // "С этим товаром покупают" — считаем, как только знаем id товара и его
+  // категории (после загрузки полных данных товара)
+  useEffect(()=>{
+
+    if(!product?.id || !product.categoryIds){
+      setCrossSell([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadCrossSell(){
+
+      const cached = getCachedProducts();
+      const allProducts = cached ?? await getProducts().catch(()=>[]);
+
+      if(cancelled) return;
+
+      const picked = pickCrossSellProducts(
+        allProducts as CrossSellProduct[],
+        product!.id,
+        product!.categoryIds,
+        8
+      );
+
+      setCrossSell(picked as CrossSellProduct[]);
+
+    }
+
+    loadCrossSell();
+
+    return ()=>{ cancelled = true; };
+
+  },[product?.id, product?.categoryIds]);
 
 
 
@@ -804,6 +864,34 @@ export default function ProductPage(){
         </div>
 
       </div>
+
+      {
+        crossSell.length > 0 && (
+
+          <div className="mt-6">
+
+            <h2 className="text-lg font-bold mb-3">
+              С этим товаром покупают
+            </h2>
+
+            <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+
+              {
+                crossSell.map(item=>(
+
+                  <div key={item.id} className="w-36 flex-shrink-0">
+                    <ProductCard product={item} />
+                  </div>
+
+                ))
+              }
+
+            </div>
+
+          </div>
+
+        )
+      }
 
       {/* ПРИЛИПШАЯ КНОПКА "В КОРЗИНУ" — всегда доступна, не нужно листать
       длинное описание, чтобы её найти */}
