@@ -12,7 +12,8 @@ const STATUS_LABELS = {
   confirmed: { label: "Подтверждён", emoji: "✅" },
   paid: { label: "Оплачен", emoji: "💰" },
   shipped: { label: "Отправлен", emoji: "📦" },
-  ready: { label: "Готов к самовывозу", emoji: "📍" }
+  ready: { label: "Готов к самовывозу", emoji: "📍" },
+  cancelled: { label: "Отменён", emoji: "❌" }
 };
 
 function generateOrderId() {
@@ -50,6 +51,13 @@ async function createOrder({ telegramUserId, items, total, storelandOrderNum, po
       await client.lTrim(`ordersByUser:${order.telegramUserId}`, 0, 49);
       await client.expire(`ordersByUser:${order.telegramUserId}`, ORDER_TTL_SECONDS);
     }
+
+    // Общий список последних заказов — нужен фоновой проверке
+    // просроченных подтверждений/оплаты (не привязан к конкретному
+    // пользователю)
+    await client.lPush("allOrders", id);
+    await client.lTrim("allOrders", 0, 499);
+    await client.expire("allOrders", ORDER_TTL_SECONDS);
 
   } catch (error) {
     console.error("❌ Не удалось сохранить заказ в Redis:", error.message);
@@ -172,6 +180,28 @@ async function getOrdersForUser(telegramUserId) {
 
 }
 
+// Последние заказы (все пользователи) — для фоновой проверки просроченных
+// подтверждений/оплаты по расписанию
+async function getRecentOrders(limit = 500) {
+
+  try {
+
+    const client = await getRedisClient();
+    const ids = await client.lRange("allOrders", 0, limit - 1);
+
+    if (!ids.length) return [];
+
+    const raws = await Promise.all(ids.map(id => client.get(`order:${id}`)));
+
+    return raws.filter(Boolean).map(raw => JSON.parse(raw));
+
+  } catch (error) {
+    console.error("❌ Не удалось получить список последних заказов из Redis:", error.message);
+    return [];
+  }
+
+}
+
 module.exports = {
   STATUS_LABELS,
   createOrder,
@@ -179,6 +209,7 @@ module.exports = {
   updateOrder,
   updateOrderStatus,
   getOrdersForUser,
+  getRecentOrders,
   saveTrackingRequest,
   getTrackingRequest,
   saveAwaitingShippingData,

@@ -25,7 +25,8 @@ const {
 const {
   handleOrderCallback,
   tryHandleTrackingReply,
-  tryHandleShippingData
+  tryHandleShippingData,
+  checkOrderTimeouts
 } = require("./orderFlow");
 
 const {
@@ -809,6 +810,27 @@ app.get("/api/refresh-subcategories", async (req, res) => {
 });
 
 // ==============================
+// CHECK ORDER TIMEOUTS (напоминания и автоотмена заказов без подтверждения/оплаты)
+// ==============================
+app.get("/api/check-order-timeouts", async (req, res) => {
+  if (req.query.secret !== process.env.REFRESH_SECRET) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  res.json({ success: true, status: "started" });
+
+  const task = checkOrderTimeouts().catch(error => {
+    console.error("❌ Ошибка проверки таймаутов заказов:", error.message);
+  });
+
+  try {
+    waitUntil(task);
+  } catch (e) {
+    // waitUntil доступен только в среде Vercel
+  }
+});
+
+// ==============================
 // ALL PRODUCTS
 // ==============================
 // Превращает HTML-описание в короткий текст без тегов — этого достаточно,
@@ -973,7 +995,14 @@ app.get("/api/promo-check", async (req, res) => {
     ? await getOrdersForUser(String(telegramUserId))
     : [];
 
-  if (existingOrders.length > 0) {
+  // Промокод действует, пока клиент ни разу реально не оплатил заказ —
+  // неподтверждённые/неоплаченные и автоматически отменённые заказы
+  // не лишают права на скидку
+  const hasPaidOrder = existingOrders.some(o =>
+    ["paid", "shipped", "ready"].includes(o.status)
+  );
+
+  if (hasPaidOrder) {
     return res.json({ valid: false, reason: "not_first_order" });
   }
 

@@ -5,6 +5,7 @@ const {
   getOrder,
   updateOrder,
   updateOrderStatus,
+  getRecentOrders,
   saveTrackingRequest,
   getTrackingRequest,
   saveAwaitingShippingData,
@@ -74,6 +75,17 @@ async function notifyCustomer(order, text, replyMarkup) {
       `⚠️ Не удалось отправить сообщение клиенту по заказу #${order.id} (вероятно, бот не разрешён). Свяжитесь по телефону.`
     );
 
+  } else {
+
+    // Дублируем админу текст любого автоматического сообщения, которое
+    // бот отправляет клиенту — чтобы всегда было видно, что именно
+    // клиент получил
+    const orderLabel = order.storelandOrderNum || order.id;
+
+    await notifyAdmin(
+      `📨 Клиенту отправлено сообщение (заказ №${orderLabel}):\n\n${text}`
+    );
+
   }
 
   return result;
@@ -134,6 +146,10 @@ async function handleOrderCallback(callbackQuery) {
       }
     });
 
+    // Запоминаем момент, когда попросили подтверждение — от него считаем
+    // 24-часовой дедлайн на подтверждение заказа клиентом
+    await updateOrder(orderId, { confirmRequestedAt: Date.now() });
+
     const orderLabel = order.storelandOrderNum || order.id;
 
     const welcomeText =
@@ -173,7 +189,7 @@ async function handleOrderCallback(callbackQuery) {
 
     await ack("Спасибо за подтверждение!");
     await clearButtons(fromChatId, messageId);
-    await updateOrderStatus(orderId, "confirmed");
+    await updateOrderStatus(orderId, "confirmed", { confirmedAt: Date.now() });
 
     const orderLabel = order.storelandOrderNum || order.id;
 
@@ -244,6 +260,13 @@ async function handleOrderCallback(callbackQuery) {
 
     const orderLabel = order.storelandOrderNum || order.id;
 
+    // Единое уведомление о нажатой кнопке доставки/оплаты — это в первую
+    // очередь интересующие админа кнопки, отдельно от текста сообщений
+    // клиенту
+    await notifyAdmin(
+      `🚚 Клиент нажал кнопку доставки/оплаты по заказу №${orderLabel}: «${METHOD_LABELS[methodCode] || methodCode}»`
+    );
+
     // Самовывоз в Ярославле — адрес и часы работы отправляем сразу
     // автоматически, плюс меняем кнопку "Отправлен" у админа на "Собран"
     if (methodCode === "pickup_yar") {
@@ -256,7 +279,7 @@ async function handleOrderCallback(callbackQuery) {
       );
 
       const adminResult = await notifyAdmin(
-        `📍 Клиент по заказу №${orderLabel} выбрал: ${METHOD_LABELS[methodCode]}.\nОтветьте на это сообщение (Reply), чтобы написать клиенту напрямую.`
+        `Ответьте на это сообщение (Reply), чтобы написать клиенту заказа №${orderLabel} напрямую.`
       );
 
       if (adminResult.ok && order.telegramUserId) {
@@ -291,7 +314,7 @@ async function handleOrderCallback(callbackQuery) {
       await notifyCustomer(order, "Секунду, уже пишем вам 🙂");
 
       const adminResult = await notifyAdmin(
-        `📍 Клиент по заказу №${orderLabel} выбрал: ${METHOD_LABELS[methodCode]}.\nОтветьте на это сообщение (Reply), чтобы написать клиенту напрямую.`
+        `Ответьте на это сообщение (Reply), чтобы написать клиенту заказа №${orderLabel} напрямую.`
       );
 
       if (adminResult.ok && order.telegramUserId) {
@@ -554,8 +577,155 @@ async function tryHandleShippingData(message) {
 
 }
 
+// ==============================
+// Автоматическая отмена заказов, которые клиент не подтвердил или не
+// оплатил в течение суток, с мягкими напоминаниями до этого
+// ==============================
+
+const HOUR_MS = 60 * 60 * 1000;
+
+const CONFIRM_DEADLINE_HOURS = 24;
+const PAYMENT_DEADLINE_HOURS = 24;
+
+// Два мягких напоминания в течение суток — на 8-м и 16-м часу ожидания
+const REMINDER_HOURS = [8, 16];
+
+// Методы доставки, где оплата/получение происходит не через бота
+// (самовывоз — оплата в магазине, доставка по городу — вручную через
+// Reply), поэтому дедлайн на "оплату" к ним не применяем
+const NO_PAYMENT_DEADLINE_METHODS = ["pickup_yar", "delivery_yar"];
+
+async function sendConfirmReminder(order, count) {
+
+  const orderLabel = order.storelandOrderNum || order.id;
+
+  await notifyCustomer(
+    order,
+    `👋 Напоминаем: заказ №${orderLabel} пока не подтверждён. Нажмите кнопку «✅ Заказ подтверждаю» в сообщении выше, чтобы мы начали сборку.
+
+Если не подтвердить в течение 24 часов с момента принятия заказа — он будет автоматически отменён.`
+  );
+
+  await updateOrder(order.id, { confirmReminderCount: count });
+
+}
+
+async function sendPaymentReminder(order, count) {
+
+  const orderLabel = order.storelandOrderNum || order.id;
+
+  await notifyCustomer(
+    order,
+    `👋 Напоминаем: заказ №${orderLabel} пока не оплачен.
+
+Пожалуйста, оплатите в течение 24 часов с момента подтверждения заказа — иначе он будет автоматически отменён.`
+  );
+
+  await updateOrder(order.id, { paymentReminderCount: count });
+
+}
+
+async function cancelOrder(order, reason) {
+
+  const orderLabel = order.storelandOrderNum || order.id;
+
+  await updateOrderStatus(order.id, "cancelled", {
+    cancelledAt: Date.now(),
+    cancelReason: reason
+  });
+
+  const reasonText =
+    reason === "confirm"
+    ? "мы не получили от вас подтверждение"
+    : "не поступила оплата";
+
+  await notifyCustomer(
+    order,
+    `😌 Заказ №${orderLabel} аннулирован — ${reasonText} в течение суток.
+
+Это не страшно! Вы всегда можете оформить новый заказ в приложении магазина в любое удобное время 🌿`
+  );
+
+  await notifyAdmin(
+    `❌ Заказ №${orderLabel} автоматически аннулирован (${reason === "confirm" ? "нет подтверждения" : "нет оплаты"} более 24 часов).`
+  );
+
+}
+
+// Вызывается по расписанию (см. /api/check-order-timeouts) — проходит по
+// последним заказам и рассылает напоминания/отмены там, где нужно
+async function checkOrderTimeouts() {
+
+  const orders = await getRecentOrders();
+  const now = Date.now();
+
+  for (const order of orders) {
+
+    try {
+
+      // ---- Ждём подтверждения от клиента (кнопка "Заказ подтверждаю") ----
+      if (order.status === "accepted" && order.confirmRequestedAt) {
+
+        const hoursElapsed = (now - order.confirmRequestedAt) / HOUR_MS;
+
+        if (hoursElapsed >= CONFIRM_DEADLINE_HOURS) {
+
+          await cancelOrder(order, "confirm");
+
+        } else {
+
+          const remindersSent = order.confirmReminderCount || 0;
+
+          if (hoursElapsed >= REMINDER_HOURS[1] && remindersSent < 2) {
+            await sendConfirmReminder(order, 2);
+          } else if (hoursElapsed >= REMINDER_HOURS[0] && remindersSent < 1) {
+            await sendConfirmReminder(order, 1);
+          }
+
+        }
+
+      }
+
+      // ---- Ждём оплаты (только для доставки Почтой/СДЭК) ----
+      if (
+        order.status === "confirmed" &&
+        order.confirmedAt &&
+        !NO_PAYMENT_DEADLINE_METHODS.includes(order.deliveryMethod)
+      ) {
+
+        const hoursElapsed = (now - order.confirmedAt) / HOUR_MS;
+
+        if (hoursElapsed >= PAYMENT_DEADLINE_HOURS) {
+
+          await cancelOrder(order, "payment");
+
+        } else {
+
+          const remindersSent = order.paymentReminderCount || 0;
+
+          if (hoursElapsed >= REMINDER_HOURS[1] && remindersSent < 2) {
+            await sendPaymentReminder(order, 2);
+          } else if (hoursElapsed >= REMINDER_HOURS[0] && remindersSent < 1) {
+            await sendPaymentReminder(order, 1);
+          }
+
+        }
+
+      }
+
+    } catch (error) {
+      console.error(`❌ Ошибка проверки таймаута заказа №${order.id}:`, error.message);
+    }
+
+  }
+
+}
+
 module.exports = {
   handleOrderCallback,
   tryHandleTrackingReply,
-  tryHandleShippingData
+  tryHandleShippingData,
+  checkOrderTimeouts,
+  notifyCustomer,
+  notifyAdmin
 };

@@ -4,6 +4,7 @@ const axios = require("axios");
 const { saveReplyMapping } = require("../replyMapping");
 const { createOrder, updateOrder, getOrdersForUser } = require("../orderStore");
 const { getBonusBalance, getMaxRedeemable, deductBonusPoints } = require("../bonusStore");
+const { notifyCustomer } = require("../orderFlow");
 
 const router = express.Router();
 
@@ -128,7 +129,13 @@ if (
     ? await getOrdersForUser(String(telegramUserId))
     : [];
 
-  if (existingOrders.length === 0) {
+  // Промокод действует, пока не было ни одного реально оплаченного
+  // заказа — так же, как в /api/promo-check
+  const hasPaidOrder = existingOrders.some(o =>
+    ["paid", "shipped", "ready"].includes(o.status)
+  );
+
+  if (!hasPaidOrder) {
     promoApplied = true;
   }
 
@@ -502,7 +509,8 @@ if (telegramData.result) {
 // ==============================
 // Подтверждение клиенту в личку с ботом (необязательно — если не
 // получится, например бот заблокирован, заказ всё равно считается
-// оформленным)
+// оформленным). Через общий notifyCustomer — он же сам дублирует
+// текст сообщения админу.
 // ==============================
 if (telegramUserId) {
 
@@ -516,41 +524,16 @@ if (telegramUserId) {
 
 💰 Сумма: ${Number(total).toLocaleString()} ₽`;
 
-    const customerResponse = await fetch(
-      `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: telegramUserId,
-          text: customerMessage,
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: "🛍 Открыть магазин",
-                  url: "https://t.me/CSMBNGSHOP_bot/csmbngshop"
-                }
-              ]
-            ]
+    await notifyCustomer(order, customerMessage, {
+      inline_keyboard: [
+        [
+          {
+            text: "🛍 Открыть магазин",
+            url: "https://t.me/CSMBNGSHOP_bot/csmbngshop"
           }
-        })
-      }
-    );
-
-    const customerData = await customerResponse.json();
-
-    if (!customerData.ok) {
-
-      // Telegram ответил ошибкой (не бросает исключение сам fetch) —
-      // логируем полностью, чтобы видеть точную причину в Vercel.
-      console.log(
-        "CUSTOMER MESSAGE REJECTED:",
-        telegramUserId,
-        JSON.stringify(customerData)
-      );
-
-    }
+        ]
+      ]
+    });
 
   } catch (customerMessageError) {
 
