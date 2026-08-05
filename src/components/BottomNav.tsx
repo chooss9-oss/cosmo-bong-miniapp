@@ -165,7 +165,7 @@ h-full
 flex
 items-center
 justify-between
-px-0.5
+px-2
 "
 
 >
@@ -373,6 +373,7 @@ className="
 truncate
 max-w-full
 leading-none
+tracking-tight
 "
 
 >
