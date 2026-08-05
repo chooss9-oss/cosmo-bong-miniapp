@@ -19,14 +19,17 @@ const {
 
 const {
   STATUS_LABELS,
-  getOrdersForUser
+  getOrdersForUser,
+  getRecentOrders
 } = require("./orderStore");
 
 const {
   handleOrderCallback,
   tryHandleTrackingReply,
   tryHandleShippingData,
-  checkOrderTimeouts
+  checkOrderTimeouts,
+  buildOrderCardText,
+  buildOrderActionButtons
 } = require("./orderFlow");
 
 const {
@@ -1050,6 +1053,22 @@ app.get("/api/setup-webhook", async (req, res) => {
   }
 });
 
+// Разово регистрирует /orders в списке команд бота (появится в меню "/"
+// у админа) — открыть один раз в браузере после деплоя
+app.get("/api/setup-commands", async (req, res) => {
+  try {
+    const result = await telegramApi("setMyCommands", {
+      commands: [
+        { command: "orders", description: "Список активных заказов" }
+      ],
+      scope: { type: "chat", chat_id: process.env.ADMIN_ID }
+    });
+    res.json({ result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Telegram шлёт сюда все входящие сообщения боту
 app.post("/api/telegram-webhook", async (req, res) => {
 
@@ -1098,6 +1117,59 @@ app.post("/api/telegram-webhook", async (req, res) => {
     }
 
     if (chatId === adminId) {
+
+      // Команда /orders — список всех незакрытых заказов с карточками
+      // и кнопками действий, чтобы не искать их в истории чата
+      if (message.text && message.text.trim().startsWith("/orders")) {
+
+        const allOrders = await getRecentOrders();
+
+        const activeOrders = allOrders
+          .filter(o => ["accepted", "confirmed", "paid"].includes(o.status))
+          .sort((a, b) => a.createdAt - b.createdAt)
+          .slice(0, 20);
+
+        if (activeOrders.length === 0) {
+
+          await telegramApi("sendMessage", {
+            chat_id: adminId,
+            text: "Активных заказов нет 🎉"
+          });
+
+          res.sendStatus(200);
+          return;
+
+        }
+
+        await telegramApi("sendMessage", {
+          chat_id: adminId,
+          text: `📋 Активных заказов: ${activeOrders.length}`
+        });
+
+        for (const order of activeOrders) {
+
+          const cardText =
+            buildOrderCardText(order) +
+            "\n\n✍️ Можно ответить (Reply) на это сообщение — уйдёт клиенту.";
+
+          const buttons = buildOrderActionButtons(order, order.id);
+
+          const sendResult = await telegramApi("sendMessage", {
+            chat_id: adminId,
+            text: cardText,
+            reply_markup: buttons.length ? { inline_keyboard: buttons } : undefined
+          });
+
+          if (sendResult.ok && order.telegramUserId) {
+            await saveReplyMapping(sendResult.result.message_id, order.telegramUserId);
+          }
+
+        }
+
+        res.sendStatus(200);
+        return;
+
+      }
 
       // Админ отвечает на запрос трек-номера — это отдельный поток,
       // проверяем его раньше обычной пересылки ответа клиенту

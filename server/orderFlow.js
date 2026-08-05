@@ -41,6 +41,60 @@ function getCustomerLabel(order) {
   return "клиент (без имени)";
 }
 
+// Строит клавиатуру действий для заказа по его текущему состоянию — общая
+// логика для исходного уведомления, для повторной отправки карточки
+// заказа (/orders) и для правки клавиатуры при каждом статусе. Кнопка
+// "❌ Отменить" доступна только до оплаты — после оплаты отмена это уже
+// не просто "не пришли к сделке", а возврат денег, руками через Reply.
+function buildOrderActionButtons(order, orderId) {
+
+  if (["cancelled", "shipped", "ready"].includes(order.status)) {
+    return [];
+  }
+
+  const secondButton =
+    order.deliveryMethod === "pickup_yar"
+    ? { text: "✅ Собран", callback_data: `order_ready:${orderId}` }
+    : { text: "📦 Отправлен", callback_data: `order_shipped:${orderId}` };
+
+  if (order.status === "paid") {
+    return [[secondButton]];
+  }
+
+  const rows = [];
+
+  if (order.status === "accepted" && !order.confirmRequestedAt) {
+    rows.push([{ text: "✅ Принять заказ", callback_data: `order_accept:${orderId}` }]);
+  }
+
+  rows.push([
+    { text: "💰 Оплачен", callback_data: `order_paid:${orderId}` },
+    secondButton
+  ]);
+
+  rows.push([{ text: "❌ Отменить", callback_data: `order_cancel:${orderId}` }]);
+
+  return rows;
+
+}
+
+// Короткая карточка заказа для списка /orders — без лишних деталей,
+// только то, что нужно, чтобы понять, что за заказ и что с ним делать
+function buildOrderCardText(order) {
+
+  const orderLabel = order.storelandOrderNum || order.id;
+  const statusInfo = STATUS_LABELS[order.status] || STATUS_LABELS.accepted;
+  const ageHours = Math.floor((Date.now() - order.createdAt) / (60 * 60 * 1000));
+  const itemsText = (order.items || []).map(i => `${i.name} ×${i.quantity}`).join(", ");
+
+  return (
+    `${statusInfo.emoji} Заказ №${orderLabel} — ${getCustomerLabel(order)}\n` +
+    `${itemsText}\n` +
+    `💰 ${Number(order.total).toLocaleString()} ₽ · ${statusInfo.label} · ${ageHours} ч назад`
+  );
+
+}
+
 // Отдельное статичное сообщение-пометка "можно ответить (Reply)" —
 // текст полностью фиксированный, без данных из заказа, поэтому
 // Markdown-разметка здесь всегда безопасна (не сломается из-за
@@ -160,24 +214,22 @@ async function handleOrderCallback(callbackQuery) {
 
     await ack("Заказ принят в работу");
 
-    // Кнопки "Оплачен"/"Отправлен" остаются доступны — убираем только
-    // саму кнопку "Принять заказ"
+    // Запоминаем момент, когда попросили подтверждение — от него считаем
+    // 24-часовой дедлайн на подтверждение заказа клиентом
+    await updateOrder(orderId, { confirmRequestedAt: Date.now() });
+
+    // Кнопки "Оплачен"/"Отправлен"/"Отменить" остаются доступны — убираем
+    // только саму кнопку "Принять заказ"
     await telegramApi("editMessageReplyMarkup", {
       chat_id: fromChatId,
       message_id: messageId,
       reply_markup: {
-        inline_keyboard: [
-          [
-            { text: "💰 Оплачен", callback_data: `order_paid:${orderId}` },
-            { text: "📦 Отправлен", callback_data: `order_shipped:${orderId}` }
-          ]
-        ]
+        inline_keyboard: buildOrderActionButtons(
+          { ...order, confirmRequestedAt: Date.now() },
+          orderId
+        )
       }
     });
-
-    // Запоминаем момент, когда попросили подтверждение — от него считаем
-    // 24-часовой дедлайн на подтверждение заказа клиентом
-    await updateOrder(orderId, { confirmRequestedAt: Date.now() });
 
     const orderLabel = order.storelandOrderNum || order.id;
 
@@ -324,12 +376,10 @@ async function handleOrderCallback(callbackQuery) {
           chat_id: process.env.ADMIN_ID,
           message_id: order.adminMessageId,
           reply_markup: {
-            inline_keyboard: [
-              [
-                { text: "💰 Оплачен", callback_data: `order_paid:${orderId}` },
-                { text: "✅ Собран", callback_data: `order_ready:${orderId}` }
-              ]
-            ]
+            inline_keyboard: buildOrderActionButtons(
+              { ...order, deliveryMethod, paymentMethod },
+              orderId
+            )
           }
         });
 
@@ -440,19 +490,13 @@ async function handleOrderCallback(callbackQuery) {
     await ack(`Статус обновлён: ${STATUS_LABELS.paid.label}`);
 
     // Кнопка "Отправлен"/"Собран" должна остаться доступна — убираем
-    // только саму кнопку "Оплачен". Для самовывоза показываем "Собран"
-    const secondButton =
-      order.deliveryMethod === "pickup_yar"
-      ? { text: "✅ Собран", callback_data: `order_ready:${orderId}` }
-      : { text: "📦 Отправлен", callback_data: `order_shipped:${orderId}` };
-
+    // "Оплачен" и "Отменить" (после оплаты отмена — это уже возврат
+    // денег, руками через Reply, а не кнопка бота)
     await telegramApi("editMessageReplyMarkup", {
       chat_id: fromChatId,
       message_id: messageId,
       reply_markup: {
-        inline_keyboard: [
-          [ secondButton ]
-        ]
+        inline_keyboard: buildOrderActionButtons(order, orderId)
       }
     });
 
@@ -525,6 +569,36 @@ async function handleOrderCallback(callbackQuery) {
 
 Оплатить заказ можно в магазине наличными, картой, по QR-коду или переводом. Ждём вас!`
     );
+
+    return;
+
+  }
+
+  // ---- Админ отменяет заказ вручную ----
+  if (action === "order_cancel") {
+
+    const orderId = parts[1];
+
+    if (clickerId !== adminId) {
+      await ack("Недоступно");
+      return;
+    }
+
+    const order = await getOrder(orderId);
+
+    if (!order) {
+      await ack("Заказ не найден");
+      return;
+    }
+
+    if (order.status === "cancelled") {
+      await ack("Уже отменён");
+      return;
+    }
+
+    await ack("Заказ отменён");
+    await clearButtons(fromChatId, messageId);
+    await cancelOrder(order, "manual");
 
     return;
 
@@ -673,21 +747,30 @@ async function cancelOrder(order, reason) {
     cancelReason: reason
   });
 
+  // Если при заказе списывались баллы кэшбэка — возвращаем их обратно,
+  // раз заказ так и не состоялся
+  if (order.pointsUsed > 0 && order.telegramUserId) {
+    await addBonusPoints(order.telegramUserId, order.pointsUsed);
+  }
+
   const reasonText =
-    reason === "confirm"
-    ? "мы не получили от вас подтверждение"
-    : "не поступила оплата";
+    reason === "confirm" ? "мы не получили от вас подтверждение в течение суток"
+    : reason === "payment" ? "не поступила оплата в течение суток"
+    : "решили отменить его";
 
   await notifyCustomer(
     order,
-    `😌 Заказ №${orderLabel} аннулирован — ${reasonText} в течение суток.
+    `😌 Заказ №${orderLabel} аннулирован — ${reasonText}.
 
 Это не страшно! Вы всегда можете оформить новый заказ в приложении магазина в любое удобное время 🌿`
   );
 
-  await notifyAdmin(
-    `❌ Заказ №${orderLabel} автоматически аннулирован (${reason === "confirm" ? "нет подтверждения" : "нет оплаты"} более 24 часов).`
-  );
+  const adminReasonText =
+    reason === "confirm" ? "нет подтверждения более 24 часов"
+    : reason === "payment" ? "нет оплаты более 24 часов"
+    : "отменён вручную";
+
+  await notifyAdmin(`❌ Заказ №${orderLabel} аннулирован (${adminReasonText}).`);
 
 }
 
@@ -766,5 +849,7 @@ module.exports = {
   tryHandleShippingData,
   checkOrderTimeouts,
   notifyCustomer,
-  notifyAdmin
+  notifyAdmin,
+  buildOrderActionButtons,
+  buildOrderCardText
 };

@@ -4,7 +4,7 @@ const axios = require("axios");
 const { saveReplyMapping, telegramApi } = require("../replyMapping");
 const { createOrder, updateOrder, getOrdersForUser } = require("../orderStore");
 const { getBonusBalance, getMaxRedeemable, deductBonusPoints } = require("../bonusStore");
-const { notifyCustomer } = require("../orderFlow");
+const { notifyCustomer, buildOrderActionButtons } = require("../orderFlow");
 
 const router = express.Router();
 
@@ -439,15 +439,7 @@ chat_id:process.env.ADMIN_ID,
 text:message,
 
 reply_markup:{
-  inline_keyboard:[
-    [
-      { text:"✅ Принять заказ", callback_data:`order_accept:${order.id}` }
-    ],
-    [
-      { text:"💰 Оплачен", callback_data:`order_paid:${order.id}` },
-      { text:"📦 Отправлен", callback_data:`order_shipped:${order.id}` }
-    ]
-  ]
+  inline_keyboard: buildOrderActionButtons(order, order.id)
 }
 
 })
