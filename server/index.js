@@ -1059,7 +1059,7 @@ app.get("/api/setup-commands", async (req, res) => {
   try {
     const result = await telegramApi("setMyCommands", {
       commands: [
-        { command: "orders", description: "Список активных заказов" }
+        { command: "orders", description: "Список неоплаченных заказов" }
       ],
       scope: { type: "chat", chat_id: process.env.ADMIN_ID }
     });
@@ -1118,14 +1118,14 @@ app.post("/api/telegram-webhook", async (req, res) => {
 
     if (chatId === adminId) {
 
-      // Команда /orders — список всех незакрытых заказов с карточками
+      // Команда /orders — список неоплаченных заказов с карточками
       // и кнопками действий, чтобы не искать их в истории чата
       if (message.text && message.text.trim().startsWith("/orders")) {
 
         const allOrders = await getRecentOrders();
 
         const activeOrders = allOrders
-          .filter(o => ["accepted", "confirmed", "paid"].includes(o.status))
+          .filter(o => ["accepted", "confirmed"].includes(o.status))
           .sort((a, b) => a.createdAt - b.createdAt)
           .slice(0, 20);
 
@@ -1133,7 +1133,7 @@ app.post("/api/telegram-webhook", async (req, res) => {
 
           await telegramApi("sendMessage", {
             chat_id: adminId,
-            text: "Активных заказов нет 🎉"
+            text: "Неоплаченных заказов нет 🎉"
           });
 
           res.sendStatus(200);
@@ -1143,7 +1143,7 @@ app.post("/api/telegram-webhook", async (req, res) => {
 
         await telegramApi("sendMessage", {
           chat_id: adminId,
-          text: `📋 Активных заказов: ${activeOrders.length}`
+          text: `📋 Неоплаченных заказов: ${activeOrders.length}`
         });
 
         for (const order of activeOrders) {
