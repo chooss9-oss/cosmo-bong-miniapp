@@ -204,7 +204,7 @@ items-center
 
 justify-center
 
-gap-0.5
+gap-0
 
 text-[10px]
 
@@ -252,8 +252,8 @@ src={item.icon}
 alt=""
 
 className={`
-w-6
-h-6
+w-8
+h-8
 object-contain
 transition-all
 duration-200
