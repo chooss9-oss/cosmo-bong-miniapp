@@ -9,6 +9,8 @@ import {
 
 import { cleanProductName } from "../../utils/productName";
 
+import { getTelegramUser } from "../../utils/telegram";
+
 
 import {
   useNavigate
@@ -60,6 +62,8 @@ const [promoApplied,setPromoApplied]=useState(false);
 
 const [promoMessage,setPromoMessage]=useState("");
 
+const [promoChecking,setPromoChecking]=useState(false);
+
 
 
 
@@ -102,7 +106,7 @@ total;
 
 
 
-function applyPromo(){
+async function applyPromo(){
 
 
 
@@ -114,93 +118,89 @@ promo.trim()
 
 
 
-
-
-if(code === "cosmo420tg"){
-
-
-
-setPromoApplied(true);
-
-
-
-setPromoMessage(
-
-"✅ Промокод применен: скидка 10%"
-
-);
-
-
-
-
-
-
-
-
-
-localStorage.setItem(
-
-"discount",
-
-String(
-Math.floor(total * 0.10)
-)
-
-);
-
-
-
-localStorage.setItem(
-
-"finalTotal",
-
-String(
-total - Math.floor(total * 0.10)
-)
-
-);
-
-
-
+if(!code){
+  return;
 }
 
-else{
+
+
+setPromoChecking(true);
 
 
 
-setPromoApplied(false);
+try{
 
 
 
-setPromoMessage(
+  const telegramUserId = getTelegramUser()?.id;
 
-"❌ Промокод не найден"
+  const response = await fetch(
+    `/api/promo-check?code=${encodeURIComponent(code)}${telegramUserId ? `&telegramUserId=${telegramUserId}` : ""}`
+  );
 
-);
-
-
-
-localStorage.removeItem(
-
-"promoCode"
-
-);
+  const data = await response.json();
 
 
-localStorage.removeItem(
 
-"discount"
-
-);
+  if(data.valid){
 
 
-localStorage.removeItem(
 
-"finalTotal"
+    setPromoApplied(true);
 
-);
+    setPromoMessage(
+      "✅ Промокод применен: скидка 10%"
+    );
+
+    localStorage.setItem("promoCode", code);
+
+    localStorage.setItem(
+      "discount",
+      String(Math.floor(total * 0.10))
+    );
+
+    localStorage.setItem(
+      "finalTotal",
+      String(total - Math.floor(total * 0.10))
+    );
 
 
+
+  } else {
+
+
+
+    setPromoApplied(false);
+
+    setPromoMessage(
+      data.reason === "not_first_order"
+      ? "❌ Промокод действует только на первый заказ"
+      : "❌ Промокод не найден"
+    );
+
+    localStorage.removeItem("promoCode");
+    localStorage.removeItem("discount");
+    localStorage.removeItem("finalTotal");
+
+
+
+  }
+
+
+
+} catch {
+
+
+
+  setPromoApplied(false);
+
+  setPromoMessage("❌ Не удалось проверить промокод, попробуйте ещё раз");
+
+
+
+} finally {
+
+  setPromoChecking(false);
 
 }
 
@@ -765,17 +765,20 @@ focus:border-[#58BB43]
 
 onClick={applyPromo}
 
+disabled={promoChecking}
+
 className="
 bg-[#58BB43]
 text-black
 font-bold
 px-5
 rounded-2xl
+disabled:opacity-50
 "
 
 >
 
-OK
+{promoChecking ? "..." : "OK"}
 
 </button>
 

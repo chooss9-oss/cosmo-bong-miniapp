@@ -266,6 +266,8 @@ cart,
 
 total,
 
+promoCode: localStorage.getItem("promoCode") || null,
+
 pointsUsed: usePoints ? maxRedeemable : 0
 
 
@@ -322,6 +324,9 @@ clearCart();
 localStorage.removeItem(
 "finalTotal"
 );
+
+localStorage.removeItem("promoCode");
+localStorage.removeItem("discount");
 
 
 

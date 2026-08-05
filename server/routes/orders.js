@@ -2,10 +2,15 @@ const express = require("express");
 const axios = require("axios");
 
 const { saveReplyMapping } = require("../replyMapping");
-const { createOrder, updateOrder } = require("../orderStore");
+const { createOrder, updateOrder, getOrdersForUser } = require("../orderStore");
 const { getBonusBalance, getMaxRedeemable, deductBonusPoints } = require("../bonusStore");
 
 const router = express.Router();
+
+// Промокод на 10% — действует только на самый первый заказ клиента,
+// перепроверяется на сервере (не доверяем скидке, применённой на клиенте)
+const FIRST_ORDER_PROMO_CODE = "cosmo420tg";
+const FIRST_ORDER_PROMO_RATE = 0.10;
 
 const STORELAND_API_URL = "https://cosmo-bong.ru/api/v1";
 const STORELAND_SECRET_KEY = process.env.STORELAND_API_KEY;
@@ -94,7 +99,7 @@ comment,
 
 cart,
 
-total,
+promoCode,
 
 pointsUsed
 
@@ -103,6 +108,37 @@ pointsUsed
 
 
 
+
+// Считаем сумму заказа сами по товарам из корзины — не доверяем итогу,
+// присланному с клиента
+const subtotal = cart
+  ? cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0)
+  : 0;
+
+// Промокод перепроверяется на сервере: код должен совпасть и у клиента
+// не должно быть предыдущих заказов
+let promoApplied = false;
+
+if (
+  promoCode &&
+  String(promoCode).trim().toLowerCase() === FIRST_ORDER_PROMO_CODE
+) {
+
+  const existingOrders = telegramUserId
+    ? await getOrdersForUser(String(telegramUserId))
+    : [];
+
+  if (existingOrders.length === 0) {
+    promoApplied = true;
+  }
+
+}
+
+const promoDiscount = promoApplied
+  ? Math.floor(subtotal * FIRST_ORDER_PROMO_RATE)
+  : 0;
+
+const total = subtotal - promoDiscount;
 
 // Проверяем списание баллов заново на сервере (не доверяем сумме с
 // клиента) — не больше 50% суммы заказа и не больше реального баланса
@@ -115,7 +151,7 @@ if (telegramUserId && pointsUsed) {
 
 }
 
-const amountToPay = Number(total) - appliedPoints;
+const amountToPay = total - appliedPoints;
 
 
 
@@ -269,6 +305,16 @@ ${index + 1}. ${item.name}
 
 
 
+
+
+
+if (promoApplied) {
+
+  message +=
+
+  `🎟 Промокод (первый заказ): -${promoDiscount.toLocaleString()} ₽\n`;
+
+}
 
 
 

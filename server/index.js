@@ -938,6 +938,33 @@ app.get("/api/my-orders", async (req, res) => {
 });
 
 // ==============================
+// PROMO CODE — 10% скидка, действует только на первый заказ клиента
+// ==============================
+const FIRST_ORDER_PROMO_CODE = "cosmo420tg";
+const FIRST_ORDER_PROMO_RATE = 0.10;
+
+app.get("/api/promo-check", async (req, res) => {
+
+  const code = String(req.query.code || "").trim().toLowerCase();
+  const telegramUserId = req.query.telegramUserId;
+
+  if (code !== FIRST_ORDER_PROMO_CODE) {
+    return res.json({ valid: false, reason: "not_found" });
+  }
+
+  const existingOrders = telegramUserId
+    ? await getOrdersForUser(String(telegramUserId))
+    : [];
+
+  if (existingOrders.length > 0) {
+    return res.json({ valid: false, reason: "not_first_order" });
+  }
+
+  res.json({ valid: true, discountRate: FIRST_ORDER_PROMO_RATE });
+
+});
+
+// ==============================
 // BONUS BALANCE (баллы кэшбэка)
 // ==============================
 app.get("/api/bonus-balance", async (req, res) => {
