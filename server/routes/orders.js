@@ -1,7 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 
-const { saveReplyMapping } = require("../replyMapping");
+const { saveReplyMapping, telegramApi } = require("../replyMapping");
 const { createOrder, updateOrder, getOrdersForUser } = require("../orderStore");
 const { getBonusBalance, getMaxRedeemable, deductBonusPoints } = require("../bonusStore");
 const { notifyCustomer } = require("../orderFlow");
@@ -393,6 +393,8 @@ telegramUserId
 // и кнопками статуса ниже
 const order = await createOrder({
   telegramUserId,
+  username,
+  telegramUsername,
   items: cart.map(item => ({
     name: item.name,
     quantity: item.quantity,
@@ -496,7 +498,23 @@ error:"Telegram send failed"
 // ответить (Reply) прямо на уведомление о заказе, даже если клиент сам
 // ещё ничего не писал боту.
 if (telegramUserId && telegramData.result) {
+
   await saveReplyMapping(telegramData.result.message_id, telegramUserId);
+
+  // Отдельным сообщением — жирная пометка, что именно на это можно
+  // ответить (Reply), чтобы ответ ушёл клиенту. Текст полностью
+  // фиксированный (без данных из заказа), поэтому Markdown-разметка
+  // здесь безопасна.
+  const replyHint = await telegramApi("sendMessage", {
+    chat_id: process.env.ADMIN_ID,
+    text: "✍️ *Можно ответить (Reply)* на уведомление о заказе выше — ответ уйдёт клиенту.",
+    parse_mode: "Markdown"
+  });
+
+  if (replyHint.ok) {
+    await saveReplyMapping(replyHint.result.message_id, telegramUserId);
+  }
+
 }
 
 // Запоминаем id этого сообщения — понадобится, чтобы поменять кнопку

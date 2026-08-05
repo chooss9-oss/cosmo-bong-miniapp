@@ -33,6 +33,34 @@ const METHOD_LABELS = {
   delivery_yar: "Доставка по Ярославлю"
 };
 
+// Имя/юзернейм клиента для уведомлений админу — чтобы было явно видно,
+// кто именно нажал кнопку или прислал сообщение, а не обезличенное "Клиент"
+function getCustomerLabel(order) {
+  if (order.telegramUsername) return `@${order.telegramUsername}`;
+  if (order.username) return `@${order.username} (введено вручную)`;
+  return "клиент (без имени)";
+}
+
+// Отдельное статичное сообщение-пометка "можно ответить (Reply)" —
+// текст полностью фиксированный, без данных из заказа, поэтому
+// Markdown-разметка здесь всегда безопасна (не сломается из-за
+// спецсимволов в имени/комментарии клиента)
+async function sendReplyHint(telegramUserId) {
+
+  const result = await telegramApi("sendMessage", {
+    chat_id: process.env.ADMIN_ID,
+    text: "✍️ *Можно ответить (Reply)* на сообщение выше — ответ уйдёт клиенту.",
+    parse_mode: "Markdown"
+  });
+
+  if (result.ok && telegramUserId) {
+    await saveReplyMapping(result.result.message_id, telegramUserId);
+  }
+
+  return result;
+
+}
+
 async function clearButtons(chatId, messageId) {
   try {
     await telegramApi("editMessageReplyMarkup", {
@@ -45,12 +73,13 @@ async function clearButtons(chatId, messageId) {
   }
 }
 
-async function notifyAdmin(text, extraReplyMarkup) {
+async function notifyAdmin(text, extraReplyMarkup, parseMode) {
 
   const result = await telegramApi("sendMessage", {
     chat_id: process.env.ADMIN_ID,
     text,
-    reply_markup: extraReplyMarkup
+    reply_markup: extraReplyMarkup,
+    parse_mode: parseMode
   });
 
   return result;
@@ -193,7 +222,7 @@ async function handleOrderCallback(callbackQuery) {
 
     const orderLabel = order.storelandOrderNum || order.id;
 
-    await notifyAdmin(`✅ Клиент подтвердил заказ №${orderLabel}. Отправил ему выбор способа доставки и оплаты.`);
+    await notifyAdmin(`✅ ${getCustomerLabel(order)} подтвердил заказ №${orderLabel}. Отправил ему выбор способа доставки и оплаты.`);
 
     const text =
 `Отлично! Как вам удобнее оплатить и получить заказ?
@@ -264,7 +293,7 @@ async function handleOrderCallback(callbackQuery) {
     // очередь интересующие админа кнопки, отдельно от текста сообщений
     // клиенту
     await notifyAdmin(
-      `🚚 Клиент нажал кнопку доставки/оплаты по заказу №${orderLabel}: «${METHOD_LABELS[methodCode] || methodCode}»`
+      `🚚 ${getCustomerLabel(order)} нажал кнопку доставки/оплаты по заказу №${orderLabel}: «${METHOD_LABELS[methodCode] || methodCode}»`
     );
 
     // Самовывоз в Ярославле — адрес и часы работы отправляем сразу
@@ -279,7 +308,9 @@ async function handleOrderCallback(callbackQuery) {
       );
 
       const adminResult = await notifyAdmin(
-        `Ответьте на это сообщение (Reply), чтобы написать клиенту заказа №${orderLabel} напрямую.`
+        `✍️ *Можно ответить (Reply)* на это сообщение, чтобы написать клиенту заказа №${orderLabel} напрямую.`,
+        undefined,
+        "Markdown"
       );
 
       if (adminResult.ok && order.telegramUserId) {
@@ -314,7 +345,9 @@ async function handleOrderCallback(callbackQuery) {
       await notifyCustomer(order, "Секунду, уже пишем вам 🙂");
 
       const adminResult = await notifyAdmin(
-        `Ответьте на это сообщение (Reply), чтобы написать клиенту заказа №${orderLabel} напрямую.`
+        `✍️ *Можно ответить (Reply)* на это сообщение, чтобы написать клиенту заказа №${orderLabel} напрямую.`,
+        undefined,
+        "Markdown"
       );
 
       if (adminResult.ok && order.telegramUserId) {
@@ -564,14 +597,20 @@ async function tryHandleShippingData(message) {
   const methodLabel =
     order.deliveryMethod === "cdek" ? "СДЭК" : "Почта";
 
+  // Текст содержит то, что напечатал клиент сам (ФИО, адрес и т.д.) —
+  // Markdown сюда не добавляем, чтобы случайный спецсимвол не сломал
+  // отправку сообщения
   const adminResult = await notifyAdmin(
-    `📥 Данные получателя по заказу №${orderLabel} (${methodLabel}):\n\n${shippingData}`,
+    `📥 ${getCustomerLabel(order)} прислал данные получателя по заказу №${orderLabel} (${methodLabel}):\n\n${shippingData}`,
     { inline_keyboard: [[{ text: "📐 Посчитать доставку", callback_data: `order_calc:${orderId}` }]] }
   );
 
   if (adminResult.ok && order.telegramUserId) {
     await saveReplyMapping(adminResult.result.message_id, order.telegramUserId);
   }
+
+  // Отдельная жирная пометка (Reply) — уже безопасный статичный текст
+  await sendReplyHint(order.telegramUserId);
 
   return true;
 
