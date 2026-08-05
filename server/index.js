@@ -351,7 +351,7 @@ async function scrapeSalesData() {
 // ==============================
 // ПРОВЕРКА НАЛИЧИЯ — ПОРЦИОННО (одна порция за один запуск)
 // ==============================
-async function scrapeStockChunk(productUrls, offset, chunkSize) {
+async function scrapeStockChunk(productUrls, offset, chunkSize, urlToIds = {}) {
 
   const chunk = productUrls.slice(offset, offset + chunkSize);
   const newStockCache = {};
@@ -394,7 +394,20 @@ async function scrapeStockChunk(productUrls, offset, chunkSize) {
           }
 
         } catch (innerError) {
+
           console.error(`⚠️ Не удалось проверить наличие ${url}:`, innerError.message);
+
+          // Если страница товара реально удалена в Storeland (404) — это
+          // надёжный сигнал, что товар снят с продажи. Помечаем как
+          // "нет в наличии", а не оставляем старое значение навсегда
+          // (иначе удалённые товары так и висят в наличии бесконечно).
+          if (innerError.response && innerError.response.status === 404) {
+            const ids = urlToIds[url] || [];
+            ids.forEach(id => {
+              newStockCache[id] = 0;
+            });
+          }
+
         }
 
       })
@@ -700,17 +713,21 @@ app.get("/api/refresh-stock", async (req, res) => {
 
       const newProducts = await readNewProductsFromRedis();
 
-      const productUrls = [...new Set(
-        products.concat(newProducts)
-          .filter(p => p.url)
-          .map(p => p.url.split('?')[0])
-      )];
+      const urlToIds = {};
+
+      products.concat(newProducts).filter(p => p.url).forEach(p => {
+        const url = p.url.split('?')[0];
+        if (!urlToIds[url]) urlToIds[url] = [];
+        urlToIds[url].push(p.id);
+      });
+
+      const productUrls = Object.keys(urlToIds);
 
       const CHUNK_SIZE = 150;
 
       const offset = await readStockOffsetFromRedis();
 
-      const { newStockCache, nextOffset } = await scrapeStockChunk(productUrls, offset, CHUNK_SIZE);
+      const { newStockCache, nextOffset } = await scrapeStockChunk(productUrls, offset, CHUNK_SIZE, urlToIds);
 
       const existingStock = (await readStockCacheFromRedis()) || {};
       const mergedStock = { ...existingStock, ...newStockCache };
