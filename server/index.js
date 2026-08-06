@@ -1215,14 +1215,32 @@ app.post("/api/telegram-webhook", async (req, res) => {
 
             console.log("TELEGRAM WEBHOOK: reply to customer FAILED:", JSON.stringify(sendResult));
 
-            // Даём знать админу прямо в чат — иначе он решит, что ответ ушёл
+            // Реакцией на само сообщение админа + текстом — чтобы сразу было
+            // видно и в чате, и явным предупреждением
+            await telegramApi("setMessageReaction", {
+              chat_id: adminId,
+              message_id: message.message_id,
+              reaction: [{ type: "emoji", emoji: "❌" }]
+            }).catch(() => {});
+
             await telegramApi("sendMessage", {
               chat_id: adminId,
               text: "⚠️ Не удалось отправить ваш ответ клиенту через бота (скорее всего, он не разрешил боту писать). Свяжитесь по телефону, указанному в заказе."
             });
 
           } else {
+
             console.log("TELEGRAM WEBHOOK: reply delivered to customer", customerChatId, `(total ${Date.now() - t0}ms)`);
+
+            // Реакция ✅ на сообщение админа — подтверждение, что оно ушло
+            // клиенту (Telegram Bot API не даёт узнать, прочитано ли оно —
+            // только факт доставки)
+            await telegramApi("setMessageReaction", {
+              chat_id: adminId,
+              message_id: message.message_id,
+              reaction: [{ type: "emoji", emoji: "✅" }]
+            }).catch(() => {});
+
           }
 
         } else {
