@@ -251,7 +251,7 @@ async function notifyCustomer(order, text, replyMarkup) {
     const orderLabel = order.storelandOrderNum || order.id;
 
     const mirrorResult = await notifyAdmin(
-      `🆔 ID клиента: ${order.telegramUserId}\n` +
+      `👤 Клиент: ${getCustomerLabel(order)}\n` +
       `📨 Клиенту отправлено сообщение (заказ №${orderLabel}):\n\n${text}`
     );
 
@@ -292,7 +292,7 @@ async function notifyCustomerPhoto(order, photoUrl, caption) {
     const mirrorResult = await telegramApi("sendPhoto", {
       chat_id: process.env.ADMIN_ID,
       photo: photoUrl,
-      caption: `🆔 ID клиента: ${order.telegramUserId}\n📨 Клиенту отправлен QR-код для оплаты (заказ №${orderLabel})`
+      caption: `👤 Клиент: ${getCustomerLabel(order)}\n📨 Клиенту отправлен QR-код для оплаты (заказ №${orderLabel})`
     }).catch(() => ({ ok: false }));
 
     if (mirrorResult.ok) {
