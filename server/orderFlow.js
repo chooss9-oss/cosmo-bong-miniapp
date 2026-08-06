@@ -13,6 +13,8 @@ const {
   getPaymentRequisites,
   savePendingBank,
   getPendingBank,
+  saveOrderEditRequest,
+  getOrderEditRequest,
   saveAwaitingShippingData,
   getAwaitingShippingData,
   clearAwaitingShippingData
@@ -133,7 +135,10 @@ function buildOrderActionButtons(order, orderId) {
     secondButton
   ]);
 
-  rows.push([{ text: "❌ Отменить", callback_data: `order_cancel:${orderId}` }]);
+  rows.push([
+    { text: "✏️ Изменить заказ", callback_data: `order_edit:${orderId}` },
+    { text: "❌ Отменить", callback_data: `order_cancel:${orderId}` }
+  ]);
 
   return rows;
 
@@ -755,6 +760,46 @@ async function handleOrderCallback(callbackQuery) {
 
   }
 
+  // ---- Админ правит состав/сумму заказа вручную (например, если что-то
+  // поменяли прямо в админке Storeland — туда бот сам не заглядывает) ----
+  if (action === "order_edit") {
+
+    const orderId = parts[1];
+
+    if (clickerId !== adminId) {
+      await ack("Недоступно");
+      return;
+    }
+
+    const order = await getOrder(orderId);
+
+    if (!order) {
+      await ack("Заказ не найден");
+      return;
+    }
+
+    await ack("Введите новый заказ");
+
+    const currentItemsText = (order.items || [])
+      .map(i => `${i.name} x${i.quantity}`)
+      .join("\n");
+
+    const askResult = await notifyAdmin(
+      `✏️ Введите новый состав и сумму заказа №${order.storelandOrderNum || order.id} одним сообщением (ответьте на это сообщение).\n\n` +
+      `Формат — список товаров, последней строкой сумма:\n\n` +
+      `Название товара x2\nДругой товар x1\nСумма: 3200\n\n` +
+      `Текущий состав для справки:\n${currentItemsText || "—"}\nСумма: ${Number(order.total).toLocaleString()}`,
+      { force_reply: true }
+    );
+
+    if (askResult.ok) {
+      await saveOrderEditRequest(askResult.result.message_id, orderId);
+    }
+
+    return;
+
+  }
+
   // ---- Админ отменяет заказ вручную ----
   if (action === "order_cancel") {
 
@@ -886,6 +931,88 @@ async function tryHandlePaymentDetailsReply(message) {
   });
 
   await notifyAdmin(`✅ Счёт (${BANK_LABELS[bank]}) по заказу №${orderLabel} отправлен клиенту. Отсчёт 24 часов на оплату начался.`);
+
+  return true;
+
+}
+
+// Админ ответил новым составом/суммой на запрос из order_edit — возвращает
+// true, если обработано. Последняя строка вида "Сумма: 3200" — новая
+// сумма заказа, всё, что выше неё, становится новым списком товаров
+// (свободный текст, каждая строка — отдельная позиция).
+async function tryHandleOrderEditReply(message) {
+
+  if (!message.reply_to_message || !message.text) return false;
+
+  const orderId = await getOrderEditRequest(message.reply_to_message.message_id);
+
+  if (!orderId) return false;
+
+  const order = await getOrder(orderId);
+
+  if (!order) {
+    await notifyAdmin(`⚠️ Не удалось найти заказ #${orderId}, изменения не применены.`);
+    return true;
+  }
+
+  const lines = message.text.split("\n").map(line => line.trim()).filter(Boolean);
+
+  const sumLineIndex = lines.findIndex(line => /^сумма\s*:?/i.test(line));
+
+  if (sumLineIndex === -1) {
+
+    await notifyAdmin(
+      `⚠️ Не нашёл строку "Сумма: ..." — ничего не изменил.\nПопробуйте ещё раз, ответив (Reply) на исходный запрос. Последней строкой обязательно укажите сумму, например: Сумма: 3200`
+    );
+
+    return true;
+
+  }
+
+  const sumText = lines[sumLineIndex].replace(/^сумма\s*:?/i, "").trim();
+  const newTotal = Number(sumText.replace(/[^\d.]/g, ""));
+
+  if (isNaN(newTotal) || newTotal <= 0) {
+
+    await notifyAdmin(
+      `⚠️ Не разобрал сумму в строке "${lines[sumLineIndex]}" — ничего не изменил. Попробуйте ещё раз, ответив (Reply) на исходный запрос.`
+    );
+
+    return true;
+
+  }
+
+  const itemLines = lines.slice(0, sumLineIndex);
+
+  const newItems = itemLines.length
+    ? itemLines.map(line => {
+        const match = line.match(/^(.*?)\s*[xх]\s*(\d+)\s*$/i);
+        return match
+          ? { name: match[1].trim(), quantity: Number(match[2]), price: null }
+          : { name: line, quantity: 1, price: null };
+      })
+    : order.items;
+
+  const orderLabel = order.storelandOrderNum || order.id;
+  const oldTotal = order.total;
+
+  await updateOrder(orderId, {
+    items: newItems,
+    total: newTotal
+  });
+
+  const newItemsText = newItems.map(i => `${i.name} ×${i.quantity}`).join("\n");
+
+  await notifyAdmin(
+    `✅ Заказ №${orderLabel} обновлён.\n\n${newItemsText}\n\nСумма: ${newTotal.toLocaleString()}₽ (было ${Number(oldTotal).toLocaleString()}₽)`
+  );
+
+  // Клиента предупреждаем — иначе сумма в счёте/кэшбэке разойдётся с тем,
+  // что он ожидал, и это выглядит как ошибка
+  await notifyCustomer(
+    order,
+    `ℹ️ В ваш заказ №${orderLabel} внесены изменения.\n\nАктуальный состав:\n${newItemsText}\n\nАктуальная сумма: ${newTotal.toLocaleString()}₽\n\nЕсли есть вопросы — просто напишите нам в этом чате.`
+  );
 
   return true;
 
@@ -1099,6 +1226,7 @@ module.exports = {
   handleOrderCallback,
   tryHandleTrackingReply,
   tryHandlePaymentDetailsReply,
+  tryHandleOrderEditReply,
   tryHandleShippingData,
   checkOrderTimeouts,
   notifyCustomer,

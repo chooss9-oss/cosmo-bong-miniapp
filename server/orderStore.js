@@ -209,6 +209,29 @@ async function getPendingBank(orderId) {
   }
 }
 
+// Админ должен прислать новый состав/сумму заказа одним сообщением —
+// помечаем, что следующий ответ (Reply) на это сообщение нужно разобрать
+// как правку заказа (например, если что-то поменяли прямо в админке
+// Storeland и нужно отразить это в боте/мини-аппе)
+async function saveOrderEditRequest(messageId, orderId) {
+  try {
+    const client = await getRedisClient();
+    await client.set(`orderEditRequest:${messageId}`, orderId, { EX: 60 * 60 * 24 });
+  } catch (error) {
+    console.error("❌ Не удалось сохранить orderEditRequest в Redis:", error.message);
+  }
+}
+
+async function getOrderEditRequest(messageId) {
+  try {
+    const client = await getRedisClient();
+    return await client.get(`orderEditRequest:${messageId}`);
+  } catch (error) {
+    console.error("❌ Не удалось прочитать orderEditRequest из Redis:", error.message);
+    return null;
+  }
+}
+
 // Клиент выбрал СДЭК/Почту и должен прислать данные получателя одним
 // сообщением — помечаем, что следующее его сообщение это данные, а не
 // обычный вопрос
@@ -298,6 +321,8 @@ module.exports = {
   getPaymentRequisites,
   savePendingBank,
   getPendingBank,
+  saveOrderEditRequest,
+  getOrderEditRequest,
   saveAwaitingShippingData,
   getAwaitingShippingData,
   clearAwaitingShippingData

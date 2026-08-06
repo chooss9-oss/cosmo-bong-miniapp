@@ -29,6 +29,7 @@ const {
   handleOrderCallback,
   tryHandleTrackingReply,
   tryHandlePaymentDetailsReply,
+  tryHandleOrderEditReply,
   tryHandleShippingData,
   checkOrderTimeouts,
   buildOrderCardText,
@@ -1265,6 +1266,15 @@ app.post("/api/telegram-webhook", async (req, res) => {
       const handledPaymentDetails = await tryHandlePaymentDetailsReply(message);
 
       if (handledPaymentDetails) {
+        res.sendStatus(200);
+        return;
+      }
+
+      // Админ отвечает на запрос правки состава/суммы заказа (после
+      // "✏️ Изменить заказ") — тоже отдельный поток
+      const handledOrderEdit = await tryHandleOrderEditReply(message);
+
+      if (handledOrderEdit) {
         res.sendStatus(200);
         return;
       }
