@@ -1001,7 +1001,7 @@ async function cancelOrder(order, reason) {
   const reasonText =
     reason === "confirm" ? "мы не получили от вас подтверждение в течение суток"
     : reason === "payment" ? "не поступила оплата в течение суток"
-    : "решили отменить его";
+    : "вы либо не подтвердили, либо не оплатили его";
 
   await notifyCustomer(
     order,
