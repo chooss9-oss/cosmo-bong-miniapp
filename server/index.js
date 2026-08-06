@@ -400,6 +400,24 @@ async function scrapeStockChunk(productUrls, offset, chunkSize, urlToIds = {}) {
             newStockCache[wishlistModId] = isOutOfStock ? 0 : 1;
           }
 
+          // Надёжный запасной способ: у части товаров (например, с
+          // модификациями по цвету) верстка не совпадает с селекторами
+          // выше, и rest_value/data-mod-id не находятся вообще — товар
+          // тогда молча остаётся "в наличии" навсегда. Подстраховываемся
+          // текстовым поиском "Нет в наличии" на странице и простав ляем
+          // статус явно для всех id, которые точно принадлежат этому URL —
+          // из уже известного products.json, не зависим от верстки.
+          const pageText = $product('body').text();
+          const isOutOfStockOnPage = /нет в наличии/i.test(pageText);
+
+          const idsForThisUrl = urlToIds[url] || [];
+
+          idsForThisUrl.forEach(id => {
+            if (newStockCache[id] === undefined) {
+              newStockCache[id] = isOutOfStockOnPage ? 0 : 1;
+            }
+          });
+
         } catch (innerError) {
 
           console.error(`⚠️ Не удалось проверить наличие ${url}:`, innerError.message);
