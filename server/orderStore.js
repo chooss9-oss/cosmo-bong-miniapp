@@ -131,6 +131,56 @@ async function getTrackingRequest(messageId) {
   }
 }
 
+// Админ должен прислать стоимость и срок доставки одним сообщением —
+// помечаем, что следующий ответ (Reply) на это сообщение нужно разобрать
+// как "стоимость, срок", а не как обычный ответ клиенту
+async function savePaymentDetailsRequest(messageId, orderId) {
+  try {
+    const client = await getRedisClient();
+    await client.set(`paymentDetailsRequest:${messageId}`, orderId, { EX: 60 * 60 * 24 });
+  } catch (error) {
+    console.error("❌ Не удалось сохранить paymentDetailsRequest в Redis:", error.message);
+  }
+}
+
+async function getPaymentDetailsRequest(messageId) {
+  try {
+    const client = await getRedisClient();
+    return await client.get(`paymentDetailsRequest:${messageId}`);
+  } catch (error) {
+    console.error("❌ Не удалось прочитать paymentDetailsRequest из Redis:", error.message);
+    return null;
+  }
+}
+
+// Реквизиты для оплаты переводом — почти не меняются, но карта иногда
+// обновляется, поэтому храним в Redis и даём админу команду для правки
+// (см. /setrequisites), а не зашиваем текст в код
+const DEFAULT_PAYMENT_REQUISITES =
+`СБЕР: 5469 7700 1514 2384
+Артем Константинович В.
+(без комментариев к платежу)`;
+
+async function savePaymentRequisites(text) {
+  try {
+    const client = await getRedisClient();
+    await client.set("paymentRequisites", text);
+  } catch (error) {
+    console.error("❌ Не удалось сохранить paymentRequisites в Redis:", error.message);
+  }
+}
+
+async function getPaymentRequisites() {
+  try {
+    const client = await getRedisClient();
+    const stored = await client.get("paymentRequisites");
+    return stored || DEFAULT_PAYMENT_REQUISITES;
+  } catch (error) {
+    console.error("❌ Не удалось прочитать paymentRequisites из Redis:", error.message);
+    return DEFAULT_PAYMENT_REQUISITES;
+  }
+}
+
 // Клиент выбрал СДЭК/Почту и должен прислать данные получателя одним
 // сообщением — помечаем, что следующее его сообщение это данные, а не
 // обычный вопрос
@@ -214,6 +264,10 @@ module.exports = {
   getRecentOrders,
   saveTrackingRequest,
   getTrackingRequest,
+  savePaymentDetailsRequest,
+  getPaymentDetailsRequest,
+  savePaymentRequisites,
+  getPaymentRequisites,
   saveAwaitingShippingData,
   getAwaitingShippingData,
   clearAwaitingShippingData

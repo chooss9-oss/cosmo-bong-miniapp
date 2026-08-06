@@ -8,6 +8,9 @@ const {
   getRecentOrders,
   saveTrackingRequest,
   getTrackingRequest,
+  savePaymentDetailsRequest,
+  getPaymentDetailsRequest,
+  getPaymentRequisites,
   saveAwaitingShippingData,
   getAwaitingShippingData,
   clearAwaitingShippingData
@@ -32,6 +35,16 @@ const METHOD_LABELS = {
   pickup_yar: "Самовывоз в Ярославле",
   delivery_yar: "Доставка по Ярославлю"
 };
+
+// "1 день" / "2 дня" / "5 дней"
+function pluralizeDays(n) {
+  const abs = Math.abs(n) % 100;
+  const last = abs % 10;
+  if (abs > 10 && abs < 20) return "дней";
+  if (last === 1) return "день";
+  if (last >= 2 && last <= 4) return "дня";
+  return "дней";
+}
 
 // Имя/юзернейм клиента для уведомлений админу — чтобы было явно видно,
 // кто именно нажал кнопку или прислал сообщение, а не обезличенное "Клиент"
@@ -466,6 +479,20 @@ async function handleOrderCallback(callbackQuery) {
 
     await notifyCustomer(order, text);
 
+    // Спрашиваем у админа стоимость и срок доставки одним сообщением —
+    // как только он ответит, бот сам соберёт и отправит клиенту полный
+    // счёт (реквизиты подставит из сохранённого шаблона). Именно с этого
+    // момента, а не с момента подтверждения заказа, начинается отсчёт
+    // 24 часов на оплату.
+    const askResult = await notifyAdmin(
+      `💳 Введите стоимость и срок доставки для заказа №${order.storelandOrderNum || order.id} одним сообщением через запятую (ответьте на это сообщение).\nНапример: 450, 4`,
+      { force_reply: true }
+    );
+
+    if (askResult.ok) {
+      await savePaymentDetailsRequest(askResult.result.message_id, orderId);
+    }
+
     return;
 
   }
@@ -646,6 +673,73 @@ async function tryHandleTrackingReply(message) {
 
 }
 
+// Админ ответил стоимостью и сроком доставки на запрос из order_calc —
+// возвращает true, если обработано. Собирает и отправляет клиенту полный
+// счёт (сумма заказа уже известна, реквизиты берём из сохранённого
+// шаблона), и с этого момента отсчитывает 24 часа на оплату.
+async function tryHandlePaymentDetailsReply(message) {
+
+  if (!message.reply_to_message || !message.text) return false;
+
+  const orderId = await getPaymentDetailsRequest(message.reply_to_message.message_id);
+
+  if (!orderId) return false;
+
+  const order = await getOrder(orderId);
+
+  if (!order) {
+    await notifyAdmin(`⚠️ Не удалось найти заказ #${orderId}, счёт не отправлен.`);
+    return true;
+  }
+
+  const [rawCost, rawDays] = message.text.split(",").map(part => part.trim());
+
+  const deliveryCost = Number(rawCost);
+  const deliveryDays = Number(rawDays);
+
+  if (!rawCost || !rawDays || isNaN(deliveryCost) || isNaN(deliveryDays)) {
+
+    await notifyAdmin(
+      `⚠️ Не разобрал сообщение — нужно два числа через запятую (стоимость доставки, срок в днях), например: 450, 4.\nПопробуйте ещё раз, ответив (Reply) на исходный запрос.`
+    );
+
+    return true;
+
+  }
+
+  const requisites = await getPaymentRequisites();
+  const orderLabel = order.storelandOrderNum || order.id;
+
+  const deliveryNote =
+    order.deliveryMethod === "pochta"
+    ? "оплачивается вместе с заказом"
+    : "оплачивается при получении";
+
+  const invoiceText =
+`— Сумма заказа (оплата по реквизитам ниже или по QR коду): ${Number(order.total).toLocaleString()}₽
+
+— Сумма доставки (${deliveryNote}): ${deliveryCost.toLocaleString()}₽
+
+— Срок доставки (без учёта выходных): ${deliveryDays} ${pluralizeDays(deliveryDays)}
+
+${requisites}
+
+Оплати свой заказ в течение 24 часов. После оплаты пришли нам чек/скрин или просто сообщи, что оплатил. Отправим в течение 3-х дней после оплаты. Трек-номер для отслеживания предоставим.`;
+
+  await notifyCustomer(order, invoiceText);
+
+  await updateOrder(orderId, {
+    deliveryCost,
+    deliveryDays,
+    paymentRequestedAt: Date.now()
+  });
+
+  await notifyAdmin(`✅ Счёт по заказу №${orderLabel} отправлен клиенту. Отсчёт 24 часов на оплату начался.`);
+
+  return true;
+
+}
+
 // Клиент прислал данные получателя (СДЭК/Почта) — возвращает true, если обработано
 async function tryHandleShippingData(message) {
 
@@ -809,13 +903,20 @@ async function checkOrderTimeouts() {
       }
 
       // ---- Ждём оплаты (только для доставки Почтой/СДЭК) ----
+      // Считаем не с момента подтверждения заказа, а с момента, когда
+      // клиенту реально прислали счёт с реквизитами (paymentRequestedAt) —
+      // до этого момента ему просто нечем платить. Если счёт почему-то
+      // не выставлялся (paymentRequestedAt нет) — по-прежнему считаем от
+      // confirmedAt, чтобы заказ не завис без дедлайна вообще
+      const paymentDeadlineAnchor = order.paymentRequestedAt || order.confirmedAt;
+
       if (
         order.status === "confirmed" &&
-        order.confirmedAt &&
+        paymentDeadlineAnchor &&
         !NO_PAYMENT_DEADLINE_METHODS.includes(order.deliveryMethod)
       ) {
 
-        const hoursElapsed = (now - order.confirmedAt) / HOUR_MS;
+        const hoursElapsed = (now - paymentDeadlineAnchor) / HOUR_MS;
 
         if (hoursElapsed >= PAYMENT_DEADLINE_HOURS) {
 
@@ -846,6 +947,7 @@ async function checkOrderTimeouts() {
 module.exports = {
   handleOrderCallback,
   tryHandleTrackingReply,
+  tryHandlePaymentDetailsReply,
   tryHandleShippingData,
   checkOrderTimeouts,
   notifyCustomer,

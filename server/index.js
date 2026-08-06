@@ -20,12 +20,15 @@ const {
 const {
   STATUS_LABELS,
   getOrdersForUser,
-  getRecentOrders
+  getRecentOrders,
+  getPaymentRequisites,
+  savePaymentRequisites
 } = require("./orderStore");
 
 const {
   handleOrderCallback,
   tryHandleTrackingReply,
+  tryHandlePaymentDetailsReply,
   tryHandleShippingData,
   checkOrderTimeouts,
   buildOrderCardText,
@@ -1059,7 +1062,9 @@ app.get("/api/setup-commands", async (req, res) => {
   try {
     const result = await telegramApi("setMyCommands", {
       commands: [
-        { command: "orders", description: "Список неоплаченных заказов" }
+        { command: "orders", description: "Список неоплаченных заказов" },
+        { command: "requisites", description: "Показать реквизиты для оплаты" },
+        { command: "setrequisites", description: "Изменить реквизиты для оплаты" }
       ],
       scope: { type: "chat", chat_id: process.env.ADMIN_ID }
     });
@@ -1171,11 +1176,69 @@ app.post("/api/telegram-webhook", async (req, res) => {
 
       }
 
+      // Команда /requisites — показать текущие сохранённые реквизиты
+      // для оплаты переводом (то, что подставляется в счёт клиенту)
+      if (message.text && message.text.trim() === "/requisites") {
+
+        const requisites = await getPaymentRequisites();
+
+        await telegramApi("sendMessage", {
+          chat_id: adminId,
+          text: `💳 Текущие реквизиты:\n\n${requisites}\n\nЧтобы изменить, пришлите:\n/setrequisites\n<новый текст>`
+        });
+
+        res.sendStatus(200);
+        return;
+
+      }
+
+      // Команда /setrequisites — обновить реквизиты для оплаты переводом.
+      // Всё, что идёт после команды (в этом же или следующих строках),
+      // сохраняется как есть и будет подставляться в счета клиентам
+      if (message.text && message.text.trim().startsWith("/setrequisites")) {
+
+        const newRequisites = message.text
+          .replace(/^\/setrequisites/, "")
+          .trim();
+
+        if (!newRequisites) {
+
+          await telegramApi("sendMessage", {
+            chat_id: adminId,
+            text: "Пришлите новые реквизиты сразу после команды, например:\n\n/setrequisites\nСБЕР: 1234 5678 9012 3456\nИван Иванович И.\n(без комментариев к платежу)"
+          });
+
+          res.sendStatus(200);
+          return;
+
+        }
+
+        await savePaymentRequisites(newRequisites);
+
+        await telegramApi("sendMessage", {
+          chat_id: adminId,
+          text: `✅ Реквизиты обновлены:\n\n${newRequisites}`
+        });
+
+        res.sendStatus(200);
+        return;
+
+      }
+
       // Админ отвечает на запрос трек-номера — это отдельный поток,
       // проверяем его раньше обычной пересылки ответа клиенту
       const handledTracking = await tryHandleTrackingReply(message);
 
       if (handledTracking) {
+        res.sendStatus(200);
+        return;
+      }
+
+      // Админ отвечает на запрос стоимости/срока доставки (после
+      // "📐 Посчитать доставку") — тоже отдельный поток
+      const handledPaymentDetails = await tryHandlePaymentDetailsReply(message);
+
+      if (handledPaymentDetails) {
         res.sendStatus(200);
         return;
       }
