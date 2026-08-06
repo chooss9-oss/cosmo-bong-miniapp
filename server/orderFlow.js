@@ -201,6 +201,24 @@ async function notifyAdmin(text, extraReplyMarkup, parseMode) {
 
 }
 
+// Реакция 👍 на сообщение-копию у админа — визуальное подтверждение, что
+// клиенту реально доставлено (не просто "отправлено в фоне без ошибок").
+// "✅" тут не работает — Telegram разрешает реакции только из своего
+// фиксированного набора эмодзи, "👍" в него входит.
+async function markDelivered(chatId, messageId) {
+
+  const result = await telegramApi("setMessageReaction", {
+    chat_id: chatId,
+    message_id: messageId,
+    reaction: [{ type: "emoji", emoji: "👍" }]
+  }).catch(err => ({ ok: false, description: err.message }));
+
+  if (!result.ok) {
+    console.log("orderFlow: markDelivered (setMessageReaction) FAILED:", JSON.stringify(result));
+  }
+
+}
+
 async function notifyCustomer(order, text, replyMarkup) {
 
   if (!order.telegramUserId) return { ok: false };
@@ -223,12 +241,18 @@ async function notifyCustomer(order, text, replyMarkup) {
 
     // Дублируем админу текст любого автоматического сообщения, которое
     // бот отправляет клиенту — чтобы всегда было видно, что именно
-    // клиент получил
+    // клиент получил. Сверху — id клиента, снизу на самой копии —
+    // реакция 👍, подтверждающая, что сообщение реально доставлено.
     const orderLabel = order.storelandOrderNum || order.id;
 
-    await notifyAdmin(
+    const mirrorResult = await notifyAdmin(
+      `🆔 ID клиента: ${order.telegramUserId}\n` +
       `📨 Клиенту отправлено сообщение (заказ №${orderLabel}):\n\n${text}`
     );
+
+    if (mirrorResult.ok) {
+      await markDelivered(process.env.ADMIN_ID, mirrorResult.result.message_id);
+    }
 
   }
 
@@ -260,11 +284,15 @@ async function notifyCustomerPhoto(order, photoUrl, caption) {
 
     const orderLabel = order.storelandOrderNum || order.id;
 
-    await telegramApi("sendPhoto", {
+    const mirrorResult = await telegramApi("sendPhoto", {
       chat_id: process.env.ADMIN_ID,
       photo: photoUrl,
-      caption: `📨 Клиенту отправлен QR-код для оплаты (заказ №${orderLabel})`
-    }).catch(() => {});
+      caption: `🆔 ID клиента: ${order.telegramUserId}\n📨 Клиенту отправлен QR-код для оплаты (заказ №${orderLabel})`
+    }).catch(() => ({ ok: false }));
+
+    if (mirrorResult.ok) {
+      await markDelivered(process.env.ADMIN_ID, mirrorResult.result.message_id);
+    }
 
   }
 
