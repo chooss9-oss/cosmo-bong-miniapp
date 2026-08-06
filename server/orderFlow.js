@@ -731,7 +731,11 @@ ${requisites}
   await updateOrder(orderId, {
     deliveryCost,
     deliveryDays,
-    paymentRequestedAt: Date.now()
+    paymentRequestedAt: Date.now(),
+    // Таймер перезапускается на счёте — сбрасываем счётчик напоминаний,
+    // чтобы они снова отсчитывались от нового момента, а не от старого
+    // (когда ждали именно подтверждения)
+    paymentReminderCount: 0
   });
 
   await notifyAdmin(`✅ Счёт по заказу №${orderLabel} отправлен клиенту. Отсчёт 24 часов на оплату начался.`);
