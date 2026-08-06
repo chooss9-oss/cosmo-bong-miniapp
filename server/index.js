@@ -1216,12 +1216,20 @@ app.post("/api/telegram-webhook", async (req, res) => {
             console.log("TELEGRAM WEBHOOK: reply to customer FAILED:", JSON.stringify(sendResult));
 
             // Реакцией на само сообщение админа + текстом — чтобы сразу было
-            // видно и в чате, и явным предупреждением
-            await telegramApi("setMessageReaction", {
+            // видно и в чате, и явным предупреждением.
+            // ВАЖНО: Telegram разрешает реакции только из своего
+            // фиксированного набора эмодзи — "✅"/"❌" в него не входят и
+            // тихо отклоняются API, поэтому используем "👎" (он в списке
+            // разрешённых)
+            const reactionResult = await telegramApi("setMessageReaction", {
               chat_id: adminId,
               message_id: message.message_id,
-              reaction: [{ type: "emoji", emoji: "❌" }]
-            }).catch(() => {});
+              reaction: [{ type: "emoji", emoji: "👎" }]
+            }).catch(err => ({ ok: false, description: err.message }));
+
+            if (!reactionResult.ok) {
+              console.log("TELEGRAM WEBHOOK: setMessageReaction (fail) FAILED:", JSON.stringify(reactionResult));
+            }
 
             await telegramApi("sendMessage", {
               chat_id: adminId,
@@ -1232,14 +1240,18 @@ app.post("/api/telegram-webhook", async (req, res) => {
 
             console.log("TELEGRAM WEBHOOK: reply delivered to customer", customerChatId, `(total ${Date.now() - t0}ms)`);
 
-            // Реакция ✅ на сообщение админа — подтверждение, что оно ушло
+            // Реакция 👍 на сообщение админа — подтверждение, что оно ушло
             // клиенту (Telegram Bot API не даёт узнать, прочитано ли оно —
-            // только факт доставки)
-            await telegramApi("setMessageReaction", {
+            // только факт доставки). "✅" здесь не работает — см. коммент выше
+            const reactionResult = await telegramApi("setMessageReaction", {
               chat_id: adminId,
               message_id: message.message_id,
-              reaction: [{ type: "emoji", emoji: "✅" }]
-            }).catch(() => {});
+              reaction: [{ type: "emoji", emoji: "👍" }]
+            }).catch(err => ({ ok: false, description: err.message }));
+
+            if (!reactionResult.ok) {
+              console.log("TELEGRAM WEBHOOK: setMessageReaction (ok) FAILED:", JSON.stringify(reactionResult));
+            }
 
           }
 
