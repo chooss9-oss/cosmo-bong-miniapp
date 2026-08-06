@@ -155,29 +155,57 @@ async function getPaymentDetailsRequest(messageId) {
 
 // Реквизиты для оплаты переводом — почти не меняются, но карта иногда
 // обновляется, поэтому храним в Redis и даём админу команду для правки
-// (см. /setrequisites), а не зашиваем текст в код
-const DEFAULT_PAYMENT_REQUISITES =
+// (см. /setrequisites), а не зашиваем текст в код. Два банка — два
+// независимых блока реквизитов.
+const DEFAULT_PAYMENT_REQUISITES = {
+  sber:
 `СБЕР: 5469 7700 1514 2384
 Артем Константинович В.
-(без комментариев к платежу)`;
+(без комментариев к платежу)`,
+  raif:
+`РАЙФАЙЗЕН: 2200 3005 9451 1626
+Артем Константинович В.
+(без комментариев к платежу)`
+};
 
-async function savePaymentRequisites(text) {
+async function savePaymentRequisites(bank, text) {
   try {
     const client = await getRedisClient();
-    await client.set("paymentRequisites", text);
+    await client.set(`paymentRequisites:${bank}`, text);
   } catch (error) {
     console.error("❌ Не удалось сохранить paymentRequisites в Redis:", error.message);
   }
 }
 
-async function getPaymentRequisites() {
+async function getPaymentRequisites(bank) {
   try {
     const client = await getRedisClient();
-    const stored = await client.get("paymentRequisites");
-    return stored || DEFAULT_PAYMENT_REQUISITES;
+    const stored = await client.get(`paymentRequisites:${bank}`);
+    return stored || DEFAULT_PAYMENT_REQUISITES[bank] || DEFAULT_PAYMENT_REQUISITES.sber;
   } catch (error) {
     console.error("❌ Не удалось прочитать paymentRequisites из Redis:", error.message);
-    return DEFAULT_PAYMENT_REQUISITES;
+    return DEFAULT_PAYMENT_REQUISITES[bank] || DEFAULT_PAYMENT_REQUISITES.sber;
+  }
+}
+
+// Какой банк админ выбрал для счёта по заказу — между нажатием кнопки
+// (Сбер/Райф) и вводом двух чисел (стоимость, срок доставки)
+async function savePendingBank(orderId, bank) {
+  try {
+    const client = await getRedisClient();
+    await client.set(`pendingBank:${orderId}`, bank, { EX: 60 * 60 * 24 });
+  } catch (error) {
+    console.error("❌ Не удалось сохранить pendingBank в Redis:", error.message);
+  }
+}
+
+async function getPendingBank(orderId) {
+  try {
+    const client = await getRedisClient();
+    return await client.get(`pendingBank:${orderId}`);
+  } catch (error) {
+    console.error("❌ Не удалось прочитать pendingBank из Redis:", error.message);
+    return null;
   }
 }
 
@@ -268,6 +296,8 @@ module.exports = {
   getPaymentDetailsRequest,
   savePaymentRequisites,
   getPaymentRequisites,
+  savePendingBank,
+  getPendingBank,
   saveAwaitingShippingData,
   getAwaitingShippingData,
   clearAwaitingShippingData

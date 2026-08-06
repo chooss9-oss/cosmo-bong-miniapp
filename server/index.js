@@ -1177,14 +1177,19 @@ app.post("/api/telegram-webhook", async (req, res) => {
       }
 
       // Команда /requisites — показать текущие сохранённые реквизиты
-      // для оплаты переводом (то, что подставляется в счёт клиенту)
+      // для оплаты переводом по обоим банкам (то, что подставляется в счёт клиенту)
       if (message.text && message.text.trim() === "/requisites") {
 
-        const requisites = await getPaymentRequisites();
+        const [sber, raif] = await Promise.all([
+          getPaymentRequisites("sber"),
+          getPaymentRequisites("raif")
+        ]);
 
         await telegramApi("sendMessage", {
           chat_id: adminId,
-          text: `💳 Текущие реквизиты:\n\n${requisites}\n\nЧтобы изменить, пришлите:\n/setrequisites\n<новый текст>`
+          text:
+            `💳 Сбер:\n\n${sber}\n\n💳 Райф:\n\n${raif}\n\n` +
+            `Чтобы изменить, пришлите:\n/setrequisites sber\n<новый текст>\nили\n/setrequisites raif\n<новый текст>`
         });
 
         res.sendStatus(200);
@@ -1192,20 +1197,23 @@ app.post("/api/telegram-webhook", async (req, res) => {
 
       }
 
-      // Команда /setrequisites — обновить реквизиты для оплаты переводом.
-      // Всё, что идёт после команды (в этом же или следующих строках),
-      // сохраняется как есть и будет подставляться в счета клиентам
+      // Команда /setrequisites sber|raif — обновить реквизиты одного из
+      // банков. Всё, что идёт после банка (в этом же или следующих
+      // строках), сохраняется как есть и подставляется в счета клиентам
       if (message.text && message.text.trim().startsWith("/setrequisites")) {
 
-        const newRequisites = message.text
-          .replace(/^\/setrequisites/, "")
-          .trim();
+        const withoutCommand = message.text.replace(/^\/setrequisites/, "").trim();
+        const [bankRaw, ...restLines] = withoutCommand.split("\n");
+        const bank = (bankRaw || "").trim().toLowerCase();
+        const newRequisites = restLines.join("\n").trim();
 
-        if (!newRequisites) {
+        if ((bank !== "sber" && bank !== "raif") || !newRequisites) {
 
           await telegramApi("sendMessage", {
             chat_id: adminId,
-            text: "Пришлите новые реквизиты сразу после команды, например:\n\n/setrequisites\nСБЕР: 1234 5678 9012 3456\nИван Иванович И.\n(без комментариев к платежу)"
+            text:
+              "Формат команды:\n\n/setrequisites sber\nСБЕР: 1234 5678 9012 3456\nИван Иванович И.\n(без комментариев к платежу)\n\n" +
+              "(первая строка после команды — банк: sber или raif, дальше сам текст реквизитов)"
           });
 
           res.sendStatus(200);
@@ -1213,11 +1221,11 @@ app.post("/api/telegram-webhook", async (req, res) => {
 
         }
 
-        await savePaymentRequisites(newRequisites);
+        await savePaymentRequisites(bank, newRequisites);
 
         await telegramApi("sendMessage", {
           chat_id: adminId,
-          text: `✅ Реквизиты обновлены:\n\n${newRequisites}`
+          text: `✅ Реквизиты ${bank === "sber" ? "Сбера" : "Райфа"} обновлены:\n\n${newRequisites}`
         });
 
         res.sendStatus(200);

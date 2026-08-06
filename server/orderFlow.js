@@ -11,6 +11,8 @@ const {
   savePaymentDetailsRequest,
   getPaymentDetailsRequest,
   getPaymentRequisites,
+  savePendingBank,
+  getPendingBank,
   saveAwaitingShippingData,
   getAwaitingShippingData,
   clearAwaitingShippingData
@@ -44,6 +46,52 @@ function pluralizeDays(n) {
   if (last === 1) return "день";
   if (last >= 2 && last <= 4) return "дня";
   return "дней";
+}
+
+const BANK_LABELS = {
+  sber: "Сбер",
+  raif: "Райф"
+};
+
+// QR СБП показываем только для Сбера — картинка лежит в public/ фронтенда,
+// раздаётся по прямой ссылке на проде
+const QR_SBP_URL = "https://cosmo-bong-miniapp.vercel.app/qr-sbp.jpg";
+
+// Собирает текст счёта под конкретную пару способ доставки × банк.
+// Для Почты доставка платится вместе с заказом, поэтому в тексте одна
+// общая сумма и нет отдельной строки "Сумма доставки". Для СДЭК —
+// наоборот, доставка отдельно и оплачивается при получении.
+async function buildInvoiceText(order, bank, deliveryCost, deliveryDays) {
+
+  const requisites = await getPaymentRequisites(bank);
+  const daysText = `${deliveryDays} ${pluralizeDays(deliveryDays)}`;
+  const qrNote = bank === "sber" ? " или по QR коду" : "";
+
+  const footer =
+`Оплатите свой заказ в течение 24 часов. После оплаты пришлите нам чек/скрин или просто сообщите, что оплатили. Отправим в течение 3-х дней после оплаты. Трек-номер для отслеживания предоставим.`;
+
+  if (order.deliveryMethod === "pochta") {
+
+    const combinedTotal = Number(order.total) + Number(deliveryCost);
+
+    return (
+      `— Сумма заказа с учетом стоимости доставки (оплата по реквизитам ниже${qrNote}): ${combinedTotal.toLocaleString()}₽\n\n` +
+      `— Срок доставки (без учёта выходных): ${daysText}\n\n` +
+      `${requisites}\n\n` +
+      footer
+    );
+
+  }
+
+  // СДЭК (и вообще всё, что не "Почта")
+  return (
+    `— Сумма заказа (оплата по реквизитам ниже${qrNote}): ${Number(order.total).toLocaleString()}₽\n\n` +
+    `— Сумма доставки (оплачивается при получении): ${Number(deliveryCost).toLocaleString()}₽\n\n` +
+    `— Срок доставки (без учёта выходных): ${daysText}\n\n` +
+    `${requisites}\n\n` +
+    footer
+  );
+
 }
 
 // Имя/юзернейм клиента для уведомлений админу — чтобы было явно видно,
@@ -181,6 +229,42 @@ async function notifyCustomer(order, text, replyMarkup) {
     await notifyAdmin(
       `📨 Клиенту отправлено сообщение (заказ №${orderLabel}):\n\n${text}`
     );
+
+  }
+
+  return result;
+
+}
+
+// Отправляет клиенту фото (QR-код для оплаты) с копией админу — как и
+// notifyCustomer для текста, только для фото
+async function notifyCustomerPhoto(order, photoUrl, caption) {
+
+  if (!order.telegramUserId) return { ok: false };
+
+  const result = await telegramApi("sendPhoto", {
+    chat_id: order.telegramUserId,
+    photo: photoUrl,
+    caption
+  });
+
+  if (!result.ok) {
+
+    console.log("orderFlow: notifyCustomerPhoto FAILED:", JSON.stringify(result));
+
+    await notifyAdmin(
+      `⚠️ Не удалось отправить QR-код клиенту по заказу #${order.id}.`
+    );
+
+  } else {
+
+    const orderLabel = order.storelandOrderNum || order.id;
+
+    await telegramApi("sendPhoto", {
+      chat_id: process.env.ADMIN_ID,
+      photo: photoUrl,
+      caption: `📨 Клиенту отправлен QR-код для оплаты (заказ №${orderLabel})`
+    }).catch(() => {});
 
   }
 
@@ -479,13 +563,55 @@ async function handleOrderCallback(callbackQuery) {
 
     await notifyCustomer(order, text);
 
-    // Спрашиваем у админа стоимость и срок доставки одним сообщением —
-    // как только он ответит, бот сам соберёт и отправит клиенту полный
-    // счёт (реквизиты подставит из сохранённого шаблона). Именно с этого
-    // момента, а не с момента подтверждения заказа, начинается отсчёт
-    // 24 часов на оплату.
+    // Сначала спрашиваем у админа, каким банком выставлять счёт — от
+    // этого зависит, какие реквизиты подставить и слать ли QR-код.
+    // Числа (стоимость и срок доставки) спросим следующим шагом, уже
+    // после выбора банка (см. order_bank ниже).
+    const orderLabel = order.storelandOrderNum || order.id;
+
+    await notifyAdmin(
+      `💳 Выберите банк для счёта по заказу №${orderLabel}:`,
+      {
+        inline_keyboard: [[
+          { text: "💳 Сбер", callback_data: `order_bank:sber:${orderId}` },
+          { text: "💳 Райф", callback_data: `order_bank:raif:${orderId}` }
+        ]]
+      }
+    );
+
+    return;
+
+  }
+
+  // ---- Админ выбрал банк для счёта — теперь спрашиваем два числа ----
+  if (action === "order_bank") {
+
+    const bank = parts[1];
+    const orderId = parts[2];
+
+    if (clickerId !== adminId) {
+      await ack("Недоступно");
+      return;
+    }
+
+    const order = await getOrder(orderId);
+
+    if (!order) {
+      await ack("Заказ не найден");
+      return;
+    }
+
+    await ack(bank === "sber" ? "Сбер выбран" : "Райф выбран");
+    await clearButtons(fromChatId, messageId);
+
+    await savePendingBank(orderId, bank);
+
+    const orderLabel = order.storelandOrderNum || order.id;
+
+    // Именно с ответа на это сообщение (не с момента подтверждения
+    // заказа) начинается отсчёт 24 часов на оплату
     const askResult = await notifyAdmin(
-      `💳 Введите стоимость и срок доставки для заказа №${order.storelandOrderNum || order.id} одним сообщением через запятую (ответьте на это сообщение).\nНапример: 450, 4`,
+      `💳 (${BANK_LABELS[bank]}) Введите стоимость и срок доставки для заказа №${orderLabel} одним сообщением через запятую (ответьте на это сообщение).\nНапример: 450, 4`,
       { force_reply: true }
     );
 
@@ -707,30 +833,23 @@ async function tryHandlePaymentDetailsReply(message) {
 
   }
 
-  const requisites = await getPaymentRequisites();
   const orderLabel = order.storelandOrderNum || order.id;
 
-  const deliveryNote =
-    order.deliveryMethod === "pochta"
-    ? "оплачивается вместе с заказом"
-    : "оплачивается при получении";
+  const bank = (await getPendingBank(orderId)) || "sber";
 
-  const invoiceText =
-`— Сумма заказа (оплата по реквизитам ниже или по QR коду): ${Number(order.total).toLocaleString()}₽
-
-— Сумма доставки (${deliveryNote}): ${deliveryCost.toLocaleString()}₽
-
-— Срок доставки (без учёта выходных): ${deliveryDays} ${pluralizeDays(deliveryDays)}
-
-${requisites}
-
-Оплати свой заказ в течение 24 часов. После оплаты пришли нам чек/скрин или просто сообщи, что оплатил. Отправим в течение 3-х дней после оплаты. Трек-номер для отслеживания предоставим.`;
+  const invoiceText = await buildInvoiceText(order, bank, deliveryCost, deliveryDays);
 
   await notifyCustomer(order, invoiceText);
+
+  // QR-код по СБП шлём отдельным сообщением, только для Сбера
+  if (bank === "sber") {
+    await notifyCustomerPhoto(order, QR_SBP_URL, "Отсканируйте QR для оплаты по СБП");
+  }
 
   await updateOrder(orderId, {
     deliveryCost,
     deliveryDays,
+    paymentBank: bank,
     paymentRequestedAt: Date.now(),
     // Таймер перезапускается на счёте — сбрасываем счётчик напоминаний,
     // чтобы они снова отсчитывались от нового момента, а не от старого
@@ -738,7 +857,7 @@ ${requisites}
     paymentReminderCount: 0
   });
 
-  await notifyAdmin(`✅ Счёт по заказу №${orderLabel} отправлен клиенту. Отсчёт 24 часов на оплату начался.`);
+  await notifyAdmin(`✅ Счёт (${BANK_LABELS[bank]}) по заказу №${orderLabel} отправлен клиенту. Отсчёт 24 часов на оплату начался.`);
 
   return true;
 
