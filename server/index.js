@@ -401,21 +401,27 @@ async function scrapeStockChunk(productUrls, offset, chunkSize, urlToIds = {}) {
             newStockCache[wishlistModId] = isOutOfStock ? 0 : 1;
           }
 
-          // Надёжный запасной способ: у части товаров (например, с
-          // модификациями по цвету) верстка не совпадает с селекторами
-          // выше, и rest_value/data-mod-id не находятся вообще — товар
-          // тогда молча остаётся "в наличии" навсегда. Подстраховываемся
-          // текстовым поиском "Нет в наличии" на странице и простав ляем
-          // статус явно для всех id, которые точно принадлежат этому URL —
-          // из уже известного products.json, не зависим от верстки.
+          // Надёжный запасной способ — текстовый поиск "Нет в наличии" на
+          // странице. Раньше он применялся только если селекторы выше
+          // вообще ничего не нашли (newStockCache[id] === undefined), но
+          // у части товаров без цветовых модификаций верстка селекторов
+          // (.add-wishlist/.available-false) не совпадает с ожидаемой и
+          // ошибочно определяет товар как "в наличии" — то есть находит
+          // ЗНАЧЕНИЕ, просто неверное, и текстовая проверка тогда молча
+          // пропускалась. Текст "Нет в наличии" на странице товара —
+          // самый надёжный сигнал (он появляется только когда товар
+          // целиком недоступен), поэтому теперь он ПЕРЕОПРЕДЕЛЯЕТ то, что
+          // нашли селекторы, а не только дополняет пропуски.
           const pageText = $product('body').text();
           const isOutOfStockOnPage = /нет в наличии/i.test(pageText);
 
           const idsForThisUrl = urlToIds[url] || [];
 
           idsForThisUrl.forEach(id => {
-            if (newStockCache[id] === undefined) {
-              newStockCache[id] = isOutOfStockOnPage ? 0 : 1;
+            if (isOutOfStockOnPage) {
+              newStockCache[id] = 0;
+            } else if (newStockCache[id] === undefined) {
+              newStockCache[id] = 1;
             }
           });
 
