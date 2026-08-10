@@ -31,6 +31,8 @@ async function createStorelandOrder({ username, telegramUsername, phone, comment
       ? `@${telegramUsername}`
       : username
       ? `@${username}`
+      : platform === "android"
+      ? "Клиент из приложения"
       : "Клиент из Telegram";
 
   params.append("form[order_person]", displayName);
