@@ -2,12 +2,16 @@ const { getRedisClient } = require("./replyMapping");
 
 // ==============================
 // Баллы кэшбэка — 1 балл = 1 рубль.
-// Начисляются 5% от суммы заказа при переходе в статус "Оплачен".
-// Списать можно не больше 50% от суммы заказа — так заказ никогда не
-// закрывается полностью баллами, и всегда приходят реальные деньги.
+// Начисляются при переходе заказа в статус "Оплачен": 5% — для заказов из
+// Telegram Mini App, 3% — для заказов из Android-приложения (у него своя,
+// отдельная программа лояльности, см. server/routes/orders.js).
+// Списать можно не больше 50% от суммы заказа (для обеих платформ) — так
+// заказ никогда не закрывается полностью баллами, и всегда приходят
+// реальные деньги.
 // ==============================
 
 const CASHBACK_RATE = 0.05;
+const ANDROID_CASHBACK_RATE = 0.03;
 const MAX_REDEEM_SHARE = 0.5;
 
 async function getBonusBalance(telegramUserId) {
@@ -56,9 +60,12 @@ async function deductBonusPoints(telegramUserId, amount) {
 
 }
 
-// Сколько баллов начислится за заказ на такую сумму
-function computeCashback(total) {
-  return Math.round(Number(total) * CASHBACK_RATE);
+// Сколько баллов начислится за заказ на такую сумму. platform === "android"
+// — используем сниженную ставку Android-приложения, иначе (в том числе для
+// старых заказов без поля platform) — обычную ставку Telegram Mini App.
+function computeCashback(total, platform) {
+  const rate = platform === "android" ? ANDROID_CASHBACK_RATE : CASHBACK_RATE;
+  return Math.round(Number(total) * rate);
 }
 
 // Сколько баллов реально можно списать сейчас — не больше половины суммы
@@ -70,6 +77,7 @@ function getMaxRedeemable(total, balance) {
 
 module.exports = {
   CASHBACK_RATE,
+  ANDROID_CASHBACK_RATE,
   MAX_REDEEM_SHARE,
   getBonusBalance,
   addBonusPoints,

@@ -1005,17 +1005,23 @@ app.get("/api/my-orders", async (req, res) => {
 });
 
 // ==============================
-// PROMO CODE — 10% скидка, действует только на первый заказ клиента
+// PROMO CODE — скидка на первый заказ клиента. У Telegram Mini App и
+// Android-приложения разные коды/ставки (см. server/routes/orders.js,
+// где сама скидка реально применяется и перепроверяется при заказе —
+// этот эндпоинт только для предварительной проверки на клиенте).
 // ==============================
-const FIRST_ORDER_PROMO_CODE = "cosmo420tg";
-const FIRST_ORDER_PROMO_RATE = 0.10;
+const PROMO_CONFIGS = {
+  telegram: { code: "cosmo420tg", rate: 0.10 },
+  android: { code: "cosmo420", rate: 0.07 }
+};
 
 app.get("/api/promo-check", async (req, res) => {
 
   const code = String(req.query.code || "").trim().toLowerCase();
   const telegramUserId = req.query.telegramUserId;
+  const promoConfig = req.query.platform === "android" ? PROMO_CONFIGS.android : PROMO_CONFIGS.telegram;
 
-  if (code !== FIRST_ORDER_PROMO_CODE) {
+  if (code !== promoConfig.code) {
     return res.json({ valid: false, reason: "not_found" });
   }
 
@@ -1034,7 +1040,7 @@ app.get("/api/promo-check", async (req, res) => {
     return res.json({ valid: false, reason: "not_first_order" });
   }
 
-  res.json({ valid: true, discountRate: FIRST_ORDER_PROMO_RATE });
+  res.json({ valid: true, discountRate: promoConfig.rate });
 
 });
 

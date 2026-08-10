@@ -226,7 +226,10 @@ async function markDelivered(chatId, messageId) {
 
 async function notifyCustomer(order, text, replyMarkup) {
 
-  if (!order.telegramUserId) return { ok: false };
+  // Заказы из Android-приложения не имеют настоящего Telegram-чата с ботом
+  // (telegramUserId у них — псевдо-ID вида "android:<телефон>", не годится
+  // как chat_id для Bot API) — не пытаемся слать им сообщения в Telegram.
+  if (!order.telegramUserId || order.platform === "android") return { ok: false };
 
   const result = await telegramApi("sendMessage", {
     chat_id: order.telegramUserId,
@@ -269,7 +272,7 @@ async function notifyCustomer(order, text, replyMarkup) {
 // notifyCustomer для текста, только для фото
 async function notifyCustomerPhoto(order, photoUrl, caption) {
 
-  if (!order.telegramUserId) return { ok: false };
+  if (!order.telegramUserId || order.platform === "android") return { ok: false };
 
   const result = await telegramApi("sendPhoto", {
     chat_id: order.telegramUserId,
@@ -686,9 +689,11 @@ async function handleOrderCallback(callbackQuery) {
       }
     });
 
-    // Начисляем кэшбэк баллами — 5% от суммы заказа, доступны для
-    // списания (до 50% суммы) при следующей покупке
-    const cashback = computeCashback(order.total);
+    // Начисляем кэшбэк баллами — ставка зависит от платформы заказа
+    // (5% Telegram Mini App / 3% Android), доступны для списания
+    // (до 50% суммы) при следующей покупке
+    const cashback = computeCashback(order.total, order.platform);
+    const cashbackPercent = order.platform === "android" ? 3 : 5;
     await addBonusPoints(order.telegramUserId, cashback);
 
     await notifyCustomer(
@@ -697,7 +702,7 @@ async function handleOrderCallback(callbackQuery) {
 
 Отправим в течение 3 дней, но обычно отправляем в день оплаты. Как только упакуем и отправим, пришлём трек-номер для отслеживания.
 
-🎁 Вам начислено ${cashback} баллов кэшбэка (5% от заказа) — можно списать до 50% суммы следующего заказа. Баланс баллов смотрите в разделе «Профиль» в мини-приложении магазина.`
+🎁 Вам начислено ${cashback} баллов кэшбэка (${cashbackPercent}% от заказа) — можно списать до 50% суммы следующего заказа. Баланс баллов смотрите в разделе «Профиль» в мини-приложении магазина.`
     );
 
     return;

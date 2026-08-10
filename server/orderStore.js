@@ -20,7 +20,7 @@ function generateOrderId() {
   return `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 }
 
-async function createOrder({ telegramUserId, username, telegramUsername, items, total, storelandOrderNum, pointsUsed }) {
+async function createOrder({ telegramUserId, username, telegramUsername, items, total, storelandOrderNum, pointsUsed, platform }) {
 
   const id = generateOrderId();
 
@@ -29,6 +29,10 @@ async function createOrder({ telegramUserId, username, telegramUsername, items, 
     telegramUserId: telegramUserId ? String(telegramUserId) : null,
     username: username || null,
     telegramUsername: telegramUsername || null,
+    // "telegram" (по умолчанию, для старых заказов и мини-аппа) или
+    // "android" — своя программа лояльности (см. routes/orders.js) и без
+    // Telegram-уведомлений клиенту (у Android-пользователя нет чата с ботом).
+    platform: platform === "android" ? "android" : "telegram",
     items: items || [],
     total: Number(total) || 0,
     pointsUsed: Number(pointsUsed) || 0,

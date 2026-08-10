@@ -8,10 +8,14 @@ const { notifyCustomer, buildOrderActionButtons } = require("../orderFlow");
 
 const router = express.Router();
 
-// Промокод на 10% — действует только на самый первый заказ клиента,
-// перепроверяется на сервере (не доверяем скидке, применённой на клиенте)
-const FIRST_ORDER_PROMO_CODE = "cosmo420tg";
-const FIRST_ORDER_PROMO_RATE = 0.10;
+// Промокод действует только на самый первый заказ клиента, перепроверяется
+// на сервере (не доверяем скидке, применённой на клиенте). У Telegram
+// Mini App и Android-приложения — разные коды и разные ставки, каждая
+// платформа передаёт свой promoCode, сервер сверяет его с "своим" набором.
+const PROMO_CONFIGS = {
+  telegram: { code: "cosmo420tg", rate: 0.10 },
+  android: { code: "cosmo420", rate: 0.07 }
+};
 
 const STORELAND_API_URL = "https://cosmo-bong.ru/api/v1";
 const STORELAND_SECRET_KEY = process.env.STORELAND_API_KEY;
@@ -102,10 +106,16 @@ cart,
 
 promoCode,
 
-pointsUsed
+pointsUsed,
+
+platform
 
 
 }=req.body;
+
+// Всё, что не явно "android", считаем Telegram Mini App — так старые
+// клиенты (не присылающие platform вообще) продолжают работать как раньше.
+const promoConfig = platform === "android" ? PROMO_CONFIGS.android : PROMO_CONFIGS.telegram;
 
 
 
@@ -122,7 +132,7 @@ let promoApplied = false;
 
 if (
   promoCode &&
-  String(promoCode).trim().toLowerCase() === FIRST_ORDER_PROMO_CODE
+  String(promoCode).trim().toLowerCase() === promoConfig.code
 ) {
 
   const existingOrders = telegramUserId
@@ -142,7 +152,7 @@ if (
 }
 
 const promoDiscount = promoApplied
-  ? Math.floor(subtotal * FIRST_ORDER_PROMO_RATE)
+  ? Math.floor(subtotal * promoConfig.rate)
   : 0;
 
 const total = subtotal - promoDiscount;
@@ -222,7 +232,9 @@ try {
 
 let message =
 
-`🔥 НОВЫЙ ЗАКАЗ COSMO BONG\n\n`;
+platform === "android"
+? `📱 НОВЫЙ ЗАКАЗ COSMO BONG (Android-приложение)\n\n`
+: `🔥 НОВЫЙ ЗАКАЗ COSMO BONG\n\n`;
 
 
 
@@ -402,7 +414,8 @@ const order = await createOrder({
   })),
   total,
   storelandOrderNum,
-  pointsUsed: appliedPoints
+  pointsUsed: appliedPoints,
+  platform
 });
 
 // Списываем баллы только после того, как заказ реально создан
@@ -489,7 +502,7 @@ error:"Telegram send failed"
 // Привязываем это сообщение у админа к чату клиента — так админ сможет
 // ответить (Reply) прямо на уведомление о заказе, даже если клиент сам
 // ещё ничего не писал боту.
-if (telegramUserId && telegramData.result) {
+if (telegramUserId && telegramData.result && platform !== "android") {
 
   await saveReplyMapping(telegramData.result.message_id, telegramUserId);
 
