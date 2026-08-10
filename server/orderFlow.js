@@ -244,7 +244,13 @@ async function notifyCustomer(order, text, replyMarkup) {
     // callback_data, нажатие уходит на POST /api/chat/button (см.
     // routes/chat.js), который вызывает те же confirmOrderByCustomer/
     // selectDeliveryMethodByCustomer, что и Telegram callback_query.
-    const buttons = replyMarkup?.inline_keyboard;
+    // Чат приложения умеет только кнопки-действия (callback_data) — кнопки
+    // со ссылкой (url), которые есть в некоторых Telegram-клавиатурах,
+    // просто отфильтровываем, чтобы не показывать в приложении нерабочую
+    // кнопку.
+    const buttons = replyMarkup?.inline_keyboard
+      ?.map(row => row.filter(btn => btn.callback_data))
+      .filter(row => row.length > 0);
 
     await appendChatMessage(order.telegramUserId, { from: "admin", text, buttons });
 
@@ -642,13 +648,18 @@ async function handleOrderCallback(callbackQuery) {
 
     const orderLabel = order.storelandOrderNum || order.id;
 
+    const contactHint =
+      order.platform === "android"
+        ? "Если есть вопросы — пиши прямо в этом чате, разберёмся и быстро поможем✨"
+        : "Если есть вопросы — пиши прямо в боте, разберёмся и быстро поможем✨";
+
     const welcomeText =
 `👋 Приветствую! Заказ №${orderLabel} получили и готовы собирать.
 
 📦 Отправляем по 100% предоплате, доставляем Почтой или СДЭК (от 350₽, от 2 дней), оплата переводом на карту или по QR.
 
 После отправления заказа пришлём трек-номер для отслеживания.
-Если есть вопросы — пиши прямо в боте, разберёмся и быстро поможем✨
+${contactHint}
 
 ❗️ Подтвердите заказ в течение 24 часов. Если мы не дождёмся подтверждения, то заказ отменим.`;
 
@@ -831,13 +842,18 @@ async function handleOrderCallback(callbackQuery) {
     const cashbackPercent = order.platform === "android" ? 3 : 5;
     await addBonusPoints(order.telegramUserId, cashback);
 
+    const balanceHint =
+      order.platform === "android"
+        ? "Баланс баллов смотрите в разделе «Профиль» в этом приложении."
+        : "Баланс баллов смотрите в разделе «Профиль» в мини-приложении магазина.";
+
     await notifyCustomer(
       order,
       `✅ Ваш заказ успешно оплачен!
 
 Отправим в течение 3 дней, но обычно отправляем в день оплаты. Как только упакуем и отправим, пришлём трек-номер для отслеживания.
 
-🎁 Вам начислено ${cashback} баллов кэшбэка (${cashbackPercent}% от заказа) — можно списать до 50% суммы следующего заказа. Баланс баллов смотрите в разделе «Профиль» в мини-приложении магазина.`
+🎁 Вам начислено ${cashback} баллов кэшбэка (${cashbackPercent}% от заказа) — можно списать до 50% суммы следующего заказа. ${balanceHint}`
     );
 
     return;

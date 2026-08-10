@@ -8,19 +8,19 @@ const { notifyCustomer, buildOrderActionButtons } = require("../orderFlow");
 
 const router = express.Router();
 
-// Промокод действует только на самый первый заказ клиента, перепроверяется
-// на сервере (не доверяем скидке, применённой на клиенте). У Telegram
-// Mini App и Android-приложения — разные коды и разные ставки, каждая
-// платформа передаёт свой promoCode, сервер сверяет его с "своим" набором.
+// Промокод перепроверяется на сервере (не доверяем скидке, применённой на
+// клиенте). У Telegram Mini App и Android-приложения — разные коды, разные
+// ставки и разные условия: у Telegram — только на первый заказ, у Android —
+// постоянный промокод, можно применять к каждому заказу.
 const PROMO_CONFIGS = {
-  telegram: { code: "cosmo420tg", rate: 0.10 },
-  android: { code: "cosmo420", rate: 0.07 }
+  telegram: { code: "cosmo420tg", rate: 0.10, firstOrderOnly: true },
+  android: { code: "cosmo420", rate: 0.07, firstOrderOnly: false }
 };
 
 const STORELAND_API_URL = "https://cosmo-bong.ru/api/v1";
 const STORELAND_SECRET_KEY = process.env.STORELAND_API_KEY;
 
-async function createStorelandOrder({ username, telegramUsername, phone, comment, cart }) {
+async function createStorelandOrder({ username, telegramUsername, phone, comment, cart, platform }) {
 
   const params = new URLSearchParams();
 
@@ -43,7 +43,11 @@ async function createStorelandOrder({ username, telegramUsername, phone, comment
     commentParts.push(comment);
   }
 
-  commentParts.push("Заказ оформлен через Telegram Mini App");
+  commentParts.push(
+    platform === "android"
+      ? "Заказ оформлен через Android-приложение"
+      : "Заказ оформлен через Telegram Mini App"
+  );
 
   params.append(
     "form[order_comment_only_for_staff]",
@@ -126,8 +130,10 @@ const subtotal = cart
   ? cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0)
   : 0;
 
-// Промокод перепроверяется на сервере: код должен совпасть и у клиента
-// не должно быть предыдущих заказов
+// Промокод перепроверяется на сервере: код должен совпасть, а если у
+// платформы промокод только на первый заказ (firstOrderOnly) — ещё и не
+// должно быть предыдущих оплаченных заказов. У Android промокод постоянный
+// (firstOrderOnly: false), эта проверка для него пропускается.
 let promoApplied = false;
 
 if (
@@ -135,18 +141,26 @@ if (
   String(promoCode).trim().toLowerCase() === promoConfig.code
 ) {
 
-  const existingOrders = telegramUserId
-    ? await getOrdersForUser(String(telegramUserId))
-    : [];
+  if (!promoConfig.firstOrderOnly) {
 
-  // Промокод действует, пока не было ни одного реально оплаченного
-  // заказа — так же, как в /api/promo-check
-  const hasPaidOrder = existingOrders.some(o =>
-    ["paid", "shipped", "ready"].includes(o.status)
-  );
-
-  if (!hasPaidOrder) {
     promoApplied = true;
+
+  } else {
+
+    const existingOrders = telegramUserId
+      ? await getOrdersForUser(String(telegramUserId))
+      : [];
+
+    // Промокод действует, пока не было ни одного реально оплаченного
+    // заказа — так же, как в /api/promo-check
+    const hasPaidOrder = existingOrders.some(o =>
+      ["paid", "shipped", "ready"].includes(o.status)
+    );
+
+    if (!hasPaidOrder) {
+      promoApplied = true;
+    }
+
   }
 
 }
@@ -202,7 +216,8 @@ try {
     telegramUsername,
     phone,
     comment,
-    cart
+    cart,
+    platform
   });
 
   if (storelandResult.status === "ok") {
@@ -331,7 +346,7 @@ if (promoApplied) {
 
   message +=
 
-  `🎟 Промокод (первый заказ): -${promoDiscount.toLocaleString()} ₽\n`;
+  `🎟 Промокод${promoConfig.firstOrderOnly ? " (первый заказ)" : ""}: -${promoDiscount.toLocaleString()} ₽\n`;
 
 }
 
@@ -551,16 +566,27 @@ if (telegramUserId) {
 
 💰 Сумма: ${Number(total).toLocaleString()} ₽`;
 
-    await notifyCustomer(order, customerMessage, {
-      inline_keyboard: [
-        [
-          {
-            text: "🛍 Открыть магазин",
-            url: "https://t.me/CSMBNGSHOP_bot/csmbngshop"
+    // Кнопка "Открыть магазин" ведёт в Telegram Mini App — для
+    // Android-клиента это бессмысленная ссылка (они уже в приложении),
+    // да и кнопки со ссылкой (url) чат приложения не умеет показывать
+    // (там только кнопки-действия с callback_data), поэтому для Android
+    // отправляем то же сообщение без кнопки.
+    await notifyCustomer(
+      order,
+      customerMessage,
+      platform === "android"
+        ? undefined
+        : {
+            inline_keyboard: [
+              [
+                {
+                  text: "🛍 Открыть магазин",
+                  url: "https://t.me/CSMBNGSHOP_bot/csmbngshop"
+                }
+              ]
+            ]
           }
-        ]
-      ]
-    });
+    );
 
   } catch (customerMessageError) {
 

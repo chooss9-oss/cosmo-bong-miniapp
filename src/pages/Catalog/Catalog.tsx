@@ -240,6 +240,25 @@ return prevRow[n];
 
 
 
+// Раскладка клавиатуры: если пользователь забыл переключить раскладку и
+// набрал русский запрос латинскими буквами (например "vjkjrj" вместо
+// "молоко"), пробуем понять это — переводим запрос по позициям клавиш
+// QWERTY -> ЙЦУКЕН и ищем ещё раз уже с ним (см. использование ниже).
+const QWERTY_TO_JCUKEN: Record<string, string> = {
+  q: "й", w: "ц", e: "у", r: "к", t: "е", y: "н", u: "г", i: "ш", o: "щ", p: "з",
+  "[": "х", "]": "ъ",
+  a: "ф", s: "ы", d: "в", f: "а", g: "п", h: "р", j: "о", k: "л", l: "д", ";": "ж", "'": "э",
+  z: "я", x: "ч", c: "с", v: "м", b: "и", n: "т", m: "ь", ",": "б", ".": "ю", "/": ".",
+};
+
+function latinToCyrillicLayout(input: string): string {
+  return input
+    .toLowerCase()
+    .split("")
+    .map((ch) => QWERTY_TO_JCUKEN[ch] ?? ch)
+    .join("");
+}
+
 // Ищем слово по подстроке, а если не нашли — допускаем небольшую опечатку
 // (порог зависит от длины слова, чтобы не ловить случайные совпадения).
 function wordMatchesText(
@@ -639,6 +658,28 @@ word.length>1 &&
 
 );
 
+// Тот же запрос, но как будто набран в другой раскладке — используется
+// ниже как fallback, если по исходному запросу ничего не нашлось
+const layoutSearchWords =
+
+search
+
+.split(" ")
+
+.map(word=>
+
+normalizeWord(latinToCyrillicLayout(word))
+
+)
+
+.filter(word=>
+
+word.length>1 &&
+
+!stopWords.includes(word)
+
+);
+
 
 
 
@@ -727,11 +768,34 @@ searchableText
 
 
 
-return searchWords.every(word=>
+const matchesOriginal =
+
+searchWords.every(word=>
 
 wordMatchesText(word, fullText, textTokens)
 
 );
+
+if(matchesOriginal){
+  return true;
+}
+
+// Запрос на латинице (не той раскладке) — пробуем ещё раз с переведённым
+// в кириллицу вариантом, только если он реально отличается от исходного
+if(
+  layoutSearchWords.length > 0 &&
+  layoutSearchWords.join(" ") !== searchWords.join(" ")
+){
+
+  return layoutSearchWords.every(word=>
+
+  wordMatchesText(word, fullText, textTokens)
+
+  );
+
+}
+
+return false;
 
 
 });
