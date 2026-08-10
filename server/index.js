@@ -9,6 +9,7 @@ const cheerio = require("cheerio");
 const { waitUntil } = require("@vercel/functions");
 
 const orderRouter = require("./routes/orders");
+const chatRouter = require("./routes/chat");
 
 const {
   getRedisClient,
@@ -40,6 +41,9 @@ const {
   getBonusBalance,
   getMaxRedeemable
 } = require("./bonusStore");
+
+const { isAndroidCustomerId, appendChatMessage } = require("./chatStore");
+const { getPushToken, sendExpoPush } = require("./pushStore");
 
 const app = express();
 
@@ -700,6 +704,7 @@ function loadCache() {
 // ORDERS
 // ==============================
 app.use("/api/order", orderRouter);
+app.use("/api/chat", chatRouter);
 
 // ==============================
 // REFRESH SALES
@@ -1308,7 +1313,42 @@ app.post("/api/telegram-webhook", async (req, res) => {
           `(redis lookup took ${Date.now() - t0}ms)`
         );
 
-        if (customerChatId) {
+        if (customerChatId && isAndroidCustomerId(customerChatId)) {
+
+          // У Android-клиента нет настоящего Telegram-чата — сохраняем
+          // ответ админа в историю чата приложения и доставляем
+          // push-уведомлением вместо telegramApi sendMessage.
+          const t1 = Date.now();
+
+          await appendChatMessage(customerChatId, { from: "admin", text: message.text });
+
+          const pushToken = await getPushToken(customerChatId);
+          const pushResult = await sendExpoPush(pushToken, {
+            title: "Cosmo Bong",
+            body: message.text,
+            data: { type: "chat" }
+          });
+
+          console.log(`TELEGRAM WEBHOOK: push to Android customer took ${Date.now() - t1}ms`, pushResult);
+
+          const reactionResult = await telegramApi("setMessageReaction", {
+            chat_id: adminId,
+            message_id: message.message_id,
+            reaction: [{ type: "emoji", emoji: pushResult.ok ? "👍" : "👎" }]
+          }).catch(err => ({ ok: false, description: err.message }));
+
+          if (!reactionResult.ok) {
+            console.log("TELEGRAM WEBHOOK: setMessageReaction FAILED:", JSON.stringify(reactionResult));
+          }
+
+          if (!pushResult.ok) {
+            await telegramApi("sendMessage", {
+              chat_id: adminId,
+              text: "⚠️ Сообщение сохранено в чате приложения, но push не доставлен (клиент ещё не открывал приложение или не разрешил уведомления). Он увидит ответ, когда откроет чат."
+            });
+          }
+
+        } else if (customerChatId) {
 
           const t1 = Date.now();
 

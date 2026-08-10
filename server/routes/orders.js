@@ -390,7 +390,9 @@ telegramUserId
 ?
 
 (
-  notificationsAllowed
+  platform === "android"
+  ? `\n💬 Клиент из Android-приложения — можно ответить на это сообщение (Reply), ответ придёт ему в чат приложения push-уведомлением.\n`
+  : notificationsAllowed
   ? `\n🔔 Клиент разрешил уведомления боту — можно ответить на это сообщение (Reply).\n`
   : `\n🔕 Клиент НЕ разрешил уведомления боту — Reply может не дойти, лучше связаться по телефону.\n`
 )
@@ -501,8 +503,10 @@ error:"Telegram send failed"
 
 // Привязываем это сообщение у админа к чату клиента — так админ сможет
 // ответить (Reply) прямо на уведомление о заказе, даже если клиент сам
-// ещё ничего не писал боту.
-if (telegramUserId && telegramData.result && platform !== "android") {
+// ещё ничего не писал боту. Для Android telegramUserId — это customerId
+// ("android:<телефон>"), Reply на него уйдёт в чат приложения (см.
+// /api/telegram-webhook и isAndroidCustomerId в server/chatStore.js).
+if (telegramUserId && telegramData.result) {
 
   await saveReplyMapping(telegramData.result.message_id, telegramUserId);
 

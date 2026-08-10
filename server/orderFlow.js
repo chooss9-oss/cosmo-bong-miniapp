@@ -25,6 +25,9 @@ const {
   addBonusPoints
 } = require("./bonusStore");
 
+const { appendChatMessage } = require("./chatStore");
+const { getPushToken, sendExpoPush } = require("./pushStore");
+
 // ==============================
 // Полный сценарий обработки заказа кнопками в Telegram:
 // Принят -> клиент подтверждает -> выбор доставки/оплаты ->
@@ -226,10 +229,28 @@ async function markDelivered(chatId, messageId) {
 
 async function notifyCustomer(order, text, replyMarkup) {
 
+  if (!order.telegramUserId) return { ok: false };
+
   // Заказы из Android-приложения не имеют настоящего Telegram-чата с ботом
   // (telegramUserId у них — псевдо-ID вида "android:<телефон>", не годится
-  // как chat_id для Bot API) — не пытаемся слать им сообщения в Telegram.
-  if (!order.telegramUserId || order.platform === "android") return { ok: false };
+  // как chat_id для Bot API) — доставляем такие уведомления через чат
+  // приложения + push вместо telegramApi sendMessage. Кнопки (replyMarkup)
+  // в простом текстовом чате не поддерживаются, поэтому для Android они
+  // игнорируются.
+  if (order.platform === "android") {
+
+    await appendChatMessage(order.telegramUserId, { from: "admin", text });
+
+    const pushToken = await getPushToken(order.telegramUserId);
+    const pushResult = await sendExpoPush(pushToken, {
+      title: "Cosmo Bong",
+      body: text,
+      data: { type: "chat" }
+    });
+
+    return pushResult;
+
+  }
 
   const result = await telegramApi("sendMessage", {
     chat_id: order.telegramUserId,
