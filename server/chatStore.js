@@ -19,14 +19,29 @@ function isAndroidCustomerId(customerId) {
   return typeof customerId === "string" && customerId.startsWith("android:");
 }
 
-async function appendChatMessage(customerId, { from, text }) {
-  if (!customerId || !text) return null;
+async function appendChatMessage(customerId, { from, text, buttons, imageUrl }) {
+  if (!customerId || (!text && !imageUrl)) return null;
 
   const message = {
     from, // "admin" | "customer"
-    text: String(text),
+    text: text ? String(text) : "",
     createdAt: Date.now()
   };
+
+  // Кнопки сценария заказа (подтвердить / выбор доставки) — тот же формат,
+  // что inline_keyboard в Telegram: массив строк, в строке массив кнопок
+  // { text, callback_data }. Одноразовые — после нажатия клиент получит
+  // следующий шаг уже новым сообщением, старые кнопки просто перестают
+  // быть актуальными (сервер игнорирует повторное нажатие по уже
+  // обработанному orderId/шагу).
+  if (buttons && buttons.length) {
+    message.buttons = buttons;
+  }
+
+  // Фото (например QR-код для оплаты по СБП)
+  if (imageUrl) {
+    message.imageUrl = imageUrl;
+  }
 
   try {
     const client = await getRedisClient();

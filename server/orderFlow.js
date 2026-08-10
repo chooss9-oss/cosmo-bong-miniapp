@@ -239,7 +239,14 @@ async function notifyCustomer(order, text, replyMarkup) {
   // игнорируются.
   if (order.platform === "android") {
 
-    await appendChatMessage(order.telegramUserId, { from: "admin", text });
+    // inline_keyboard из Telegram-формата кнопок переносим как есть — в
+    // приложении рендерится тот же набор строк/кнопок с тем же
+    // callback_data, нажатие уходит на POST /api/chat/button (см.
+    // routes/chat.js), который вызывает те же confirmOrderByCustomer/
+    // selectDeliveryMethodByCustomer, что и Telegram callback_query.
+    const buttons = replyMarkup?.inline_keyboard;
+
+    await appendChatMessage(order.telegramUserId, { from: "admin", text, buttons });
 
     const pushToken = await getPushToken(order.telegramUserId);
     const pushResult = await sendExpoPush(pushToken, {
@@ -293,7 +300,26 @@ async function notifyCustomer(order, text, replyMarkup) {
 // notifyCustomer для текста, только для фото
 async function notifyCustomerPhoto(order, photoUrl, caption) {
 
-  if (!order.telegramUserId || order.platform === "android") return { ok: false };
+  if (!order.telegramUserId) return { ok: false };
+
+  if (order.platform === "android") {
+
+    await appendChatMessage(order.telegramUserId, {
+      from: "admin",
+      text: caption || "",
+      imageUrl: photoUrl
+    });
+
+    const pushToken = await getPushToken(order.telegramUserId);
+    const pushResult = await sendExpoPush(pushToken, {
+      title: "Cosmo Bong",
+      body: caption || "Новое сообщение",
+      data: { type: "chat" }
+    });
+
+    return pushResult;
+
+  }
 
   const result = await telegramApi("sendPhoto", {
     chat_id: order.telegramUserId,
@@ -326,6 +352,235 @@ async function notifyCustomerPhoto(order, photoUrl, caption) {
   }
 
   return result;
+
+}
+
+// ==============================
+// Действия КЛИЕНТА в сценарии заказа (подтверждение, выбор доставки,
+// данные получателя) — вынесены в отдельные функции, потому что клиент
+// может прислать их двумя разными способами: нажатием инлайн-кнопки в
+// Telegram (callback_query, см. handleOrderCallback ниже) или нажатием
+// такой же кнопки в чате Android-приложения (POST /api/chat/button, см.
+// server/routes/chat.js). Логика заказа при этом одна и та же — отличается
+// только то, что Telegram-обработчик дополнительно "гасит" кнопки в самом
+// сообщении бота (clearButtons), а Android их просто теряет актуальность
+// (сервер отклонит повторное нажатие, см. проверки статуса ниже).
+// ==============================
+
+async function confirmOrderByCustomer(orderId) {
+
+  const order = await getOrder(orderId);
+
+  if (!order) return { ok: false, reason: "not_found" };
+
+  // Заказ подтверждают один раз, пока он в статусе "принят" — если уже
+  // подтверждён (или клиент нажал кнопку повторно), просто ничего не делаем
+  if (order.status !== "accepted") return { ok: false, reason: "already_processed" };
+
+  await updateOrderStatus(orderId, "confirmed", { confirmedAt: Date.now() });
+
+  const orderLabel = order.storelandOrderNum || order.id;
+
+  await notifyAdmin(`✅ ${getCustomerLabel(order)} подтвердил заказ №${orderLabel}. Отправил ему выбор способа доставки и оплаты.`);
+
+  const text =
+`Отлично! Как вам удобнее оплатить и получить заказ?
+Обратите внимание, если в заказе есть CBD продукция, то выберите, пожалуйста, оплату переводом.`;
+
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: "СДЭК + QR", callback_data: `order_method:cdek_qr:${orderId}` },
+        { text: "Почта + QR", callback_data: `order_method:pochta_qr:${orderId}` }
+      ],
+      [
+        { text: "СДЭК + перевод", callback_data: `order_method:cdek_transfer:${orderId}` },
+        { text: "Почта + перевод", callback_data: `order_method:pochta_transfer:${orderId}` }
+      ],
+      [
+        { text: "Самовывоз Ярославль", callback_data: `order_method:pickup_yar:${orderId}` }
+      ],
+      [
+        { text: "Доставка по Ярославлю", callback_data: `order_method:delivery_yar:${orderId}` }
+      ]
+    ]
+  };
+
+  const sendResult = await notifyCustomer(order, text, keyboard);
+
+  if (sendResult.ok && sendResult.result) {
+    await saveReplyMapping(sendResult.result.message_id, order.telegramUserId);
+  }
+
+  return { ok: true };
+
+}
+
+async function selectDeliveryMethodByCustomer(methodCode, orderId) {
+
+  const order = await getOrder(orderId);
+
+  if (!order) return { ok: false, reason: "not_found" };
+
+  // Способ доставки выбирают один раз — повторное нажатие (например,
+  // двойной тап в приложении) игнорируем
+  if (order.deliveryMethod) return { ok: false, reason: "already_processed" };
+
+  const [deliveryPart, paymentPart] = methodCode.split("_");
+
+  const deliveryMethod =
+    methodCode === "pickup_yar" ? "pickup_yar"
+    : methodCode === "delivery_yar" ? "delivery_yar"
+    : deliveryPart; // "cdek" | "pochta"
+
+  const paymentMethod =
+    methodCode === "pickup_yar" || methodCode === "delivery_yar"
+    ? null
+    : paymentPart; // "qr" | "transfer"
+
+  await updateOrder(orderId, { deliveryMethod, paymentMethod });
+
+  const orderLabel = order.storelandOrderNum || order.id;
+
+  // Единое уведомление о нажатой кнопке доставки/оплаты — это в первую
+  // очередь интересующие админа кнопки, отдельно от текста сообщений
+  // клиенту
+  await notifyAdmin(
+    `🚚 ${getCustomerLabel(order)} нажал кнопку доставки/оплаты по заказу №${orderLabel}: «${METHOD_LABELS[methodCode] || methodCode}»`
+  );
+
+  // Самовывоз в Ярославле — адрес и часы работы отправляем сразу
+  // автоматически, плюс меняем кнопку "Отправлен" у админа на "Собран"
+  if (methodCode === "pickup_yar") {
+
+    await notifyCustomer(
+      order,
+      `Наш магазин работает с 13:00 до 18:30 со вторника по субботу по адресу Депутатский переулок 6, вход с левого торца здания.
+
+Как только заказ будет собран, вам придёт соответствующее уведомление.`
+    );
+
+    const adminResult = await notifyAdmin(
+      `✍️ *Можно ответить (Reply)* на это сообщение, чтобы написать клиенту заказа №${orderLabel} напрямую.`,
+      undefined,
+      "Markdown"
+    );
+
+    if (adminResult.ok && order.telegramUserId) {
+      await saveReplyMapping(adminResult.result.message_id, order.telegramUserId);
+    }
+
+    // Меняем "Отправлен" на "Собран" в исходном уведомлении о заказе
+    if (order.adminMessageId) {
+
+      await telegramApi("editMessageReplyMarkup", {
+        chat_id: process.env.ADMIN_ID,
+        message_id: order.adminMessageId,
+        reply_markup: {
+          inline_keyboard: buildOrderActionButtons(
+            { ...order, deliveryMethod, paymentMethod },
+            orderId
+          )
+        }
+      });
+
+    }
+
+    return { ok: true };
+
+  }
+
+  // Доставка по Ярославлю — дальше вручную через Reply
+  if (methodCode === "delivery_yar") {
+
+    await notifyCustomer(order, "Секунду, уже пишем вам 🙂");
+
+    const adminResult = await notifyAdmin(
+      `✍️ *Можно ответить (Reply)* на это сообщение, чтобы написать клиенту заказа №${orderLabel} напрямую.`,
+      undefined,
+      "Markdown"
+    );
+
+    if (adminResult.ok && order.telegramUserId) {
+      await saveReplyMapping(adminResult.result.message_id, order.telegramUserId);
+    }
+
+    return { ok: true };
+
+  }
+
+  // СДЭК/Почта — просим данные получателя одним сообщением
+  const dataRequestText =
+    deliveryMethod === "cdek"
+    ?
+`Данные для отправки СДЭК (пишите, пожалуйста, в одном сообщении):
+— ФИО получателя.
+— Телефон получателя.
+— Город и адрес пункта выдачи или постамата СДЭК.
+
+Если нужна доставка до двери: полное ФИО и телефон получателя, полный адрес получателя.`
+    :
+`Данные для отправки Почтой (пишите, пожалуйста, в одном сообщении):
+— ФИО получателя.
+— Телефон получателя.
+— Индекс почтового отделения (полный адрес не обязателен).
+
+Если нужна доставка до двери: полное ФИО и телефон получателя, полный адрес получателя.`;
+
+  await notifyCustomer(order, dataRequestText);
+
+  if (order.telegramUserId) {
+    await saveAwaitingShippingData(order.telegramUserId, orderId);
+  }
+
+  return { ok: true };
+
+}
+
+// Клиент прислал данные получателя (СДЭК/Почта) текстом — общая логика для
+// Telegram (message.text в личке с ботом) и для чата Android-приложения
+// (POST /api/chat/send, см. routes/chat.js). Возвращает true, если текст
+// был распознан как данные получателя (т.е. клиент как раз ждал этого шага).
+async function submitShippingDataText(customerId, text) {
+
+  const orderId = await getAwaitingShippingData(customerId);
+
+  if (!orderId) return false;
+
+  const order = await getOrder(orderId);
+
+  if (!order) return false;
+
+  const shippingData = String(text).trim();
+
+  await updateOrder(orderId, { shippingData });
+  await clearAwaitingShippingData(customerId);
+
+  const orderLabel = order.storelandOrderNum || order.id;
+
+  const methodLabel =
+    order.deliveryMethod === "cdek" ? "СДЭК" : "Почта";
+
+  // Текст содержит то, что напечатал клиент сам (ФИО, адрес и т.д.) —
+  // Markdown сюда не добавляем, чтобы случайный спецсимвол не сломал
+  // отправку сообщения
+  const adminResult = await notifyAdmin(
+    `📥 ${getCustomerLabel(order)} прислал данные получателя по заказу №${orderLabel} (${methodLabel}):\n\n${shippingData}`,
+    { inline_keyboard: [[{ text: "📐 Посчитать доставку", callback_data: `order_calc:${orderId}` }]] }
+  );
+
+  if (adminResult.ok && order.telegramUserId) {
+    await saveReplyMapping(adminResult.result.message_id, order.telegramUserId);
+  }
+
+  // Отдельная жирная пометка (Reply) — уже безопасный статичный текст.
+  // Работает одинаково для обеих платформ: Reply у админа на это
+  // сообщение уйдёт клиенту либо в Telegram, либо (для Android) в чат
+  // приложения push-уведомлением — маршрутизация уже настроена в
+  // saveReplyMapping/routes/chat.js.
+  await sendReplyHint(order.telegramUserId);
+
+  return true;
 
 }
 
@@ -401,7 +656,7 @@ async function handleOrderCallback(callbackQuery) {
       inline_keyboard: [[{ text: "✅ Заказ подтверждаю", callback_data: `order_confirm:${orderId}` }]]
     });
 
-    if (sendResult.ok) {
+    if (sendResult.ok && sendResult.result) {
       await saveReplyMapping(sendResult.result.message_id, order.telegramUserId);
     }
 
@@ -415,49 +670,15 @@ async function handleOrderCallback(callbackQuery) {
   if (action === "order_confirm") {
 
     const orderId = parts[1];
-    const order = await getOrder(orderId);
+    const result = await confirmOrderByCustomer(orderId);
 
-    if (!order) {
-      await ack("Заказ не найден");
+    if (!result.ok) {
+      await ack(result.reason === "not_found" ? "Заказ не найден" : "Уже обработано");
       return;
     }
 
     await ack("Спасибо за подтверждение!");
     await clearButtons(fromChatId, messageId);
-    await updateOrderStatus(orderId, "confirmed", { confirmedAt: Date.now() });
-
-    const orderLabel = order.storelandOrderNum || order.id;
-
-    await notifyAdmin(`✅ ${getCustomerLabel(order)} подтвердил заказ №${orderLabel}. Отправил ему выбор способа доставки и оплаты.`);
-
-    const text =
-`Отлично! Как вам удобнее оплатить и получить заказ?
-Обратите внимание, если в заказе есть CBD продукция, то выберите, пожалуйста, оплату переводом.`;
-
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: "СДЭК + QR", callback_data: `order_method:cdek_qr:${orderId}` },
-          { text: "Почта + QR", callback_data: `order_method:pochta_qr:${orderId}` }
-        ],
-        [
-          { text: "СДЭК + перевод", callback_data: `order_method:cdek_transfer:${orderId}` },
-          { text: "Почта + перевод", callback_data: `order_method:pochta_transfer:${orderId}` }
-        ],
-        [
-          { text: "Самовывоз Ярославль", callback_data: `order_method:pickup_yar:${orderId}` }
-        ],
-        [
-          { text: "Доставка по Ярославлю", callback_data: `order_method:delivery_yar:${orderId}` }
-        ]
-      ]
-    };
-
-    const sendResult = await notifyCustomer(order, text, keyboard);
-
-    if (sendResult.ok) {
-      await saveReplyMapping(sendResult.result.message_id, order.telegramUserId);
-    }
 
     return;
 
@@ -469,122 +690,15 @@ async function handleOrderCallback(callbackQuery) {
     const methodCode = parts[1];
     const orderId = parts[2];
 
-    const order = await getOrder(orderId);
+    const result = await selectDeliveryMethodByCustomer(methodCode, orderId);
 
-    if (!order) {
-      await ack("Заказ не найден");
+    if (!result.ok) {
+      await ack(result.reason === "not_found" ? "Заказ не найден" : "Уже обработано");
       return;
     }
-
-    const [deliveryPart, paymentPart] = methodCode.split("_");
-
-    const deliveryMethod =
-      methodCode === "pickup_yar" ? "pickup_yar"
-      : methodCode === "delivery_yar" ? "delivery_yar"
-      : deliveryPart; // "cdek" | "pochta"
-
-    const paymentMethod =
-      methodCode === "pickup_yar" || methodCode === "delivery_yar"
-      ? null
-      : paymentPart; // "qr" | "transfer"
-
-    await updateOrder(orderId, { deliveryMethod, paymentMethod });
 
     await ack(METHOD_LABELS[methodCode] || "Принято");
     await clearButtons(fromChatId, messageId);
-
-    const orderLabel = order.storelandOrderNum || order.id;
-
-    // Единое уведомление о нажатой кнопке доставки/оплаты — это в первую
-    // очередь интересующие админа кнопки, отдельно от текста сообщений
-    // клиенту
-    await notifyAdmin(
-      `🚚 ${getCustomerLabel(order)} нажал кнопку доставки/оплаты по заказу №${orderLabel}: «${METHOD_LABELS[methodCode] || methodCode}»`
-    );
-
-    // Самовывоз в Ярославле — адрес и часы работы отправляем сразу
-    // автоматически, плюс меняем кнопку "Отправлен" у админа на "Собран"
-    if (methodCode === "pickup_yar") {
-
-      await notifyCustomer(
-        order,
-        `Наш магазин работает с 13:00 до 18:30 со вторника по субботу по адресу Депутатский переулок 6, вход с левого торца здания.
-
-Как только заказ будет собран, вам придёт соответствующее уведомление.`
-      );
-
-      const adminResult = await notifyAdmin(
-        `✍️ *Можно ответить (Reply)* на это сообщение, чтобы написать клиенту заказа №${orderLabel} напрямую.`,
-        undefined,
-        "Markdown"
-      );
-
-      if (adminResult.ok && order.telegramUserId) {
-        await saveReplyMapping(adminResult.result.message_id, order.telegramUserId);
-      }
-
-      // Меняем "Отправлен" на "Собран" в исходном уведомлении о заказе
-      if (order.adminMessageId) {
-
-        await telegramApi("editMessageReplyMarkup", {
-          chat_id: process.env.ADMIN_ID,
-          message_id: order.adminMessageId,
-          reply_markup: {
-            inline_keyboard: buildOrderActionButtons(
-              { ...order, deliveryMethod, paymentMethod },
-              orderId
-            )
-          }
-        });
-
-      }
-
-      return;
-
-    }
-
-    // Доставка по Ярославлю — дальше вручную через Reply
-    if (methodCode === "delivery_yar") {
-
-      await notifyCustomer(order, "Секунду, уже пишем вам 🙂");
-
-      const adminResult = await notifyAdmin(
-        `✍️ *Можно ответить (Reply)* на это сообщение, чтобы написать клиенту заказа №${orderLabel} напрямую.`,
-        undefined,
-        "Markdown"
-      );
-
-      if (adminResult.ok && order.telegramUserId) {
-        await saveReplyMapping(adminResult.result.message_id, order.telegramUserId);
-      }
-
-      return;
-
-    }
-
-    // СДЭК/Почта — просим данные получателя одним сообщением
-    const dataRequestText =
-      deliveryMethod === "cdek"
-      ?
-`Данные для отправки СДЭК (пишите, пожалуйста, в одном сообщении):
-— ФИО получателя.
-— Телефон получателя.
-— Город и адрес пункта выдачи или постамата СДЭК.
-
-Если нужна доставка до двери: полное ФИО и телефон получателя, полный адрес получателя.`
-      :
-`Данные для отправки Почтой (пишите, пожалуйста, в одном сообщении):
-— ФИО получателя.
-— Телефон получателя.
-— Индекс почтового отделения (полный адрес не обязателен).
-
-Если нужна доставка до двери: полное ФИО и телефон получателя, полный адрес получателя.`;
-
-    await notifyCustomer(order, dataRequestText);
-
-    if (order.telegramUserId) {
-      await saveAwaitingShippingData(order.telegramUserId, orderId);
-    }
 
     return;
 
@@ -1051,40 +1165,7 @@ async function tryHandleShippingData(message) {
 
   if (!message.text) return false;
 
-  const orderId = await getAwaitingShippingData(chatId);
-
-  if (!orderId) return false;
-
-  const order = await getOrder(orderId);
-
-  if (!order) return false;
-
-  const shippingData = message.text.trim();
-
-  await updateOrder(orderId, { shippingData });
-  await clearAwaitingShippingData(chatId);
-
-  const orderLabel = order.storelandOrderNum || order.id;
-
-  const methodLabel =
-    order.deliveryMethod === "cdek" ? "СДЭК" : "Почта";
-
-  // Текст содержит то, что напечатал клиент сам (ФИО, адрес и т.д.) —
-  // Markdown сюда не добавляем, чтобы случайный спецсимвол не сломал
-  // отправку сообщения
-  const adminResult = await notifyAdmin(
-    `📥 ${getCustomerLabel(order)} прислал данные получателя по заказу №${orderLabel} (${methodLabel}):\n\n${shippingData}`,
-    { inline_keyboard: [[{ text: "📐 Посчитать доставку", callback_data: `order_calc:${orderId}` }]] }
-  );
-
-  if (adminResult.ok && order.telegramUserId) {
-    await saveReplyMapping(adminResult.result.message_id, order.telegramUserId);
-  }
-
-  // Отдельная жирная пометка (Reply) — уже безопасный статичный текст
-  await sendReplyHint(order.telegramUserId);
-
-  return true;
+  return submitShippingDataText(chatId, message.text);
 
 }
 
@@ -1256,7 +1337,11 @@ module.exports = {
   tryHandleShippingData,
   checkOrderTimeouts,
   notifyCustomer,
+  notifyCustomerPhoto,
   notifyAdmin,
   buildOrderActionButtons,
-  buildOrderCardText
+  buildOrderCardText,
+  confirmOrderByCustomer,
+  selectDeliveryMethodByCustomer,
+  submitShippingDataText
 };
