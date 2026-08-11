@@ -27,7 +27,6 @@ import {
 } from "../../utils/filterStorage";
 
 import {
-  getCategoryScrollX,
   setCategoryScrollX
 } from "../../utils/categoryScrollMemory";
 
