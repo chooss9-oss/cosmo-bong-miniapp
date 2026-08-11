@@ -30,6 +30,8 @@ import {
   setCategoryScrollX
 } from "../../utils/categoryScrollMemory";
 
+import { sortByMainCategoryOrder } from "../../utils/categoryOrder";
+
 
 
 
@@ -521,6 +523,7 @@ productsData
 
 const mainCategories =
 
+sortByMainCategoryOrder<Category>(
 categoriesData.filter(
 
 (cat:Category)=>
@@ -531,6 +534,7 @@ cat["#text"]
 
 )
 
+)
 );
 
 

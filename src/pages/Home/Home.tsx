@@ -15,6 +15,8 @@ import {
   getCachedCategories
 } from "../../api/storelandApi";
 
+import { sortByMainCategoryOrder } from "../../utils/categoryOrder";
+
 
 
 const API_URL = "/api";
@@ -417,12 +419,14 @@ String(product.categoryId)
 
 const mainCategories =
 
+sortByMainCategoryOrder(
 categories.filter(category=>
 
 categoryImages[
 category["#text"]
 ]
 
+)
 );
 
 

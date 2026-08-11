@@ -32,6 +32,8 @@ import {
   setSubcategoryScrollX
 } from "../../utils/categoryScrollMemory";
 
+import { sortByMainCategoryOrder } from "../../utils/categoryOrder";
+
 
 
 
@@ -258,8 +260,10 @@ categories,
 setCategories
 
 ]=useState<Category[]>(
-  () => (getCachedCategories() ?? []).filter(
-    (cat: Category) => mainCategoryNames.includes(cat["#text"])
+  () => sortByMainCategoryOrder(
+    (getCachedCategories() ?? []).filter(
+      (cat: Category) => mainCategoryNames.includes(cat["#text"])
+    )
   )
 );
 
@@ -392,6 +396,7 @@ getCategories()
 
 const mainCategories =
 
+sortByMainCategoryOrder<Category>(
 categoriesData.filter(
 
 (cat:Category)=>
@@ -402,6 +407,7 @@ cat["#text"]
 
 )
 
+)
 );
 
 
