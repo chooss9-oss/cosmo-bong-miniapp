@@ -453,14 +453,15 @@ useEffect(() => {
 
 const categoryScrollRef = useRef<HTMLDivElement>(null);
 
-// Восстанавливаем горизонтальный скролл строки категорий сразу после
-// монтирования — та же лента, что и на странице категории, позиция
-// хранится в общем модуле src/utils/categoryScrollMemory.ts, т.к.
-// AnimatedRoutes пересоздаёт страницу заново при каждом переходе.
+// Лента категорий общая с страницей категории (память в
+// src/utils/categoryScrollMemory.ts), но в Каталоге всегда активна "Все"
+// (самый первый чип) — поэтому НЕ восстанавливаем позицию оттуда, где её
+// оставили в другом месте, а всегда показываем ленту с начала.
 useEffect(() => {
   if (categoryScrollRef.current) {
-    categoryScrollRef.current.scrollLeft = getCategoryScrollX();
+    categoryScrollRef.current.scrollLeft = 0;
   }
+  setCategoryScrollX(0);
 }, []);
 
 const isFirstFilterRender = useRef(true);

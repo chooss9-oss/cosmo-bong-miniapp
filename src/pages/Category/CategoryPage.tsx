@@ -585,14 +585,28 @@ load();
 },[categoryId]);
 
 
-// Восстанавливаем горизонтальный скролл строк категорий/подкатегорий сразу
+// Позиционируем горизонтальный скролл строк категорий/подкатегорий сразу
 // после монтирования — компонент пересоздаётся на каждый переход (в товар
-// и обратно, между категориями), поэтому позицию храним вне компонента,
-// в src/utils/categoryScrollMemory.ts
+// и обратно, между категориями). Строку категорий НЕ восстанавливаем из
+// общей памяти вслепую (она общая с Главной/Каталогом и могла быть
+// проскроллена совсем в другом месте) — вместо этого прокручиваем так,
+// чтобы была видна активная категория этой страницы. Подкатегории же
+// хранятся отдельно по каждой категории, их восстанавливаем как обычно.
 useEffect(() => {
 
   if (categoryScrollRef.current) {
-    categoryScrollRef.current.scrollLeft = getCategoryScrollX();
+    const activeChip = categoryScrollRef.current.querySelector<HTMLButtonElement>(
+      `[data-category-id="${categoryId}"]`
+    );
+    if (activeChip) {
+      const container = categoryScrollRef.current;
+      const targetLeft = activeChip.offsetLeft - 12;
+      container.scrollLeft = targetLeft > 0 ? targetLeft : 0;
+      setCategoryScrollX(container.scrollLeft);
+    } else {
+      categoryScrollRef.current.scrollLeft = 0;
+      setCategoryScrollX(0);
+    }
   }
 
   if (subcategoryScrollRef.current) {
@@ -715,6 +729,7 @@ pb-5
 
       <button
         key={cat["@_id"]}
+        data-category-id={cat["@_id"]}
         onClick={() => {
           if(String(cat["@_id"]) === String(categoryId)){
             setCategoryScrollX(0);
