@@ -259,6 +259,44 @@ function latinToCyrillicLayout(input: string): string {
     .join("");
 }
 
+// Транслитерация: если запрос набран осознанно английскими буквами как
+// "произношение" русского слова (например "bong" вместо "бонг", "chasha"
+// вместо "чаша") — это НЕ ошибка раскладки, а обычная транслитерация.
+// Разбираем сначала двухбуквенные сочетания (ш, ч, ж и т.д.), потом
+// оставшиеся одиночные буквы.
+const MULTI_LETTER_TRANSLIT: [string, string][] = [
+  ["shch", "щ"],
+  ["sch", "щ"],
+  ["sh", "ш"],
+  ["ch", "ч"],
+  ["zh", "ж"],
+  ["ts", "ц"],
+  ["kh", "х"],
+  ["ya", "я"],
+  ["yu", "ю"],
+  ["yo", "ё"],
+  ["ye", "е"],
+];
+
+const SINGLE_LETTER_TRANSLIT: Record<string, string> = {
+  a: "а", b: "б", v: "в", g: "г", d: "д", e: "е", z: "з", i: "и", y: "й",
+  k: "к", l: "л", m: "м", n: "н", o: "о", p: "п", r: "р", s: "с", t: "т",
+  u: "у", f: "ф", h: "х", c: "ц", j: "й", w: "в", q: "к",
+};
+
+function transliterateToCyrillic(input: string): string {
+  let result = input.toLowerCase();
+
+  for (const [latin, cyrillic] of MULTI_LETTER_TRANSLIT) {
+    result = result.split(latin).join(cyrillic);
+  }
+
+  return result
+    .split("")
+    .map((ch) => SINGLE_LETTER_TRANSLIT[ch] ?? ch)
+    .join("");
+}
+
 // Ищем слово по подстроке, а если не нашли — допускаем небольшую опечатку
 // (порог зависит от длины слова, чтобы не ловить случайные совпадения).
 function wordMatchesText(
@@ -680,6 +718,27 @@ word.length>1 &&
 
 );
 
+// Тот же запрос транслитом — "bong" вместо "бонг" (осознанно набрано
+// латиницей как произношение, не ошибка раскладки)
+const translitSearchWords =
+
+search
+
+.split(" ")
+
+.map(word=>
+
+normalizeWord(transliterateToCyrillic(word))
+
+)
+
+.filter(word=>
+
+word.length>1 &&
+
+!stopWords.includes(word)
+
+);
 
 
 
@@ -787,7 +846,25 @@ if(
   layoutSearchWords.join(" ") !== searchWords.join(" ")
 ){
 
-  return layoutSearchWords.every(word=>
+  const matchesLayout = layoutSearchWords.every(word=>
+
+  wordMatchesText(word, fullText, textTokens)
+
+  );
+
+  if(matchesLayout){
+    return true;
+  }
+
+}
+
+// Запрос транслитом (например "bong") — третья попытка
+if(
+  translitSearchWords.length > 0 &&
+  translitSearchWords.join(" ") !== searchWords.join(" ")
+){
+
+  return translitSearchWords.every(word=>
 
   wordMatchesText(word, fullText, textTokens)
 
