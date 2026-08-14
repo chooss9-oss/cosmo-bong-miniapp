@@ -4,6 +4,10 @@ import {
 } from "react";
 
 import {
+  useNavigate
+} from "react-router-dom";
+
+import {
   useCart
 } from "../../context/CartContext";
 
@@ -18,10 +22,20 @@ import {
 function Checkout(){
 
 
+const navigate = useNavigate();
+
+
 const {
 cart,
 clearCart
 }=useCart();
+
+
+
+const [
+consentGiven,
+setConsentGiven
+]=useState(false);
 
 
 
@@ -202,6 +216,18 @@ if(cart.length===0){
 
 alert(
 "Корзина пустая"
+);
+
+return;
+
+}
+
+
+
+if(!consentGiven){
+
+alert(
+"Чтобы оформить заказ, нужно подтвердить согласие на обработку персональных данных"
 );
 
 return;
@@ -855,11 +881,45 @@ leading-relaxed
 
 
 
+<label
+className="
+mt-4
+flex
+items-start
+gap-3
+cursor-pointer
+"
+>
+
+<input
+type="checkbox"
+checked={consentGiven}
+onChange={e=>setConsentGiven(e.target.checked)}
+className="w-5 h-5 mt-0.5 accent-[#58BB43] flex-shrink-0"
+/>
+
+<span className="text-sm text-gray-300 leading-relaxed">
+Согласен(на) на{" "}
+<span
+className="text-[#58BB43] underline"
+onClick={(e)=>{
+  e.preventDefault();
+  navigate("/privacy");
+}}
+>
+обработку персональных данных
+</span>
+</span>
+
+</label>
+
+
+
 
 <button
 
 
-disabled={loading}
+disabled={loading || !consentGiven}
 
 
 onClick={sendOrder}

@@ -1,7 +1,12 @@
 const express = require("express");
 
-const { saveReplyMapping, telegramApi } = require("../replyMapping");
-const { isAndroidCustomerId, appendChatMessage, getChatMessages } = require("../chatStore");
+const { saveReplyMapping, telegramApi, telegramApiFile } = require("../replyMapping");
+const {
+  isAndroidCustomerId,
+  appendChatMessage,
+  getChatMessages,
+  popPendingReactions
+} = require("../chatStore");
 const { savePushToken } = require("../pushStore");
 const { getAwaitingShippingData } = require("../orderStore");
 const {
@@ -73,6 +78,64 @@ router.post("/send", async (req, res) => {
   }
 });
 
+// Клиент отправляет голосовое сообщение из приложения. Файл приходит как
+// base64 в JSON-теле (проще, чем городить multipart-загрузку ради коротких
+// голосовых сообщений) — здесь превращаем его в реальные байты и шлём
+// админу в Telegram методом sendAudio (а не sendVoice: Telegram требует для
+// sendVoice формат OGG/OPUS, а запись в приложении идёт в m4a — sendAudio
+// принимает m4a/mp3 без перекодирования и всё равно даёт админу
+// воспроизводимый файл с кнопкой play).
+router.post("/send-voice", async (req, res) => {
+  try {
+    const { customerId, phone, audioBase64, mimeType } = req.body;
+
+    if (!customerId || !isAndroidCustomerId(String(customerId)) || !audioBase64) {
+      return res.status(400).json({ success: false, error: "customerId и audioBase64 обязательны" });
+    }
+
+    const buffer = Buffer.from(audioBase64, "base64");
+
+    const caption =
+      `🎤 Голосовое сообщение от клиента (Android)` + (phone ? `\n📞 ${phone}` : "");
+
+    const sendResult = await telegramApiFile(
+      "sendAudio",
+      { chat_id: process.env.ADMIN_ID, caption },
+      "audio",
+      buffer,
+      "voice-message.m4a",
+      mimeType || "audio/m4a"
+    );
+
+    if (!sendResult.ok || !sendResult.result) {
+      console.error("❌ CHAT SEND-VOICE: sendAudio failed:", JSON.stringify(sendResult));
+      return res.json({ success: false });
+    }
+
+    await saveReplyMapping(sendResult.result.message_id, customerId);
+
+    // Сохраняем это же голосовое в историю чата приложения, чтобы клиент
+    // видел свою отправку (как с текстом и фото) — берём file_id из ответа
+    // Telegram и превращаем в прямую ссылку через getFile, как и для фото.
+    let audioUrl;
+    const audioFileId = sendResult.result.audio && sendResult.result.audio.file_id;
+
+    if (audioFileId) {
+      const fileInfo = await telegramApi("getFile", { file_id: audioFileId }).catch(() => null);
+      if (fileInfo && fileInfo.ok && fileInfo.result && fileInfo.result.file_path) {
+        audioUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${fileInfo.result.file_path}`;
+      }
+    }
+
+    await appendChatMessage(customerId, { from: "customer", audioUrl });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("❌ CHAT SEND-VOICE ERROR:", error.message);
+    res.status(500).json({ success: false });
+  }
+});
+
 // Клиент нажал кнопку в чате (тот же сценарий заказа, что и инлайн-кнопки
 // в Telegram — см. server/orderFlow.js). Разрешены только кнопки, которые
 // в сценарии нажимает именно клиент (подтверждение заказа, выбор способа
@@ -102,6 +165,38 @@ router.post("/button", async (req, res) => {
     res.json({ success: !!result.ok, reason: result.reason });
   } catch (error) {
     console.error("❌ CHAT BUTTON ERROR:", error.message);
+    res.status(500).json({ success: false });
+  }
+});
+
+// Клиент реально открыл чат и увидел сообщения — вызывается из приложения
+// при фокусе на экране чата (см. ChatScreen.tsx). Ставим 👍 на все
+// накопленные с прошлого раза сообщения админа в Telegram-боте — это
+// единственный момент, когда админ узнаёт, что клиент точно прочитал ответ
+// (а не просто "push доставлен", что не одно и то же).
+router.post("/mark-read", async (req, res) => {
+  try {
+    const { customerId } = req.body;
+
+    if (!customerId || !isAndroidCustomerId(String(customerId))) {
+      return res.status(400).json({ success: false, error: "customerId обязателен" });
+    }
+
+    const pendingMessageIds = await popPendingReactions(customerId);
+
+    await Promise.all(
+      pendingMessageIds.map((messageId) =>
+        telegramApi("setMessageReaction", {
+          chat_id: process.env.ADMIN_ID,
+          message_id: Number(messageId),
+          reaction: [{ type: "emoji", emoji: "👍" }]
+        }).catch(() => {})
+      )
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("❌ CHAT MARK-READ ERROR:", error.message);
     res.status(500).json({ success: false });
   }
 });

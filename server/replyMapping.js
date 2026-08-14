@@ -58,9 +58,33 @@ async function telegramApi(method, payload) {
   return response.json();
 }
 
+// Отправка файла (например голосового сообщения) реальными байтами, а не
+// ссылкой/file_id — Telegram Bot API для этого требует multipart/form-data,
+// обычный JSON-запрос (telegramApi выше) для файлов не подходит. Node 18+
+// (среда Vercel Functions) даёт нативные FormData/Blob, поэтому отдельная
+// библиотека (form-data и т.п.) не нужна.
+async function telegramApiFile(method, fields, fileFieldName, buffer, filename, mimeType) {
+  const form = new FormData();
+
+  for (const [key, value] of Object.entries(fields || {})) {
+    if (value !== undefined && value !== null) {
+      form.append(key, String(value));
+    }
+  }
+
+  form.append(fileFieldName, new Blob([buffer], { type: mimeType }), filename);
+
+  const response = await fetch(
+    `https://api.telegram.org/bot${process.env.BOT_TOKEN}/${method}`,
+    { method: "POST", body: form }
+  );
+  return response.json();
+}
+
 module.exports = {
   getRedisClient,
   saveReplyMapping,
   getReplyMapping,
-  telegramApi
+  telegramApi,
+  telegramApiFile
 };

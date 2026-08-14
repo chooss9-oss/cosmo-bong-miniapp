@@ -17,6 +17,7 @@ import ProductPage from "./pages/Product/ProductPage";
 import Cart from "./pages/Cart/Cart";
 import Checkout from "./pages/Checkout/Checkout";
 import Success from "./pages/Success/Success";
+import Privacy from "./pages/Privacy/Privacy";
 
 
 // Запомненные позиции скролла для каждой записи в истории (по location.key).
@@ -179,6 +180,8 @@ export default function AnimatedRoutes() {
         <Route path="/cart" element={<Cart />} />
 
         <Route path="/checkout" element={<Checkout />} />
+
+        <Route path="/privacy" element={<Privacy />} />
 
       </Routes>
 

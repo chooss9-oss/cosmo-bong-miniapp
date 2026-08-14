@@ -19,8 +19,8 @@ function isAndroidCustomerId(customerId) {
   return typeof customerId === "string" && customerId.startsWith("android:");
 }
 
-async function appendChatMessage(customerId, { from, text, buttons, imageUrl }) {
-  if (!customerId || (!text && !imageUrl)) return null;
+async function appendChatMessage(customerId, { from, text, buttons, imageUrl, audioUrl }) {
+  if (!customerId || (!text && !imageUrl && !audioUrl)) return null;
 
   const message = {
     from, // "admin" | "customer"
@@ -41,6 +41,12 @@ async function appendChatMessage(customerId, { from, text, buttons, imageUrl }) 
   // Фото (например QR-код для оплаты по СБП)
   if (imageUrl) {
     message.imageUrl = imageUrl;
+  }
+
+  // Голосовое сообщение (от клиента через /chat/send-voice или от админа
+  // ответом голосом в Telegram-боте)
+  if (audioUrl) {
+    message.audioUrl = audioUrl;
   }
 
   try {
@@ -76,8 +82,52 @@ async function getChatMessages(customerId) {
   }
 }
 
+// ==============================
+// "Прочитано" в Telegram-боте. Раньше реакция (👍/👎) ставилась сразу же,
+// по факту того, дошёл ли push — но это не то же самое, что клиент реально
+// увидел сообщение (push мог не дойти, а клиент при этом уже открыл чат и
+// прочитал; или наоборот, push дошёл, но телефон лежал без дела). Поэтому
+// вместо немедленной реакции копим ID сообщений админа в очередь на
+// клиента, а реакцию ставим только когда клиент реально открывает чат в
+// приложении (см. POST /api/chat/mark-read).
+// ==============================
+
+async function addPendingReaction(customerId, telegramMessageId) {
+  if (!customerId || !telegramMessageId) return;
+
+  try {
+    const client = await getRedisClient();
+    const key = `pendingReactions:${customerId}`;
+    await client.rPush(key, String(telegramMessageId));
+    await client.expire(key, 60 * 60 * 24 * 7); // неделя — с запасом
+  } catch (error) {
+    console.error("❌ Не удалось сохранить pending reaction:", error.message);
+  }
+}
+
+// Забирает и сразу очищает список — вызывается один раз при подтверждении
+// прочтения, дальше эти же ID реакцией уже не трогаем повторно.
+async function popPendingReactions(customerId) {
+  if (!customerId) return [];
+
+  try {
+    const client = await getRedisClient();
+    const key = `pendingReactions:${customerId}`;
+    const ids = await client.lRange(key, 0, -1);
+    if (ids.length) {
+      await client.del(key);
+    }
+    return ids;
+  } catch (error) {
+    console.error("❌ Не удалось прочитать pending reactions:", error.message);
+    return [];
+  }
+}
+
 module.exports = {
   isAndroidCustomerId,
   appendChatMessage,
-  getChatMessages
+  getChatMessages,
+  addPendingReaction,
+  popPendingReactions
 };

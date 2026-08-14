@@ -42,7 +42,12 @@ const {
   getMaxRedeemable
 } = require("./bonusStore");
 
-const { isAndroidCustomerId, appendChatMessage } = require("./chatStore");
+const {
+  isAndroidCustomerId,
+  appendChatMessage,
+  addPendingReaction,
+  popPendingReactions
+} = require("./chatStore");
 const { getPushToken, sendExpoPush } = require("./pushStore");
 
 const app = express();
@@ -52,7 +57,10 @@ const app = express();
 app.set("trust proxy", true);
 
 app.use(cors());
-app.use(express.json());
+// Увеличенный лимит — голосовые сообщения из приложения приходят как base64
+// в JSON-теле (см. /api/chat/send-voice), обычный лимит express (100kb)
+// слишком мал даже для короткой записи.
+app.use(express.json({ limit: "20mb" }));
 
 const PORT = process.env.PORT || 3001;
 
@@ -980,6 +988,133 @@ app.get("/api/product/:id", async (req, res) => {
 });
 
 // ==============================
+// ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ (для Android-приложения — ссылка из чекбокса
+// на оформлении заказа и из профиля; статический HTML, не требует
+// пересборки приложения при правках текста)
+// ==============================
+app.get("/api/privacy", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(`<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Политика конфиденциальности — Cosmo Bong</title>
+<style>
+  body {
+    background: #0b0b0b;
+    color: #ffffff;
+    font-family: -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+    padding: 20px 16px 60px;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  h2 { font-size: 16px; color: #7ee62c; margin-top: 28px; }
+  p, li { font-size: 14px; color: #d8d8d8; }
+  ul { padding-left: 20px; }
+  a { color: #58BB43; }
+  hr { border: none; border-top: 1px solid #2a2a2a; margin: 32px 0; }
+  .muted { color: #9a9a9a; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>Согласие на обработку персональных данных</h1>
+  <p>Настоящим свободно, своей волей и в своём интересе, оформляя заказ, отправляя сообщение или голосовое сообщение в чат поддержки, включая push-уведомления, либо иным образом используя приложение Cosmo Bong, я даю согласие индивидуальному предпринимателю Воронцову Артёму Константиновичу (ОГРНИП: 321762700045487, ИНН: 290409139692), находящемуся по адресу: Россия, г. Ярославль, переулок Герцена д.6 к.2, кв. 60 (далее — Оператор), на обработку своих персональных данных.</p>
+  <p>Предоставление персональных данных является добровольным. Отказ от предоставления телефона ограничивает доступ к оформлению заказа, истории заказов, программе кэшбэка и чату с магазином — остальными разделами приложения (каталог, избранное, акции) можно пользоваться без этого.</p>
+
+  <h2>Перечень персональных данных</h2>
+  <ul>
+    <li>номер телефона;</li>
+    <li>имя (если указано при оформлении заказа);</li>
+    <li>состав и история заказов, использованные промокоды и баллы кэшбэка;</li>
+    <li>текст переписки в чате поддержки, включая голосовые сообщения;</li>
+    <li>фотографии и изображения, полученные от магазина в чате (например, QR-код для оплаты) — при их сохранении в галерею телефона;</li>
+    <li>технический идентификатор push-уведомлений (Expo push token) — для доставки ответов из чата.</li>
+  </ul>
+  <p>Приложение не собирает адрес электронной почты, не использует файлы cookie, не содержит рекламных или аналитических трекеров.</p>
+
+  <h2>Цели обработки</h2>
+  <ul>
+    <li>оформление и выполнение заказа, включая передачу данных для доставки;</li>
+    <li>начисление и списание баллов кэшбэка;</li>
+    <li>обратная связь и поддержка через чат в приложении;</li>
+    <li>доставка push-уведомлений об ответах в чате.</li>
+  </ul>
+  <p>Приложение запрашивает доступ к микрофону (только для отправки голосовых сообщений) и к галерее телефона (только для сохранения полученных в чате изображений) — эти разрешения используются исключительно по прямому действию пользователя и не собираются автоматически.</p>
+
+  <h2>Способы обработки</h2>
+  <p>Автоматизированный и неавтоматизированный, с передачей по сети Интернет.</p>
+
+  <h2>Передача третьим лицам</h2>
+  <ul>
+    <li>транспортным компаниям (СДЭК, Почта России) — для доставки заказов;</li>
+    <li>сервису Telegram (Bot API) — для пересылки сообщений чата и уведомлений о заказе сотруднику магазина;</li>
+    <li>сервису push-уведомлений Expo — для технической доставки push-уведомлений на устройство.</li>
+  </ul>
+  <p>Иным третьим лицам, включая рекламные и аналитические сервисы, персональные данные не передаются.</p>
+
+  <h2>Срок действия согласия</h2>
+  <p>До отзыва мной согласия, но не более 3 (трёх) лет с момента последнего обращения. Отозвать согласие можно в любой момент, направив письмо на адрес: <a href="mailto:yar-bong@mail.ru">yar-bong@mail.ru</a>.</p>
+  <p>Оператор вправе продолжить обработку данных без моего согласия, если это предусмотрено законом (ст. 6, 10, 11 ФЗ-152 от 27.07.2006).</p>
+
+  <hr />
+
+  <h1>Политика конфиденциальности и обработки персональных данных</h1>
+
+  <h2>1. Оператор</h2>
+  <p>Индивидуальный предприниматель Воронцов Артём Константинович (ОГРНИП: 321762700045487, ИНН: 290409139692), адрес: Россия, г. Ярославль, переулок Герцена д.6 к.2, кв. 60.</p>
+
+  <h2>2. Цели обработки</h2>
+  <ul>
+    <li>Оформление и выполнение заказов.</li>
+    <li>Программа кэшбэка.</li>
+    <li>Обратная связь и поддержка через чат в приложении (текст, голосовые сообщения, изображения).</li>
+    <li>Доставка push-уведомлений об ответах в чате.</li>
+  </ul>
+
+  <h2>3. Перечень обрабатываемых данных</h2>
+  <p>Номер телефона, имя (если указано), состав и история заказов, переписка в чате (включая голосовые сообщения), технический идентификатор push-уведомлений устройства.</p>
+
+  <h2>4. Срок хранения данных</h2>
+  <p>Не более 3 лет с момента последнего взаимодействия пользователя с приложением или Оператором.</p>
+
+  <h2>5. Передача третьим лицам</h2>
+  <ul>
+    <li>Транспортным компаниям — для доставки заказов.</li>
+    <li>Telegram (Bot API) — для пересылки сообщений чата и уведомлений о заказе.</li>
+    <li>Expo (сервис push-уведомлений) — для технической доставки уведомлений.</li>
+  </ul>
+
+  <h2>6. Трансграничная передача данных</h2>
+  <p>Трансграничная передача персональных данных не осуществляется.</p>
+
+  <h2>7. Разрешения устройства</h2>
+  <p>Приложение запрашивает доступ к микрофону (для отправки голосовых сообщений в чат) и к галерее (для сохранения изображений, полученных в чате). Оба разрешения запрашиваются только в момент соответствующего действия пользователя.</p>
+
+  <h2>8. Уничтожение данных</h2>
+  <p>Осуществляется путём полного удаления из информационных систем Оператора или обезличивания, исключающего возможность определения принадлежности данных конкретному пользователю.</p>
+
+  <h2>9. Права пользователя</h2>
+  <ul>
+    <li>Получать подтверждение об обработке ваших данных и сведения о них.</li>
+    <li>Требовать уточнения, блокирования или уничтожения неточных/незаконно обработанных данных.</li>
+    <li>Отзывать согласие на обработку.</li>
+    <li>Обжаловать действия Оператора в Роскомнадзоре или в суде.</li>
+  </ul>
+
+  <h2>10. Контакты для реализации прав</h2>
+  <p>Email: <a href="mailto:yar-bong@mail.ru">yar-bong@mail.ru</a></p>
+
+  <h2>11. Изменения в политике</h2>
+  <p>Оператор оставляет за собой право вносить изменения в настоящую Политику. Актуальная версия всегда доступна по этому адресу.</p>
+  <p class="muted">Последнее обновление: ${new Date().toLocaleDateString("ru-RU")}</p>
+</body>
+</html>`);
+});
+
+// ==============================
 // CATEGORIES
 // ==============================
 app.get("/api/categories", (req, res) => {
@@ -1298,8 +1433,15 @@ app.post("/api/telegram-webhook", async (req, res) => {
         return;
       }
 
-      // Админ отвечает на пересланное сообщение клиента
-      if (message.reply_to_message && message.text) {
+      // Админ отвечает на пересланное сообщение клиента — текстом, фото
+      // (например, скрин чека/оплаты) или голосом. Раньше здесь проверялся
+      // только message.text, из-за чего фото/голосовые ответы админа молча
+      // пропадали и не доходили до клиента вообще — ни в Telegram, ни в
+      // Android-чат.
+      const hasPhoto = !!(message.photo && message.photo.length);
+      const hasVoice = !!message.voice;
+
+      if (message.reply_to_message && (message.text || hasPhoto || hasVoice)) {
 
         const t0 = Date.now();
 
@@ -1318,6 +1460,8 @@ app.post("/api/telegram-webhook", async (req, res) => {
           `(redis lookup took ${Date.now() - t0}ms)`
         );
 
+        const bodyText = message.text || message.caption || "";
+
         if (customerChatId && isAndroidCustomerId(customerChatId)) {
 
           // У Android-клиента нет настоящего Telegram-чата — сохраняем
@@ -1325,26 +1469,53 @@ app.post("/api/telegram-webhook", async (req, res) => {
           // push-уведомлением вместо telegramApi sendMessage.
           const t1 = Date.now();
 
-          await appendChatMessage(customerChatId, { from: "admin", text: message.text });
+          let imageUrl;
+          let audioUrl;
+
+          if (hasPhoto) {
+            // Самое большое доступное разрешение — последний элемент массива
+            const fileId = message.photo[message.photo.length - 1].file_id;
+            const fileInfo = await telegramApi("getFile", { file_id: fileId }).catch(
+              (err) => ({ ok: false, description: err.message })
+            );
+
+            if (fileInfo.ok && fileInfo.result && fileInfo.result.file_path) {
+              imageUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${fileInfo.result.file_path}`;
+            } else {
+              console.log("TELEGRAM WEBHOOK: getFile FAILED:", JSON.stringify(fileInfo));
+            }
+          }
+
+          if (hasVoice) {
+            const fileId = message.voice.file_id;
+            const fileInfo = await telegramApi("getFile", { file_id: fileId }).catch(
+              (err) => ({ ok: false, description: err.message })
+            );
+
+            if (fileInfo.ok && fileInfo.result && fileInfo.result.file_path) {
+              audioUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${fileInfo.result.file_path}`;
+            } else {
+              console.log("TELEGRAM WEBHOOK: getFile (voice) FAILED:", JSON.stringify(fileInfo));
+            }
+          }
+
+          await appendChatMessage(customerChatId, { from: "admin", text: bodyText, imageUrl, audioUrl });
 
           const pushToken = await getPushToken(customerChatId);
           const pushResult = await sendExpoPush(pushToken, {
             title: "Cosmo Bong",
-            body: message.text,
+            body: bodyText || (imageUrl ? "📷 Фото" : audioUrl ? "🎤 Голосовое сообщение" : ""),
             data: { type: "chat" }
           });
 
           console.log(`TELEGRAM WEBHOOK: push to Android customer took ${Date.now() - t1}ms`, pushResult);
 
-          const reactionResult = await telegramApi("setMessageReaction", {
-            chat_id: adminId,
-            message_id: message.message_id,
-            reaction: [{ type: "emoji", emoji: pushResult.ok ? "👍" : "👎" }]
-          }).catch(err => ({ ok: false, description: err.message }));
-
-          if (!reactionResult.ok) {
-            console.log("TELEGRAM WEBHOOK: setMessageReaction FAILED:", JSON.stringify(reactionResult));
-          }
+          // Реакцию (👍) больше не ставим сразу — она ничего не говорила о
+          // том, увидел ли клиент сообщение на самом деле, только о том,
+          // дошёл ли push. Вместо этого копим ID в очередь и ставим 👍
+          // только когда клиент реально откроет чат в приложении (см.
+          // POST /api/chat/mark-read ниже).
+          await addPendingReaction(customerChatId, message.message_id);
 
           if (!pushResult.ok) {
             // Формулировка намеренно без утверждений о том, видел ли клиент
@@ -1365,10 +1536,24 @@ app.post("/api/telegram-webhook", async (req, res) => {
 
           const t1 = Date.now();
 
-          const sendResult = await telegramApi("sendMessage", {
-            chat_id: customerChatId,
-            text: message.text
-          });
+          // Фото/голос пересылаем тем же file_id (Telegram сам переиспользует
+          // уже загруженный файл, повторно скачивать/загружать не нужно)
+          const sendResult = hasPhoto
+            ? await telegramApi("sendPhoto", {
+                chat_id: customerChatId,
+                photo: message.photo[message.photo.length - 1].file_id,
+                caption: message.caption
+              })
+            : hasVoice
+            ? await telegramApi("sendVoice", {
+                chat_id: customerChatId,
+                voice: message.voice.file_id,
+                caption: message.caption
+              })
+            : await telegramApi("sendMessage", {
+                chat_id: customerChatId,
+                text: message.text
+              });
 
           console.log(`TELEGRAM WEBHOOK: sendMessage to customer took ${Date.now() - t1}ms`);
 
