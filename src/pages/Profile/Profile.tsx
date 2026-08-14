@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getTelegramUser } from "../../utils/telegram";
 
 interface OrderItem {
@@ -20,6 +21,8 @@ interface Order {
 }
 
 function Profile() {
+
+  const navigate = useNavigate();
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -230,6 +233,21 @@ function Profile() {
 
 
       </div>
+
+
+      <button
+        onClick={() => navigate("/privacy")}
+        className="
+          mt-6
+          w-full
+          text-center
+          text-sm
+          text-gray-400
+          underline
+        "
+      >
+        Обработка персональных данных
+      </button>
 
 
     </div>
