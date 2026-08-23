@@ -30,3 +30,4 @@ dist-ssr
 *.sw?
 .vercel
 .env*
+server/firebase-service-account.json

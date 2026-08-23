@@ -1,10 +1,17 @@
 const express = require("express");
 
-const { saveReplyMapping, telegramApi, telegramApiFile } = require("../replyMapping");
+const {
+  saveReplyMapping,
+  telegramApi,
+  telegramApiFile,
+  buildTelegramFileProxyUrl
+} = require("../replyMapping");
 const {
   isAndroidCustomerId,
   appendChatMessage,
   getChatMessages,
+  editChatMessage,
+  deleteChatMessage,
   popPendingReactions
 } = require("../chatStore");
 const { savePushToken } = require("../pushStore");
@@ -123,7 +130,7 @@ router.post("/send-voice", async (req, res) => {
     if (audioFileId) {
       const fileInfo = await telegramApi("getFile", { file_id: audioFileId }).catch(() => null);
       if (fileInfo && fileInfo.ok && fileInfo.result && fileInfo.result.file_path) {
-        audioUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${fileInfo.result.file_path}`;
+        audioUrl = buildTelegramFileProxyUrl(fileInfo.result.file_path);
       }
     }
 
@@ -132,6 +139,97 @@ router.post("/send-voice", async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error("❌ CHAT SEND-VOICE ERROR:", error.message);
+    res.status(500).json({ success: false });
+  }
+});
+
+// Клиент отправляет фото из галереи или камеры. Файл приходит как base64
+// в JSON-теле (тот же подход, что и для голосовых) — превращаем в байты и
+// шлём админу в Telegram методом sendPhoto.
+router.post("/send-image", async (req, res) => {
+  try {
+    const { customerId, phone, imageBase64, mimeType } = req.body;
+
+    if (!customerId || !isAndroidCustomerId(String(customerId)) || !imageBase64) {
+      return res.status(400).json({ success: false, error: "customerId и imageBase64 обязательны" });
+    }
+
+    const buffer = Buffer.from(imageBase64, "base64");
+
+    const caption =
+      `📷 Фото от клиента (Android)` + (phone ? `\n📞 ${phone}` : "");
+
+    const sendResult = await telegramApiFile(
+      "sendPhoto",
+      { chat_id: process.env.ADMIN_ID, caption },
+      "photo",
+      buffer,
+      "chat-image.jpg",
+      mimeType || "image/jpeg"
+    );
+
+    if (!sendResult.ok || !sendResult.result) {
+      console.error("❌ CHAT SEND-IMAGE: sendPhoto failed:", JSON.stringify(sendResult));
+      return res.json({ success: false });
+    }
+
+    await saveReplyMapping(sendResult.result.message_id, customerId);
+
+    // Сохраняем это же фото в историю чата приложения, чтобы клиент видел
+    // свою отправку — берём file_id самого крупного варианта из photo[] и
+    // превращаем в прямую ссылку через getFile.
+    let imageUrl;
+    const photos = sendResult.result.photo;
+    const photoFileId = photos && photos.length > 0 && photos[photos.length - 1].file_id;
+
+    if (photoFileId) {
+      const fileInfo = await telegramApi("getFile", { file_id: photoFileId }).catch(() => null);
+      if (fileInfo && fileInfo.ok && fileInfo.result && fileInfo.result.file_path) {
+        imageUrl = buildTelegramFileProxyUrl(fileInfo.result.file_path);
+      }
+    }
+
+    await appendChatMessage(customerId, { from: "customer", imageUrl });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("❌ CHAT SEND-IMAGE ERROR:", error.message);
+    res.status(500).json({ success: false });
+  }
+});
+
+// Клиент редактирует своё уже отправленное текстовое сообщение — только в
+// приложении, в Telegram у админа старый текст останется без изменений.
+// Идентифицируем сообщение по createdAt (уникален для сообщений клиента).
+router.post("/edit", async (req, res) => {
+  try {
+    const { customerId, createdAt, text } = req.body;
+
+    if (!customerId || !isAndroidCustomerId(String(customerId)) || !createdAt || !text) {
+      return res.status(400).json({ success: false, error: "customerId, createdAt и text обязательны" });
+    }
+
+    const ok = await editChatMessage(customerId, Number(createdAt), text);
+    res.json({ success: ok });
+  } catch (error) {
+    console.error("❌ CHAT EDIT ERROR:", error.message);
+    res.status(500).json({ success: false });
+  }
+});
+
+// Клиент удаляет своё сообщение — только в приложении.
+router.post("/delete", async (req, res) => {
+  try {
+    const { customerId, createdAt } = req.body;
+
+    if (!customerId || !isAndroidCustomerId(String(customerId)) || !createdAt) {
+      return res.status(400).json({ success: false, error: "customerId и createdAt обязательны" });
+    }
+
+    const ok = await deleteChatMessage(customerId, Number(createdAt));
+    res.json({ success: ok });
+  } catch (error) {
+    console.error("❌ CHAT DELETE ERROR:", error.message);
     res.status(500).json({ success: false });
   }
 });
@@ -206,13 +304,13 @@ router.post("/mark-read", async (req, res) => {
 // сам откроет чат).
 router.post("/push-token", async (req, res) => {
   try {
-    const { customerId, token } = req.body;
+    const { customerId, token, platform } = req.body;
 
     if (!customerId || !isAndroidCustomerId(String(customerId)) || !token) {
       return res.status(400).json({ success: false, error: "customerId и token обязательны" });
     }
 
-    await savePushToken(customerId, token);
+    await savePushToken(customerId, token, platform === "web" ? "web" : "android");
     res.json({ success: true });
   } catch (error) {
     console.error("❌ PUSH TOKEN ERROR:", error.message);

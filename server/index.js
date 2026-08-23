@@ -15,7 +15,8 @@ const {
   getRedisClient,
   saveReplyMapping,
   getReplyMapping,
-  telegramApi
+  telegramApi,
+  buildTelegramFileProxyUrl
 } = require("./replyMapping");
 
 const {
@@ -45,10 +46,11 @@ const {
 const {
   isAndroidCustomerId,
   appendChatMessage,
+  markCustomerMessagesRead,
   addPendingReaction,
   popPendingReactions
 } = require("./chatStore");
-const { getPushToken, sendExpoPush } = require("./pushStore");
+const { getPushToken, sendExpoPush, sendWebPush } = require("./pushStore");
 
 const app = express();
 
@@ -715,10 +717,31 @@ app.use("/api/order", orderRouter);
 app.use("/api/chat", chatRouter);
 
 // ==============================
+// АВТОРИЗАЦИЯ ДЛЯ /api/refresh-* И ПОДОБНЫХ ЭНДПОИНТОВ. Раньше эти
+// эндпоинты можно было вызвать только вручную (браузером с ?secret=...) —
+// то есть кто-то физически должен был об этом вспомнить. Теперь их же
+// вызывает Vercel Cron Jobs по расписанию (см. vercel.json), а Vercel сам
+// подставляет заголовок "Authorization: Bearer <CRON_SECRET>" при таком
+// вызове — секрет при этом нигде не хранится в коде/конфиге, только в
+// переменной окружения CRON_SECRET на Vercel. Ручной вызов по ссылке с
+// ?secret=... по-прежнему работает как раньше, ничего не сломано.
+// ==============================
+function isAuthorizedRefresh(req) {
+  if (req.query.secret && req.query.secret === process.env.REFRESH_SECRET) {
+    return true;
+  }
+  const authHeader = req.headers.authorization || "";
+  if (process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`) {
+    return true;
+  }
+  return false;
+}
+
+// ==============================
 // REFRESH SALES
 // ==============================
 app.get("/api/refresh-sales", async (req, res) => {
-  if (req.query.secret !== process.env.REFRESH_SECRET) {
+  if (!isAuthorizedRefresh(req)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -743,7 +766,7 @@ app.get("/api/refresh-sales", async (req, res) => {
 // REFRESH STOCK — обрабатывает ОДНУ порцию за запуск
 // ==============================
 app.get("/api/refresh-stock", async (req, res) => {
-  if (req.query.secret !== process.env.REFRESH_SECRET) {
+  if (!isAuthorizedRefresh(req)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -798,7 +821,7 @@ app.get("/api/refresh-stock", async (req, res) => {
 // REFRESH CATALOG (поиск новых товаров)
 // ==============================
 app.get("/api/refresh-catalog", async (req, res) => {
-  if (req.query.secret !== process.env.REFRESH_SECRET) {
+  if (!isAuthorizedRefresh(req)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -826,7 +849,7 @@ app.get("/api/refresh-catalog", async (req, res) => {
 // REFRESH SUBCATEGORIES
 // ==============================
 app.get("/api/refresh-subcategories", async (req, res) => {
-  if (req.query.secret !== process.env.REFRESH_SECRET) {
+  if (!isAuthorizedRefresh(req)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -854,7 +877,7 @@ app.get("/api/refresh-subcategories", async (req, res) => {
 // CHECK ORDER TIMEOUTS (напоминания и автоотмена заказов без подтверждения/оплаты)
 // ==============================
 app.get("/api/check-order-timeouts", async (req, res) => {
-  if (req.query.secret !== process.env.REFRESH_SECRET) {
+  if (!isAuthorizedRefresh(req)) {
     return res.status(403).json({ error: "Forbidden" });
   }
 
@@ -988,6 +1011,70 @@ app.get("/api/product/:id", async (req, res) => {
 });
 
 // ==============================
+// ПРОКСИ ФАЙЛОВ TELEGRAM (фото/голосовые в чате Android-приложения). Клиент
+// обращается сюда вместо прямой ссылки на api.telegram.org — см. пояснение
+// в replyMapping.js рядом с buildTelegramFileProxyUrl. path — это
+// Telegram-овский file_path (без токена), полученный через getFile.
+// ==============================
+// Расширение файла (как отдаёт Telegram в file_path) -> правильный
+// Content-Type. Сам Telegram на этой раздаче файлов часто отдаёт общий
+// "application/octet-stream" без уточнения — из-за этого плеер на телефоне
+// (ExoMediaPlayer) может не понять, что это именно аудио/OGG, и зависнуть
+// в буферизации навсегда, не воспроизводя и не показывая ошибку. Поэтому
+// определяем тип сами по расширению, а не полагаемся на заголовок Telegram.
+const TELEGRAM_FILE_CONTENT_TYPES = {
+  oga: "audio/ogg",
+  ogg: "audio/ogg",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  wav: "audio/wav",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp"
+};
+
+app.get("/api/telegram-file", async (req, res) => {
+  const filePath = req.query.path;
+
+  if (!filePath || typeof filePath !== "string" || filePath.includes("..")) {
+    return res.status(400).json({ error: "Некорректный path" });
+  }
+
+  try {
+    // Скачиваем файл целиком на сервере (а не отдаём поток "на лету") —
+    // голосовые и фото в чате небольшие, зато так у ответа гарантированно
+    // есть точный Content-Length и он не зависит от того, как Telegram
+    // передавал chunked-поток. Без точного Content-Length плеер на
+    // некоторых Android-устройствах не понимает, когда файл закончился, и
+    // "зависает" в буферизации — кнопка паузы остаётся навсегда, хотя звук
+    // так и не начинает идти.
+    const response = await axios.get(
+      `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${filePath}`,
+      { responseType: "arraybuffer", timeout: 20000 }
+    );
+
+    const buffer = Buffer.from(response.data);
+    const extension = filePath.split(".").pop()?.toLowerCase() || "";
+    const contentType =
+      TELEGRAM_FILE_CONTENT_TYPES[extension] ||
+      response.headers["content-type"] ||
+      "application/octet-stream";
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Length", buffer.length);
+    // Файлы в Telegram по одному и тому же file_path не меняются — можно
+    // спокойно кэшировать надолго на устройстве клиента.
+    res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+
+    res.send(buffer);
+  } catch (error) {
+    console.error("❌ TELEGRAM FILE PROXY ERROR:", error.message);
+    res.status(502).json({ error: "Не удалось загрузить файл" });
+  }
+});
+
+// ==============================
 // ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ (для Android-приложения — ссылка из чекбокса
 // на оформлении заказа и из профиля; статический HTML, не требует
 // пересборки приложения при правках текста)
@@ -1107,9 +1194,69 @@ app.get("/api/privacy", (req, res) => {
   <h2>10. Контакты для реализации прав</h2>
   <p>Email: <a href="mailto:yar-bong@mail.ru">yar-bong@mail.ru</a></p>
 
-  <h2>11. Изменения в политике</h2>
+    <h2>11. Изменения в политике</h2>
   <p>Оператор оставляет за собой право вносить изменения в настоящую Политику. Актуальная версия всегда доступна по этому адресу.</p>
   <p class="muted">Последнее обновление: ${new Date().toLocaleDateString("ru-RU")}</p>
+
+  <hr />
+
+  <h1>Публичная оферта на оказание услуги резервирования товара</h1>
+  <p><strong>Индивидуальный предприниматель Воронцов Артём Константинович</strong><br>
+  ОГРНИП: 321762700045487<br>
+  ИНН: 290409139692<br>
+  Место регистрации: г. Ярославль<br>
+  Контактный телефон: +7 999 799-72-56</p>
+
+  <p>Настоящий документ является публичной офертой (предложением) индивидуального предпринимателя Воронцова Артёма Константиновича (далее — «Исполнитель») в адрес любого дееспособного физического лица (далее — «Пользователь»), в соответствии со статьёй 437 Гражданского кодекса Российской Федерации.</p>
+
+  <h2>1. Термины и определения</h2>
+  <p>1.1. Сайт — интернет-ресурс cosmo-bong.ru и/или мобильное приложение Cosmo Bong, представляющие собой электронный каталог товаров.</p>
+  <p>1.2. Каталог — размещённая на Сайте информация о товарах, их характеристиках, изображениях и ориентировочной стоимости, носящая справочный характер.</p>
+  <p>1.3. Резервирование (бронирование) — услуга, оказываемая Исполнителем, по временному закреплению за Пользователем конкретной единицы товара из Каталога на определённый срок для последующего самовывоза Пользователем.</p>
+  <p>1.4. Самовывоз — способ получения товара, при котором Пользователь лично забирает зарезервированный товар в пункте выдачи, согласованном с Исполнителем.</p>
+
+  <h2>2. Предмет оферты</h2>
+  <p>2.1. Исполнитель оказывает Пользователю услугу резервирования выбранного товара из Каталога на срок, согласованный сторонами (как правило, не более 3 (трёх) календарных дней с момента резервирования, если иной срок не согласован дополнительно).</p>
+  <p>2.2. Сайт не является витриной интернет-магазина в смысле дистанционной продажи товаров и не предусматривает заключение договора купли-продажи через Сайт. Оплата и передача товара происходят исключительно при самовывозе, вне рамок Сайта.</p>
+  <p>2.3. Резервирование не является предоплатой и не гарантирует Пользователю обязательного приобретения товара — окончательное решение о покупке принимается Пользователем непосредственно в пункте выдачи при осмотре товара.</p>
+
+  <h2>3. Порядок оказания услуги</h2>
+  <p>3.1. Для резервирования товара Пользователь оформляет заявку через Сайт или мобильное приложение, указывая контактный номер телефона.</p>
+  <p>3.2. После оформления заявки с Пользователем связывается представитель Исполнителя (через чат в приложении, мессенджер или по телефону) для подтверждения наличия товара и согласования срока и места самовывоза.</p>
+  <p>3.3. Резервирование считается подтверждённым с момента подтверждения представителем Исполнителя.</p>
+  <p>3.4. Если Пользователь не забирает зарезервированный товар в согласованный срок, резервирование автоматически аннулируется, а товар возвращается в свободный доступ Каталога.</p>
+
+  <h2>4. Права и обязанности сторон</h2>
+  <p>4.1. Исполнитель обязуется:</p>
+  <ul>
+    <li>обеспечить наличие зарезервированного товара на согласованный срок;</li>
+    <li>предоставить Пользователю достоверную информацию о товаре в пределах, указанных в Каталоге.</li>
+  </ul>
+  <p>4.2. Пользователь обязуется:</p>
+  <ul>
+    <li>указывать достоверные контактные данные при оформлении резервирования;</li>
+    <li>забрать товар в согласованный срок либо заблаговременно уведомить Исполнителя об отказе от резервирования.</li>
+  </ul>
+  <p>4.3. Исполнитель вправе отменить резервирование в одностороннем порядке в случае утраты товара, технической ошибки в Каталоге (в том числе ошибки в цене или описании) или при иных обстоятельствах, делающих исполнение невозможным, уведомив об этом Пользователя.</p>
+
+  <h2>5. Стоимость и порядок расчётов</h2>
+  <p>5.1. Услуга резервирования оказывается Пользователю бесплатно.</p>
+  <p>5.2. Стоимость товара, указанная в Каталоге, носит ориентировочный характер и подлежит подтверждению при самовывозе.</p>
+  <p>5.3. Оплата товара производится Пользователем непосредственно в пункте выдачи при самовывозе, наличными или иным способом по согласованию сторон.</p>
+
+  <h2>6. Ответственность сторон</h2>
+  <p>6.1. Стороны несут ответственность за неисполнение или ненадлежащее исполнение своих обязательств по настоящей оферте в соответствии с действующим законодательством Российской Федерации.</p>
+  <p>6.2. Исполнитель не несёт ответственности за невозможность связаться с Пользователем по указанным им контактным данным.</p>
+
+  <h2>7. Прочие условия</h2>
+  <p>7.1. Акцептом настоящей оферты является факт оформления Пользователем заявки на резервирование товара через Сайт или мобильное приложение.</p>
+  <p>7.2. Исполнитель вправе в одностороннем порядке изменять условия настоящей оферты, размещая актуальную редакцию на Сайте. Изменения вступают в силу с момента публикации.</p>
+  <p>7.3. Все споры и разногласия, возникающие в связи с исполнением настоящей оферты, разрешаются путём переговоров, а при недостижении согласия — в порядке, установленном действующим законодательством Российской Федерации.</p>
+  <p>7.4. Реализуемые товары являются коллекционными и декоративными предметами и не предназначены для использования в целях потребления табачных изделий, наркотических средств или психотропных веществ.</p>
+
+  <p><em>Важно: настоящий документ не является публичной офертой на продажу товаров дистанционным способом и не заключает договор купли-продажи. Настоящая оферта регулирует исключительно услугу предварительного резервирования товара для самовывоза.</em></p>
+
+    <p class="muted">Контакты для связи по вопросам настоящей оферты: +7 999 799-72-56</p>
 </body>
 </html>`);
 });
@@ -1462,6 +1609,24 @@ app.post("/api/telegram-webhook", async (req, res) => {
 
         const bodyText = message.text || message.caption || "";
 
+        // Telegram иногда присылает один и тот же webhook повторно (если не
+        // получил ответ вовремя) — из-за этого клиенту приходило два
+        // одинаковых push. Запоминаем обработанные message_id на 10 минут
+        // и повторы просто пропускаем.
+        if (customerChatId && isAndroidCustomerId(customerChatId)) {
+          try {
+            const redis = await getRedisClient();
+            const dedupKey = `handledMsg:${message.message_id}`;
+            const alreadyHandled = await redis.set(dedupKey, "1", { NX: true, EX: 600 });
+            if (alreadyHandled === null) {
+              console.log("TELEGRAM WEBHOOK: duplicate message_id", message.message_id, "- skip");
+              return res.sendStatus(200);
+            }
+          } catch (e) {
+            console.error("dedup check failed:", e.message);
+          }
+        }
+
         if (customerChatId && isAndroidCustomerId(customerChatId)) {
 
           // У Android-клиента нет настоящего Telegram-чата — сохраняем
@@ -1480,7 +1645,7 @@ app.post("/api/telegram-webhook", async (req, res) => {
             );
 
             if (fileInfo.ok && fileInfo.result && fileInfo.result.file_path) {
-              imageUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${fileInfo.result.file_path}`;
+              imageUrl = buildTelegramFileProxyUrl(fileInfo.result.file_path);
             } else {
               console.log("TELEGRAM WEBHOOK: getFile FAILED:", JSON.stringify(fileInfo));
             }
@@ -1493,22 +1658,40 @@ app.post("/api/telegram-webhook", async (req, res) => {
             );
 
             if (fileInfo.ok && fileInfo.result && fileInfo.result.file_path) {
-              audioUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${fileInfo.result.file_path}`;
+              audioUrl = buildTelegramFileProxyUrl(fileInfo.result.file_path);
             } else {
               console.log("TELEGRAM WEBHOOK: getFile (voice) FAILED:", JSON.stringify(fileInfo));
             }
           }
 
-          await appendChatMessage(customerChatId, { from: "admin", text: bodyText, imageUrl, audioUrl });
+                   // Админ ответил — это единственный реальный сигнал, что он видел
+                   // сообщения клиента (Telegram Bot API не даёт узнать "прочитано"
+                   // напрямую), поэтому именно здесь помечаем все сообщения клиента
+                   // прочитанными.
+                   await markCustomerMessagesRead(customerChatId);
+                   await appendChatMessage(customerChatId, { from: "admin", text: bodyText, imageUrl, audioUrl });
 
-          const pushToken = await getPushToken(customerChatId);
-          const pushResult = await sendExpoPush(pushToken, {
+          const notificationBody = bodyText || (imageUrl ? "📷 Фото" : audioUrl ? "🎤 Голосовое сообщение" : "");
+
+          const androidToken = await getPushToken(customerChatId, "android");
+          const pushResult = await sendExpoPush(androidToken, {
             title: "Cosmo Bong",
-            body: bodyText || (imageUrl ? "📷 Фото" : audioUrl ? "🎤 Голосовое сообщение" : ""),
+            body: notificationBody,
             data: { type: "chat" }
           });
 
           console.log(`TELEGRAM WEBHOOK: push to Android customer took ${Date.now() - t1}ms`, pushResult);
+
+          // Веб-версия (iPhone/десктоп через браузер) — отдельный токен,
+          // отдельная доставка через Firebase, не связана с Expo/Android.
+          const webToken = await getPushToken(customerChatId, "web");
+          if (webToken) {
+            const webPushResult = await sendWebPush(webToken, {
+              title: "Cosmo Bong",
+              body: notificationBody
+            });
+            console.log(`TELEGRAM WEBHOOK: push to Web customer`, webPushResult);
+          }
 
           // Реакцию (👍) больше не ставим сразу — она ничего не говорила о
           // том, увидел ли клиент сообщение на самом деле, только о том,

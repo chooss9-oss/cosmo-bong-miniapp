@@ -81,10 +81,26 @@ async function telegramApiFile(method, fields, fileFieldName, buffer, filename, 
   return response.json();
 }
 
+// Ссылка на файл (фото/голосовое в чате), которую видит клиент. Раньше
+// клиенту отдавалась ПРЯМАЯ ссылка на api.telegram.org с токеном бота
+// внутри URL — (1) это утечка токена бота в историю чата на телефоне
+// клиента, и (2) на части российских мобильных сетей прямые запросы к
+// api.telegram.org иногда блокируются/таймаутятся (в приложении это
+// проявлялось как SocketTimeoutException при попытке проиграть голосовое).
+// Теперь клиент всегда обращается к нашему домену (см. /api/telegram-file
+// в index.js), а сам токен и прямой запрос к Telegram остаются только на
+// сервере.
+const PUBLIC_BASE_URL = "https://cosmo-bong-miniapp.vercel.app";
+
+function buildTelegramFileProxyUrl(filePath) {
+  return `${PUBLIC_BASE_URL}/api/telegram-file?path=${encodeURIComponent(filePath)}`;
+}
+
 module.exports = {
   getRedisClient,
   saveReplyMapping,
   getReplyMapping,
   telegramApi,
-  telegramApiFile
+  telegramApiFile,
+  buildTelegramFileProxyUrl
 };

@@ -1,4 +1,36 @@
 const { getRedisClient } = require("./replyMapping");
+const { initializeApp, getApps, cert } = require("firebase-admin/app");
+const { getMessaging } = require("firebase-admin/messaging");
+
+// Firebase Admin — нужен только для отправки Web Push (уведомления клиентам
+// на iPhone/десктопе через браузер). Android по-прежнему идёт через
+// Expo Push (см. sendExpoPush ниже) — это никак не пересекается.
+if (!getApps().length) {
+  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
+    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+    : require("./firebase-service-account.json");
+  initializeApp({
+    credential: cert(serviceAccount),
+  });
+}
+
+async function sendWebPush(token, { title, body }) {
+  if (!token) return { ok: false, error: "no_token" };
+
+  try {
+    // Только data, без notification — иначе браузер показывает уведомление
+    // сам, а наш обработчик onBackgroundMessage показывает второе, и клиенту
+    // приходит два одинаковых push.
+    await getMessaging().send({
+      token,
+      data: { title: String(title || ""), body: String(body || "") },
+    });
+    return { ok: true };
+  } catch (error) {
+    console.error("❌ Не удалось отправить web push:", error.message);
+    return { ok: false, error: error.message };
+  }
+}
 
 // ==============================
 // Push-токены Android-приложения (Expo Push Token) — по одному на клиента
@@ -7,23 +39,23 @@ const { getRedisClient } = require("./replyMapping");
 // закрыто.
 // ==============================
 
-async function savePushToken(customerId, token) {
+async function savePushToken(customerId, token, platform = "android") {
   if (!customerId || !token) return;
 
   try {
     const client = await getRedisClient();
-    await client.set(`pushToken:${customerId}`, String(token));
+    await client.set(`pushToken:${customerId}:${platform}`, String(token));
   } catch (error) {
     console.error("❌ Не удалось сохранить push-токен:", error.message);
   }
 }
 
-async function getPushToken(customerId) {
+async function getPushToken(customerId, platform = "android") {
   if (!customerId) return null;
 
   try {
     const client = await getRedisClient();
-    return await client.get(`pushToken:${customerId}`);
+    return await client.get(`pushToken:${customerId}:${platform}`);
   } catch (error) {
     console.error("❌ Не удалось прочитать push-токен:", error.message);
     return null;
@@ -69,5 +101,6 @@ async function sendExpoPush(token, { title, body, data }) {
 module.exports = {
   savePushToken,
   getPushToken,
-  sendExpoPush
+  sendExpoPush,
+  sendWebPush
 };
