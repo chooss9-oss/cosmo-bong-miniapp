@@ -31,7 +31,7 @@ const BANNERS = [
   },
   { 
     src: "/rastarasha-banner.jpg", 
-    title: "сувенирные коллекционные семена со скидкой 20%", 
+    title: "Сувенирные коллекционные семена со скидкой 20%", 
     link: "https://vasharastarasha.com/#a_aid=Cosmobong&a_bid=66a592a8",
     buttonText: "В магазин"
   },
