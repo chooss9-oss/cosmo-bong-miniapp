@@ -23,8 +23,18 @@ import { sortByMainCategoryOrder } from "../../utils/categoryOrder";
 const API_URL = "/api";
 
 const BANNERS = [
-  { src: "/banner.PNG", title: "Космо Бонг", link: "/catalog" },
-  { src: "/rastarasha-banner.jpg", title: null, link: null },
+  { 
+    src: "/banner.PNG", 
+    title: "Космо Бонг", 
+    link: "/catalog",
+    buttonText: "В каталог →"
+  },
+  { 
+    src: "/rastarasha-banner.jpg", 
+    title: "сувенирные коллекционные семена со скидкой 20%", 
+    link: "https://vasharastarasha.com/#a_aid=Cosmobong&a_bid=66a592a8",
+    buttonText: "В магазин"
+  },
 ];
 
 
@@ -506,16 +516,22 @@ pt-28
     {BANNERS.map((banner, index) => (
       <div key={index} className="relative w-full flex-shrink-0 snap-start">
         <FadeImage src={banner.src} alt="" className="w-full rounded-3xl" />
-        {banner.title && (
+                {banner.title && (
           <div className="absolute left-5 bottom-5 right-5">
             <h1 className="text-xl font-bold leading-tight mb-3 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
               {banner.title}
             </h1>
             <button
-              onClick={() => navigate(banner.link!)}
+              onClick={() => {
+                if (banner.link?.startsWith("http")) {
+                  window.open(banner.link, "_blank");
+                } else {
+                  navigate(banner.link!);
+                }
+              }}
               className="bg-[#58BB43] text-black font-bold text-sm px-5 py-2.5 rounded-2xl shadow-lg"
             >
-              В каталог →
+              {banner.buttonText || "Подробнее →"}
             </button>
           </div>
         )}
