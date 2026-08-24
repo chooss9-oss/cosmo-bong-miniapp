@@ -1,6 +1,7 @@
 import {
   useEffect,
-  useState
+  useState,
+  useRef
 } from "react";
 
 import {
@@ -20,6 +21,11 @@ import { sortByMainCategoryOrder } from "../../utils/categoryOrder";
 
 
 const API_URL = "/api";
+
+const BANNERS = [
+  { src: "/banner.PNG", title: "Космо Бонг", link: "/catalog" },
+  { src: "/rastarasha-banner.jpg", title: null, link: null },
+];
 
 
 
@@ -224,6 +230,23 @@ function Home(){
 
 
 const navigate = useNavigate();
+
+const [activeBanner, setActiveBanner] = useState(0);
+const bannerScrollRef = useRef<HTMLDivElement>(null);
+
+useEffect(() => {
+  const interval = setInterval(() => {
+    setActiveBanner((prev) => {
+      const next = (prev + 1) % BANNERS.length;
+      bannerScrollRef.current?.scrollTo({
+        left: next * bannerScrollRef.current.clientWidth,
+        behavior: "smooth",
+      });
+      return next;
+    });
+  }, 4000);
+  return () => clearInterval(interval);
+}, []);
 
 
 
@@ -470,81 +493,46 @@ pt-28
 
 
 
-<div
+<div className="relative mb-8">
 
-className="
-relative
-mb-8
-"
+  <div
+    ref={bannerScrollRef}
+    onScroll={(e) => {
+      const idx = Math.round(e.currentTarget.scrollLeft / e.currentTarget.clientWidth);
+      setActiveBanner(idx);
+    }}
+    className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide rounded-3xl"
+  >
+    {BANNERS.map((banner, index) => (
+      <div key={index} className="relative w-full flex-shrink-0 snap-start">
+        <FadeImage src={banner.src} alt="" className="w-full rounded-3xl" />
+        {banner.title && (
+          <div className="absolute left-5 bottom-5 right-5">
+            <h1 className="text-xl font-bold leading-tight mb-3 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
+              {banner.title}
+            </h1>
+            <button
+              onClick={() => navigate(banner.link!)}
+              className="bg-[#58BB43] text-black font-bold text-sm px-5 py-2.5 rounded-2xl shadow-lg"
+            >
+              В каталог →
+            </button>
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
 
->
-
-<FadeImage
-
-
-src="/banner.PNG"
-
-
-alt=""
-
-
-className="
-w-full
-rounded-3xl
-"
-
-
-/>
-
-<div
-
-className="
-absolute
-left-5
-bottom-5
-right-5
-"
-
->
-
-<h1
-
-className="
-text-xl
-font-bold
-leading-tight
-mb-3
-drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]
-"
-
->
-
-Космо Бонг
-
-</h1>
-
-<button
-
-onClick={()=>navigate("/catalog")}
-
-className="
-bg-[#58BB43]
-text-black
-font-bold
-text-sm
-px-5
-py-2.5
-rounded-2xl
-shadow-lg
-"
-
->
-
-В каталог →
-
-</button>
-
-</div>
+  <div className="flex justify-center gap-1.5 mt-3">
+    {BANNERS.map((_, index) => (
+      <div
+        key={index}
+        className={`h-1.5 rounded-full transition-all ${
+          activeBanner === index ? "w-4 bg-[#58BB43]" : "w-1.5 bg-gray-600"
+        }`}
+      />
+    ))}
+  </div>
 
 </div>
 
