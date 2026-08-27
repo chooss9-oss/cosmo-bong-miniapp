@@ -25,7 +25,7 @@ const {
   addBonusPoints
 } = require("./bonusStore");
 
-const { appendChatMessage } = require("./chatStore");
+const { appendChatMessage, addPendingReaction } = require("./chatStore");
 const { getPushToken, sendExpoPush } = require("./pushStore");
 
 // ==============================
@@ -252,7 +252,7 @@ async function notifyCustomer(order, text, replyMarkup) {
       ?.map(row => row.filter(btn => btn.callback_data))
       .filter(row => row.length > 0);
 
-    await appendChatMessage(order.telegramUserId, { from: "admin", text, buttons });
+        await appendChatMessage(order.telegramUserId, { from: "admin", text, buttons });
 
     const pushToken = await getPushToken(order.telegramUserId);
     const pushResult = await sendExpoPush(pushToken, {
@@ -260,6 +260,24 @@ async function notifyCustomer(order, text, replyMarkup) {
       body: text,
       data: { type: "chat" }
     });
+
+    // Дублируем админу текст автосообщения — так же, как в Telegram-ветке
+    // ниже — чтобы было видно, что именно клиенту ушло, даже если это
+    // не ручной ответ, а автоматика сценария заказа (подтверждение,
+    // выбор доставки и т.п.)
+    const orderLabelAndroid = order.storelandOrderNum || order.id;
+
+    const mirrorResultAndroid = await notifyAdmin(
+      `👤 Клиент: ${getCustomerLabel(order)}\n` +
+      `📨 Клиенту отправлено автосообщение (заказ №${orderLabelAndroid}):\n\n${text}`
+    );
+
+    if (mirrorResultAndroid.ok) {
+      // Ставим в очередь на реакцию 👍, как и обычные ответы — она
+      // проставится, когда клиент реально откроет чат в приложении
+      // (см. POST /api/chat/mark-read)
+      await addPendingReaction(order.telegramUserId, mirrorResultAndroid.result.message_id);
+    }
 
     return pushResult;
 
@@ -310,7 +328,7 @@ async function notifyCustomerPhoto(order, photoUrl, caption) {
 
   if (order.platform === "android") {
 
-    await appendChatMessage(order.telegramUserId, {
+       await appendChatMessage(order.telegramUserId, {
       from: "admin",
       text: caption || "",
       imageUrl: photoUrl
@@ -322,6 +340,18 @@ async function notifyCustomerPhoto(order, photoUrl, caption) {
       body: caption || "Новое сообщение",
       data: { type: "chat" }
     });
+
+    const orderLabelAndroidPhoto = order.storelandOrderNum || order.id;
+
+    const mirrorResultAndroidPhoto = await telegramApi("sendPhoto", {
+      chat_id: process.env.ADMIN_ID,
+      photo: photoUrl,
+      caption: `👤 Клиент: ${getCustomerLabel(order)}\n📨 Клиенту отправлен QR-код для оплаты (заказ №${orderLabelAndroidPhoto})`
+    }).catch(() => ({ ok: false }));
+
+    if (mirrorResultAndroidPhoto.ok) {
+      await addPendingReaction(order.telegramUserId, mirrorResultAndroidPhoto.result.message_id);
+    }
 
     return pushResult;
 
