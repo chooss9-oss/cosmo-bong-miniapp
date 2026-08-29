@@ -539,7 +539,7 @@ async function scrapeNewProducts() {
 
   console.log(`🔎 Новых ссылок на товары найдено: ${allNewUrlEntries.length}`);
 
-   const BATCH_SIZE = 10;
+    const BATCH_SIZE = 20;
 
   for (let i = 0; i < allNewUrlEntries.length; i += BATCH_SIZE) {
 
@@ -624,8 +624,8 @@ async function scrapeNewProducts() {
     // Пауза между пачками — сайт отвечает 503 (перегрузка/защита от
     // ботов), если слать запросы слишком часто подряд. Небольшая задержка
     // между группами по BATCH_SIZE снижает нагрузку и долю ошибок 503.
-    if (i + BATCH_SIZE < allNewUrlEntries.length) {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+       if (i + BATCH_SIZE < allNewUrlEntries.length) {
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
 
   }
