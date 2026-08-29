@@ -277,6 +277,26 @@ async function writeNewProductsToRedis(data) {
   }
 }
 
+async function readNewProductQueueFromRedis() {
+  try {
+    const client = await getRedisClient();
+    const stored = await client.get("newProductQueue");
+    return stored ? JSON.parse(stored) : null;
+  } catch (error) {
+    console.error("❌ Не удалось прочитать очередь новых товаров:", error.message);
+    return null;
+  }
+}
+
+async function writeNewProductQueueToRedis(data) {
+  try {
+    const client = await getRedisClient();
+    await client.set("newProductQueue", JSON.stringify(data));
+  } catch (error) {
+    console.error("❌ Не удалось записать очередь новых товаров:", error.message);
+  }
+}
+
 // ==============================
 // КЭШ РАСПРОДАЖИ (запасной вариант в памяти + фоновое обновление)
 // ==============================
@@ -465,17 +485,20 @@ async function scrapeStockChunk(productUrls, offset, chunkSize, urlToIds = {}) {
 }
 
 // ==============================
-// ПОИСК НОВЫХ ТОВАРОВ
+// ПОИСК НОВЫХ ТОВАРОВ — построение очереди (быстрый шаг: только ссылки,
+// без захода на страницы товаров)
 // ==============================
-async function scrapeNewProducts() {
-  console.log("🔄 Поиск новых товаров...");
+async function discoverNewProductUrls() {
+  console.log("🔄 Поиск новых ссылок на товары...");
+
+  const existingNewProducts = await readNewProductsFromRedis();
 
   const existingUrls = new Set(
     products
+      .concat(existingNewProducts)
       .map(p => p.url ? p.url.split('?')[0] : null)
       .filter(Boolean)
   );
-  const newProductsFound = [];
 
   const categoryEntries = Object.entries(CATEGORY_SLUGS);
 
@@ -486,24 +509,13 @@ async function scrapeNewProducts() {
       const categoryObj = categories.find(c => c["#text"] === categoryName);
       const categoryId = categoryObj ? String(categoryObj["@_id"]) : null;
 
-           const { data: html } = await axios.get(`https://cosmo-bong.ru/catalog/${slug}`, {
+      const { data: html } = await axios.get(`https://cosmo-bong.ru/catalog/${slug}`, {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
         timeout: 15000
       });
 
       const urlMatches = [...html.matchAll(/https:\/\/cosmo-bong\.ru\/goods\/[^"'\s?]+/g)];
       const foundUrls = [...new Set(urlMatches.map(m => m[0]))];
-
-      // ВРЕМЕННЫЙ ДИАГНОСТИЧЕСКИЙ ЛОГ — убрать после решения проблемы с
-      // товаром "Напас силиконовый Color Freack", не попадающим в скан
-      if (slug === "Napasy") {
-        console.log(`🔍 DEBUG Napasy: получено ${html.length} байт HTML, найдено ${foundUrls.length} ссылок на товары`);
-        const freackUrl = foundUrls.find(u => u.includes("Freack"));
-        console.log(`🔍 DEBUG Napasy: ссылка Freack в HTML найдена? ${freackUrl || "НЕТ"}`);
-        if (freackUrl) {
-          console.log(`🔍 DEBUG Napasy: уже считается существующей (existingUrls)? ${existingUrls.has(freackUrl)}`);
-        }
-      }
 
       const newUrls = foundUrls
         .filter(url => !existingUrls.has(url))
@@ -539,118 +551,154 @@ async function scrapeNewProducts() {
 
   console.log(`🔎 Новых ссылок на товары найдено: ${allNewUrlEntries.length}`);
 
-    const BATCH_SIZE = 20;
+  return allNewUrlEntries;
+}
 
-  for (let i = 0; i < allNewUrlEntries.length; i += BATCH_SIZE) {
+// Заходит на страницу одного товара и парсит его данные — вынесено
+// отдельно, используется порционной обработкой ниже.
+async function scrapeOneProduct(url, categoryId) {
 
-    const batch = allNewUrlEntries.slice(i, i + BATCH_SIZE);
+  let productPage;
+
+  // Retry при 503 — сайт периодически отдаёт эту ошибку под нагрузкой на
+  // конкретные товары (не всегда одни и те же), повторная попытка через
+  // паузу обычно проходит успешно
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await axios.get(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        timeout: 12000
+      });
+      productPage = response.data;
+      break;
+    } catch (retryError) {
+      const status = retryError.response?.status;
+      if (status === 503 && attempt < 2) {
+        await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
+        continue;
+      }
+      throw retryError;
+    }
+  }
+
+  const $product = cheerio.load(productPage);
+
+  const name = $product('.product-name h1').first().text().trim();
+  const description = $product('.htmlDataBlock').first().html() || "";
+  const images = [];
+
+  $product('.thumblist img').each((i, el) => {
+    const src = $product(el).attr('src');
+    if (src) {
+      images.push(src.replace('/baec64/', '/075a3e/'));
+    }
+  });
+
+  const found = [];
+
+  $product('.goodsDataMainModificationsList').each((i, el) => {
+
+    const modId = $product(el).find('input[name="id"]').attr('value');
+    const priceAttr = $product(el).find('input[name="price_now"]').attr('value');
+    const price = parseFloat(priceAttr);
+
+    if (modId && name) {
+      found.push({
+        id: modId,
+        name,
+        price: isNaN(price) ? 0 : price,
+        description,
+        images,
+        categoryIds: categoryId ? [categoryId] : [],
+        url
+      });
+    }
+
+  });
+
+  if (found.length === 0) {
+
+    const modId = $product('.add-wishlist').attr('data-mod-id');
+    const priceAttr = $product('.main-price').first().attr('content');
+    const price = parseFloat(priceAttr);
+
+    if (modId && name) {
+      found.push({
+        id: modId,
+        name,
+        price: isNaN(price) ? 0 : price,
+        description,
+        images,
+        categoryIds: categoryId ? [categoryId] : [],
+        url
+      });
+    }
+
+  }
+
+  return found;
+}
+
+// ==============================
+// ПОИСК НОВЫХ ТОВАРОВ — обработка ПОРЦИЯМИ (одна порция за один запуск,
+// как и scrapeStockChunk). Очередь ссылок хранится в Redis между вызовами,
+// чтобы не упираться в лимит времени serverless-функции (60 сек на Hobby):
+// один вызов /api/refresh-catalog обрабатывает часть, следующий вызов —
+// следующую часть, и так пока очередь не опустеет.
+// ==============================
+async function scrapeNewProductsChunk() {
+
+  let queue = await readNewProductQueueFromRedis();
+
+  // Очередь пуста или ещё не создана — заново сканируем категории в
+  // поисках новых ссылок (быстрый шаг, занимает пару секунд)
+  if (!queue || queue.length === 0) {
+    queue = await discoverNewProductUrls();
+  }
+
+  const CHUNK_SIZE = 30;
+  const BATCH_SIZE = 15;
+
+  const chunk = queue.slice(0, CHUNK_SIZE);
+  const remaining = queue.slice(CHUNK_SIZE);
+
+  const newlyFound = [];
+
+  for (let i = 0; i < chunk.length; i += BATCH_SIZE) {
+
+    const batch = chunk.slice(i, i + BATCH_SIZE);
 
     await Promise.allSettled(
 
       batch.map(async ({ url, categoryId }) => {
-
-             try {
-          let productPage;
-
-          // Retry при 503 — сайт периодически отдаёт эту ошибку под
-          // нагрузкой на конкретные товары (не всегда одни и те же), одна
-          // повторная попытка через паузу обычно проходит успешно
-          for (let attempt = 0; attempt < 3; attempt++) {
-            try {
-              const response = await axios.get(url, {
-                headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
-                timeout: 12000
-              });
-              productPage = response.data;
-              break;
-            } catch (retryError) {
-              const status = retryError.response?.status;
-              if (status === 503 && attempt < 2) {
-                await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
-                continue;
-              }
-              throw retryError;
-            }
-          }
-
-          const $product = cheerio.load(productPage);
-
-          const name = $product('.product-name h1').first().text().trim();
-
-          const description = $product('.htmlDataBlock').first().html() || "";
-
-          const images = [];
-
-          $product('.thumblist img').each((i, el) => {
-            const src = $product(el).attr('src');
-            if (src) {
-              images.push(src.replace('/baec64/', '/075a3e/'));
-            }
-          });
-
-          let addedAny = false;
-
-          $product('.goodsDataMainModificationsList').each((i, el) => {
-
-            const modId = $product(el).find('input[name="id"]').attr('value');
-            const priceAttr = $product(el).find('input[name="price_now"]').attr('value');
-            const price = parseFloat(priceAttr);
-
-            if (modId && name) {
-              newProductsFound.push({
-                id: modId,
-                name,
-                price: isNaN(price) ? 0 : price,
-                description,
-                images,
-                categoryIds: categoryId ? [categoryId] : [],
-                url
-              });
-              addedAny = true;
-            }
-
-          });
-
-          if (!addedAny) {
-
-            const modId = $product('.add-wishlist').attr('data-mod-id');
-            const priceAttr = $product('.main-price').first().attr('content');
-            const price = parseFloat(priceAttr);
-
-            if (modId && name) {
-              newProductsFound.push({
-                id: modId,
-                name,
-                price: isNaN(price) ? 0 : price,
-                description,
-                images,
-                categoryIds: categoryId ? [categoryId] : [],
-                url
-              });
-            }
-
-          }
-
-               } catch (productError) {
+        try {
+          const found = await scrapeOneProduct(url, categoryId);
+          newlyFound.push(...found);
+        } catch (productError) {
           console.error(`⚠️ Не удалось загрузить товар ${url}:`, productError.message);
         }
-
       })
 
     );
 
-    // Пауза между пачками — сайт отвечает 503 (перегрузка/защита от
-    // ботов), если слать запросы слишком часто подряд. Небольшая задержка
-    // между группами по BATCH_SIZE снижает нагрузку и долю ошибок 503.
-       if (i + BATCH_SIZE < allNewUrlEntries.length) {
+    if (i + BATCH_SIZE < chunk.length) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
   }
 
-  console.log(`✅ Найдено новых товаров: ${newProductsFound.length}`);
+  const existingNewProducts = await readNewProductsFromRedis();
+  const merged = existingNewProducts.concat(newlyFound);
 
-  return newProductsFound;
+  await writeNewProductsToRedis(merged);
+  await writeNewProductQueueToRedis(remaining);
+
+  console.log(
+    `✅ Порция обработана: ${chunk.length} ссылок (успешно ${newlyFound.length}), ` +
+    `осталось в очереди: ${remaining.length}. Всего новых товаров в базе: ${merged.length}.`
+  );
+
+  return { processedInChunk: chunk.length, succeededInChunk: newlyFound.length, remaining: remaining.length, total: merged.length };
 }
 
 // ==============================
@@ -855,7 +903,10 @@ app.get("/api/refresh-stock", async (req, res) => {
 });
 
 // ==============================
-// REFRESH CATALOG (поиск новых товаров)
+// REFRESH CATALOG (поиск новых товаров) — обрабатывает ОДНУ порцию за
+// вызов. Чтобы дообработать весь каталог полностью, открой эту ссылку
+// несколько раз подряд (с паузой в несколько секунд) — в логах будет
+// видно "осталось в очереди: N", пока N не станет 0.
 // ==============================
 app.get("/api/refresh-catalog", async (req, res) => {
   if (!isAuthorizedRefresh(req)) {
@@ -864,13 +915,7 @@ app.get("/api/refresh-catalog", async (req, res) => {
 
   res.json({ success: true, status: "started" });
 
-  const task = scrapeNewProducts()
-    .then(async result => {
-
-      await writeNewProductsToRedis(result);
-
-      console.log(`✅ Каталог обновлён в фоне: всего новых товаров в Redis — ${result.length}.`);
-    })
+  const task = scrapeNewProductsChunk()
     .catch(error => {
       console.error("❌ Ошибка поиска новых товаров:", error.message);
     });
@@ -1753,7 +1798,7 @@ app.post("/api/telegram-webhook", async (req, res) => {
           if (!pushResult.ok) {
             // Формулировка намеренно без утверждений о том, видел ли клиент
             // сообщение — push мог не дойти по многим причинам (не разрешил
-            // уведомления, не открывал приложение вообще, временный сбой
+            // уведомления, ещё не открывал приложение вообще, временный сбой
             // самого Expo push), но при этом чат в приложении обновляется
             // отдельным опросом каждые несколько секунд, пока приложение
             // открыто — так что клиент вполне мог уже видеть ответ, даже
