@@ -549,11 +549,29 @@ async function scrapeNewProducts() {
 
       batch.map(async ({ url, categoryId }) => {
 
-        try {
-          const { data: productPage } = await axios.get(url, {
-            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
-            timeout: 12000
-          });
+             try {
+          let productPage;
+
+          // Retry при 503 — сайт периодически отдаёт эту ошибку под
+          // нагрузкой на конкретные товары (не всегда одни и те же), одна
+          // повторная попытка через паузу обычно проходит успешно
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              const response = await axios.get(url, {
+                headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+                timeout: 12000
+              });
+              productPage = response.data;
+              break;
+            } catch (retryError) {
+              const status = retryError.response?.status;
+              if (status === 503 && attempt < 2) {
+                await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
+                continue;
+              }
+              throw retryError;
+            }
+          }
 
           const $product = cheerio.load(productPage);
 
