@@ -45,8 +45,43 @@ async function savePushToken(customerId, token, platform = "android") {
   try {
     const client = await getRedisClient();
     await client.set(`pushToken:${customerId}:${platform}`, String(token));
+
+        // Дата первого открытия приложения — фиксируется один раз (HSETNX не
+    // перезаписывает уже существующее поле), чтобы дальнейшие обновления
+    // токена (например при переустановке) не сбрасывали исходную дату
+    // установки. И Android, и iPhone (platform: "web") считаем установкой —
+    // ключ хранит "<дата>:<платформа>" одной строкой, чтобы не заводить
+    // вторую отдельную структуру в Redis.
+    await client.hSetNX("androidInstalls", customerId, `${Date.now()}:${platform}`);
   } catch (error) {
     console.error("❌ Не удалось сохранить push-токен:", error.message);
+  }
+}
+
+// Список всех клиентов, хотя бы раз открывших Android-приложение (есть
+// зафиксированная дата первого сохранения push-токена) — для вкладки
+// "Установки" в панели оператора.
+async function listAndroidInstalls() {
+  try {
+    const client = await getRedisClient();
+    const all = await client.hGetAll("androidInstalls");
+
+    return Object.entries(all)
+      .map(([customerId, raw]) => {
+        // Старые записи (сохранены до этой правки) хранят просто число —
+        // считаем их Android по умолчанию, раз тогда фиксировался только он.
+        const [installedAtStr, platform] = String(raw).split(":");
+        return {
+          customerId,
+          phone: customerId.startsWith("android:") ? customerId.slice("android:".length) : customerId,
+          installedAt: Number(installedAtStr) || 0,
+          platform: platform || "android"
+        };
+      })
+      .sort((a, b) => b.installedAt - a.installedAt);
+  } catch (error) {
+    console.error("❌ Не удалось получить список установок:", error.message);
+    return [];
   }
 }
 
@@ -101,6 +136,7 @@ async function sendExpoPush(token, { title, body, data }) {
 module.exports = {
   savePushToken,
   getPushToken,
+  listAndroidInstalls,
   sendExpoPush,
   sendWebPush
 };

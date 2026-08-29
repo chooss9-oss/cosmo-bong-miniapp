@@ -5,6 +5,7 @@ const { saveReplyMapping, telegramApi } = require("../replyMapping");
 const { createOrder, updateOrder, getOrdersForUser } = require("../orderStore");
 const { getBonusBalance, getMaxRedeemable, deductBonusPoints } = require("../bonusStore");
 const { notifyCustomer, buildOrderActionButtons } = require("../orderFlow");
+const { appendChatMessage } = require("../chatStore");
 
 const router = express.Router();
 
@@ -523,6 +524,29 @@ error:"Telegram send failed"
 // ещё ничего не писал боту. Для Android telegramUserId — это customerId
 // ("android:<телефон>"), Reply на него уйдёт в чат приложения (см.
 // /api/telegram-webhook и isAndroidCustomerId в server/chatStore.js).
+if (platform === "android" && telegramUserId) {
+
+  await fetch("https://cosmo-bong-telegram-relay.chooss9.workers.dev/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      type: "push",
+      text: `Посетитель: ${telegramUserId}\n📱 Новый заказ №${storelandOrderNum || "?"} на ${Number(total).toLocaleString()} ₽`
+    })
+  }).catch((e) => console.log("PUSH RELAY ERROR (new order):", e.message));
+
+  // Полный текст заказа (тот же, что уходит в Telegram) — в историю чата
+  // для панели, с пометкой internal:true, чтобы клиент его не увидел
+  // у себя в приложении.
+  await appendChatMessage(telegramUserId, {
+    from: "admin",
+    text: message,
+    internal: true,
+    buttons: buildOrderActionButtons(order, order.id)
+  });
+
+}
+
 if (telegramUserId && telegramData.result) {
 
   await saveReplyMapping(telegramData.result.message_id, telegramUserId);

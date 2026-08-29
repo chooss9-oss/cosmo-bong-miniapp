@@ -486,13 +486,24 @@ async function scrapeNewProducts() {
       const categoryObj = categories.find(c => c["#text"] === categoryName);
       const categoryId = categoryObj ? String(categoryObj["@_id"]) : null;
 
-      const { data: html } = await axios.get(`https://cosmo-bong.ru/catalog/${slug}`, {
+           const { data: html } = await axios.get(`https://cosmo-bong.ru/catalog/${slug}`, {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
         timeout: 15000
       });
 
       const urlMatches = [...html.matchAll(/https:\/\/cosmo-bong\.ru\/goods\/[^"'\s?]+/g)];
       const foundUrls = [...new Set(urlMatches.map(m => m[0]))];
+
+      // ВРЕМЕННЫЙ ДИАГНОСТИЧЕСКИЙ ЛОГ — убрать после решения проблемы с
+      // товаром "Напас силиконовый Color Freack", не попадающим в скан
+      if (slug === "Napasy") {
+        console.log(`🔍 DEBUG Napasy: получено ${html.length} байт HTML, найдено ${foundUrls.length} ссылок на товары`);
+        const freackUrl = foundUrls.find(u => u.includes("Freack"));
+        console.log(`🔍 DEBUG Napasy: ссылка Freack в HTML найдена? ${freackUrl || "НЕТ"}`);
+        if (freackUrl) {
+          console.log(`🔍 DEBUG Napasy: уже считается существующей (existingUrls)? ${existingUrls.has(freackUrl)}`);
+        }
+      }
 
       const newUrls = foundUrls
         .filter(url => !existingUrls.has(url))
@@ -715,6 +726,7 @@ function loadCache() {
 // ==============================
 app.use("/api/order", orderRouter);
 app.use("/api/chat", chatRouter);
+app.use("/api/panel-chat", require("./routes/panelChat"));
 
 // ==============================
 // АВТОРИЗАЦИЯ ДЛЯ /api/refresh-* И ПОДОБНЫХ ЭНДПОИНТОВ. Раньше эти
@@ -1264,6 +1276,19 @@ app.get("/api/privacy", (req, res) => {
 // ==============================
 // CATEGORIES
 // ==============================
+// ВРЕМЕННЫЙ диагностический эндпоинт — определить, к какому Firebase-проекту
+// привязан FIREBASE_SERVICE_ACCOUNT. Убрать сразу после проверки.
+app.get("/api/_debug-firebase-project", (req, res) => {
+  try {
+    const sa = process.env.FIREBASE_SERVICE_ACCOUNT
+      ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+      : null;
+    res.json({ project_id: sa ? sa.project_id : "переменная не установлена" });
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
+
 app.get("/api/categories", (req, res) => {
   res.json(categories);
 });

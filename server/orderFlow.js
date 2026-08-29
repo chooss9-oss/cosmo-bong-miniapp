@@ -26,7 +26,7 @@ const {
 } = require("./bonusStore");
 
 const { appendChatMessage, addPendingReaction } = require("./chatStore");
-const { getPushToken, sendExpoPush } = require("./pushStore");
+const { getPushToken, sendExpoPush, sendWebPush } = require("./pushStore");
 
 // ==============================
 // Полный сценарий обработки заказа кнопками в Telegram:
@@ -252,7 +252,7 @@ async function notifyCustomer(order, text, replyMarkup) {
       ?.map(row => row.filter(btn => btn.callback_data))
       .filter(row => row.length > 0);
 
-        await appendChatMessage(order.telegramUserId, { from: "admin", text, buttons });
+                  await appendChatMessage(order.telegramUserId, { from: "admin", text, buttons });
 
     const pushToken = await getPushToken(order.telegramUserId);
     const pushResult = await sendExpoPush(pushToken, {
@@ -261,16 +261,30 @@ async function notifyCustomer(order, text, replyMarkup) {
       data: { type: "chat" }
     });
 
+    // iPhone/десктоп (Web Push через Firebase) — отдельный токен, эта
+    // ветка раньше не учитывалась в автосообщениях сценария заказа,
+    // из-за чего обычные ручные ответы на iPhone доходили, а автоматика
+    // (принять/оплатить/доставка) — нет.
+    const webPushToken = await getPushToken(order.telegramUserId, "web");
+    if (webPushToken) {
+      await sendWebPush(webPushToken, { title: "Cosmo Bong", body: text });
+    }
+
     // Дублируем админу текст автосообщения — так же, как в Telegram-ветке
     // ниже — чтобы было видно, что именно клиенту ушло, даже если это
     // не ручной ответ, а автоматика сценария заказа (подтверждение,
     // выбор доставки и т.п.)
     const orderLabelAndroid = order.storelandOrderNum || order.id;
-
-    const mirrorResultAndroid = await notifyAdmin(
+    const mirrorTextAndroid =
       `👤 Клиент: ${getCustomerLabel(order)}\n` +
-      `📨 Клиенту отправлено автосообщение (заказ №${orderLabelAndroid}):\n\n${text}`
-    );
+      `📨 Клиенту отправлено автосообщение (заказ №${orderLabelAndroid}):\n\n${text}`;
+
+    // Тот же заголовок — в историю чата панели как internal-сообщение
+    // (клиент его не увидит, см. фильтр в GET /api/chat/history), чтобы
+    // перед автосообщением было видно контекст, как и в Telegram.
+    await appendChatMessage(order.telegramUserId, { from: "admin", text: mirrorTextAndroid, internal: true });
+
+    const mirrorResultAndroid = await notifyAdmin(mirrorTextAndroid);
 
     if (mirrorResultAndroid.ok) {
       // Ставим в очередь на реакцию 👍, как и обычные ответы — она
@@ -278,6 +292,18 @@ async function notifyCustomer(order, text, replyMarkup) {
       // (см. POST /api/chat/mark-read)
       await addPendingReaction(order.telegramUserId, mirrorResultAndroid.result.message_id);
     }
+
+        // Push в веб-панель оператора — те же автосообщения сценария заказа
+    // (подтверждение, выбор доставки, счёт и т.д.) должны быть видны
+    // оператору так же, как обычные сообщения от/для клиента.
+    await fetch("https://cosmo-bong-telegram-relay.chooss9.workers.dev/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "push",
+        text: `Посетитель: ${order.telegramUserId}\n📨 Заказ №${orderLabelAndroid} — клиенту отправлено: ${text.slice(0, 200)}`
+      })
+    }).catch((e) => console.error("❌ PUSH RELAY ERROR (order flow):", e.message));
 
     return pushResult;
 
@@ -328,7 +354,7 @@ async function notifyCustomerPhoto(order, photoUrl, caption) {
 
   if (order.platform === "android") {
 
-       await appendChatMessage(order.telegramUserId, {
+             await appendChatMessage(order.telegramUserId, {
       from: "admin",
       text: caption || "",
       imageUrl: photoUrl
@@ -341,7 +367,12 @@ async function notifyCustomerPhoto(order, photoUrl, caption) {
       data: { type: "chat" }
     });
 
-    const orderLabelAndroidPhoto = order.storelandOrderNum || order.id;
+    const webPushTokenPhoto = await getPushToken(order.telegramUserId, "web");
+    if (webPushTokenPhoto) {
+      await sendWebPush(webPushTokenPhoto, { title: "Cosmo Bong", body: caption || "Новое сообщение" });
+    }
+
+      const orderLabelAndroidPhoto = order.storelandOrderNum || order.id;
 
     const mirrorResultAndroidPhoto = await telegramApi("sendPhoto", {
       chat_id: process.env.ADMIN_ID,
@@ -352,6 +383,15 @@ async function notifyCustomerPhoto(order, photoUrl, caption) {
     if (mirrorResultAndroidPhoto.ok) {
       await addPendingReaction(order.telegramUserId, mirrorResultAndroidPhoto.result.message_id);
     }
+
+        await fetch("https://cosmo-bong-telegram-relay.chooss9.workers.dev/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "push",
+        text: `Посетитель: ${order.telegramUserId}\n📨 Заказ №${orderLabelAndroidPhoto} — клиенту отправлен QR-код для оплаты`
+      })
+    }).catch((e) => console.error("❌ PUSH RELAY ERROR (order flow photo):", e.message));
 
     return pushResult;
 
@@ -600,13 +640,24 @@ async function submitShippingDataText(customerId, text) {
   // Текст содержит то, что напечатал клиент сам (ФИО, адрес и т.д.) —
   // Markdown сюда не добавляем, чтобы случайный спецсимвол не сломал
   // отправку сообщения
+    const calcButton = { inline_keyboard: [[{ text: "📐 Посчитать доставку", callback_data: `order_calc:${orderId}` }]] };
+
   const adminResult = await notifyAdmin(
     `📥 ${getCustomerLabel(order)} прислал данные получателя по заказу №${orderLabel} (${methodLabel}):\n\n${shippingData}`,
-    { inline_keyboard: [[{ text: "📐 Посчитать доставку", callback_data: `order_calc:${orderId}` }]] }
+    calcButton
   );
 
   if (adminResult.ok && order.telegramUserId) {
     await saveReplyMapping(adminResult.result.message_id, order.telegramUserId);
+  }
+
+  if (order.platform === "android") {
+    await appendChatMessage(order.telegramUserId, {
+      from: "admin",
+      text: `📥 Данные получателя по заказу №${orderLabel} (${methodLabel}):\n\n${shippingData}`,
+      buttons: calcButton.inline_keyboard,
+      internal: true
+    });
   }
 
   // Отдельная жирная пометка (Reply) — уже безопасный статичный текст.
@@ -1375,8 +1426,266 @@ async function checkOrderTimeouts() {
 
 }
 
+// ==============================
+// Действия АДМИНА из веб-панели оператора — то же самое, что кнопки в
+// Telegram (handleOrderCallback), но без проверки clickerId и без
+// answerCallbackQuery. Кнопки в исходном сообщении Telegram обновляем
+// той же логикой (editMessageReplyMarkup по order.adminMessageId), чтобы
+// оба канала (Telegram и панель) оставались согласованы.
+// ==============================
+
+async function refreshAdminMessageButtons(order, orderId) {
+  if (!order.adminMessageId) return;
+  await telegramApi("editMessageReplyMarkup", {
+    chat_id: process.env.ADMIN_ID,
+    message_id: order.adminMessageId,
+    reply_markup: { inline_keyboard: buildOrderActionButtons(order, orderId) }
+  }).catch(() => {});
+}
+
+async function panelAcceptOrder(orderId) {
+  const order = await getOrder(orderId);
+  if (!order) return { ok: false, reason: "not_found" };
+  if (order.status !== "accepted" || order.confirmRequestedAt) {
+    return { ok: false, reason: "already_processed" };
+  }
+
+  await updateOrder(orderId, { confirmRequestedAt: Date.now() });
+  await refreshAdminMessageButtons({ ...order, confirmRequestedAt: Date.now() }, orderId);
+
+  const orderLabel = order.storelandOrderNum || order.id;
+  const contactHint =
+    order.platform === "android"
+      ? "Если есть вопросы — пиши прямо в этом чате, разберёмся и быстро поможем✨"
+      : "Если есть вопросы — пиши прямо в боте, разберёмся и быстро поможем✨";
+
+  const welcomeText =
+`👋 Приветствую! Заказ №${orderLabel} получили и готовы собирать.
+
+📦 Отправляем по 100% предоплате, доставляем Почтой или СДЭК (от 350₽, от 2 дней), оплата переводом на карту или по QR.
+
+После отправления заказа пришлём трек-номер для отслеживания.
+${contactHint}
+
+❗️ Подтвердите заказ в течение 24 часов. Если мы не дождёмся подтверждения, то заказ отменим.`;
+
+  const sendResult = await notifyCustomer(order, welcomeText, {
+    inline_keyboard: [[{ text: "✅ Заказ подтверждаю", callback_data: `order_confirm:${orderId}` }]]
+  });
+
+  if (sendResult.ok && sendResult.result) {
+    await saveReplyMapping(sendResult.result.message_id, order.telegramUserId);
+  }
+
+  return { ok: true };
+}
+
+async function panelMarkPaid(orderId) {
+  const order = await updateOrderStatus(orderId, "paid");
+  if (!order) return { ok: false, reason: "not_found" };
+
+  await refreshAdminMessageButtons(order, orderId);
+
+  const cashback = computeCashback(order.total, order.platform);
+  const cashbackPercent = order.platform === "android" ? 3 : 5;
+  await addBonusPoints(order.telegramUserId, cashback);
+
+  const balanceHint =
+    order.platform === "android"
+      ? "Баланс баллов смотрите в разделе «Профиль» в этом приложении."
+      : "Баланс баллов смотрите в разделе «Профиль» в мини-приложении магазина.";
+
+  await notifyCustomer(
+    order,
+    `✅ Ваш заказ успешно оплачен!
+
+Отправим в течение 3 дней, но обычно отправляем в день оплаты. Как только упакуем и отправим, пришлём трек-номер для отслеживания.
+
+🎁 Вам начислено ${cashback} баллов кэшбэка (${cashbackPercent}% от заказа) — можно списать до 50% суммы следующего заказа. ${balanceHint}`
+  );
+
+  return { ok: true };
+}
+
+async function panelMarkShipped(orderId, trackingNumber) {
+  if (!trackingNumber || !String(trackingNumber).trim()) {
+    return { ok: false, reason: "empty_tracking" };
+  }
+
+  const order = await updateOrderStatus(orderId, "shipped", { trackingNumber: String(trackingNumber).trim() });
+  if (!order) return { ok: false, reason: "not_found" };
+
+  await refreshAdminMessageButtons(order, orderId);
+
+  const orderLabel = order.storelandOrderNum || order.id;
+
+  await notifyAdmin(`✅ Заказ №${orderLabel} отмечен как отправленный. Трек-номер: ${trackingNumber} (из панели)`);
+
+  await notifyCustomer(
+    order,
+    `📦 Ваш заказ №${orderLabel} отправлен!\n\nТрек-номер: ${trackingNumber}`
+  );
+
+  return { ok: true };
+}
+
+async function panelMarkReady(orderId) {
+  const order = await updateOrderStatus(orderId, "ready");
+  if (!order) return { ok: false, reason: "not_found" };
+
+  await refreshAdminMessageButtons(order, orderId);
+
+  await notifyCustomer(
+    order,
+    `✅ Ваш заказ собран и доступен к самовывозу.
+
+Оплатить заказ можно в магазине наличными, картой, по QR-коду или переводом. Ждём вас!`
+  );
+
+  return { ok: true };
+}
+
+async function panelEditOrder(orderId, editText) {
+  const order = await getOrder(orderId);
+  if (!order) return { ok: false, reason: "not_found" };
+
+  const lines = String(editText || "").split("\n").map((line) => line.trim()).filter(Boolean);
+  const sumLineIndex = lines.findIndex((line) => /^сумма\s*:?/i.test(line));
+
+  if (sumLineIndex === -1) {
+    return { ok: false, reason: "no_sum_line" };
+  }
+
+  const sumText = lines[sumLineIndex].replace(/^сумма\s*:?/i, "").trim();
+  const newTotal = Number(sumText.replace(/[^\d.]/g, ""));
+
+  if (isNaN(newTotal) || newTotal <= 0) {
+    return { ok: false, reason: "bad_sum" };
+  }
+
+  const itemLines = lines.slice(0, sumLineIndex);
+  const newItems = itemLines.length
+    ? itemLines.map((line) => {
+        const match = line.match(/^(.*?)\s*[xх]\s*(\d+)\s*$/i);
+        return match
+          ? { name: match[1].trim(), quantity: Number(match[2]), price: null }
+          : { name: line, quantity: 1, price: null };
+      })
+    : order.items;
+
+  const orderLabel = order.storelandOrderNum || order.id;
+  const oldTotal = order.total;
+
+  await updateOrder(orderId, { items: newItems, total: newTotal });
+
+  const newItemsText = newItems.map((i) => `${i.name} ×${i.quantity}`).join("\n");
+
+  await notifyAdmin(
+    `✅ Заказ №${orderLabel} обновлён (из панели).\n\n${newItemsText}\n\nСумма: ${newTotal.toLocaleString()}₽ (было ${Number(oldTotal).toLocaleString()}₽)`
+  );
+
+  await notifyCustomer(
+    order,
+    `ℹ️ В ваш заказ №${orderLabel} внесены изменения.\n\nАктуальный состав:\n${newItemsText}\n\nАктуальная сумма: ${newTotal.toLocaleString()}₽\n\nЕсли есть вопросы — просто напишите нам в этом чате.`
+  );
+
+  return { ok: true };
+}
+
+async function panelCancelOrder(orderId) {
+  const order = await getOrder(orderId);
+  if (!order) return { ok: false, reason: "not_found" };
+  if (order.status === "cancelled") return { ok: false, reason: "already_cancelled" };
+
+  await refreshAdminMessageButtons({ ...order, status: "cancelled" }, orderId);
+  await cancelOrder(order, "manual");
+
+  return { ok: true };
+}
+
+async function panelCalcOrder(orderId) {
+  const order = await getOrder(orderId);
+  if (!order) return { ok: false, reason: "not_found" };
+
+  const text =
+`Посчитаем стоимость, срок доставки и пришлём данные на оплату заказа.
+‼️ Обратите внимание:
+— стоимость доставки СДЭК оплачивается при получении.
+— стоимость доставки Почтой оплачивается вместе с суммой заказа.
+
+Пожалуйста, ожидайте.`;
+
+  await notifyCustomer(order, text);
+
+  const orderLabel = order.storelandOrderNum || order.id;
+  const bankButtons = {
+    inline_keyboard: [[
+      { text: "💳 Сбер", callback_data: `order_bank:sber:${orderId}` },
+      { text: "💳 Райф", callback_data: `order_bank:raif:${orderId}` }
+    ]]
+  };
+
+  await notifyAdmin(`💳 Выберите банк для счёта по заказу №${orderLabel}:`, bankButtons);
+
+  if (order.platform === "android") {
+    await appendChatMessage(order.telegramUserId, {
+      from: "admin",
+      text: `💳 Выберите банк для счёта по заказу №${orderLabel}:`,
+      buttons: bankButtons.inline_keyboard,
+      internal: true
+    });
+  }
+
+  return { ok: true };
+}
+
+async function panelChooseBankAndInvoice(orderId, bank, priceDaysText) {
+  const order = await getOrder(orderId);
+  if (!order) return { ok: false, reason: "not_found" };
+  if (bank !== "sber" && bank !== "raif") return { ok: false, reason: "bad_bank" };
+
+  const [rawCost, rawDays] = String(priceDaysText || "").split(",").map((p) => p.trim());
+  const deliveryCost = Number(rawCost);
+  const deliveryDays = Number(rawDays);
+
+  if (!rawCost || !rawDays || isNaN(deliveryCost) || isNaN(deliveryDays)) {
+    return { ok: false, reason: "bad_numbers" };
+  }
+
+  await savePendingBank(orderId, bank);
+
+  const orderLabel = order.storelandOrderNum || order.id;
+  const invoiceText = await buildInvoiceText(order, bank, deliveryCost, deliveryDays);
+
+  await notifyCustomer(order, invoiceText);
+
+  if (bank === "sber") {
+    await notifyCustomerPhoto(order, QR_SBP_URL, "Отсканируйте QR для оплаты по СБП");
+  }
+
+  await updateOrder(orderId, {
+    deliveryCost,
+    deliveryDays,
+    paymentBank: bank,
+    paymentRequestedAt: Date.now(),
+    paymentReminderCount: 0
+  });
+
+  await notifyAdmin(`✅ Счёт (${BANK_LABELS[bank]}) по заказу №${orderLabel} отправлен клиенту (из панели). Отсчёт 24 часов на оплату начался.`);
+
+  return { ok: true };
+}
+
 module.exports = {
   handleOrderCallback,
+  panelCalcOrder,
+  panelChooseBankAndInvoice,
+  panelAcceptOrder,
+  panelMarkPaid,
+  panelMarkShipped,
+  panelMarkReady,
+  panelEditOrder,
+  panelCancelOrder,
   tryHandleTrackingReply,
   tryHandlePaymentDetailsReply,
   tryHandleOrderEditReply,

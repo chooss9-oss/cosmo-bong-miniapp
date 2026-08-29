@@ -12,7 +12,8 @@ const {
   getChatMessages,
   editChatMessage,
   deleteChatMessage,
-  popPendingReactions
+  popPendingReactions,
+  markChatReadByCustomer
 } = require("../chatStore");
 const { savePushToken } = require("../pushStore");
 const { getAwaitingShippingData } = require("../orderStore");
@@ -36,7 +37,9 @@ router.get("/history", async (req, res) => {
   }
 
   const messages = await getChatMessages(String(customerId));
-  res.json({ messages });
+  // internal:true — служебные сообщения только для админа (см.
+  // routes/orders.js) — клиенту в приложении их показывать не нужно.
+  res.json({ messages: messages.filter((m) => !m.internal) });
 });
 
 // Клиент отправляет сообщение из приложения. Если клиент как раз должен
@@ -63,15 +66,26 @@ router.post("/send", async (req, res) => {
       return res.json({ success: true });
     }
 
-    const adminMessage =
+       const adminMessage =
       `💬 Сообщение от клиента (Android)\n` +
       (phone ? `📞 ${phone}\n\n` : "\n") +
       text;
 
-    const sendResult = await telegramApi("sendMessage", {
+       const sendResult = await telegramApi("sendMessage", {
       chat_id: process.env.ADMIN_ID,
       text: adminMessage
     });
+
+    // Push в веб-панель оператора — тот же relay, что уже используется для
+    // сайтового чата (cosmo-bong-telegram-relay), только без дублирования
+    // в Telegram (сообщение туда уже ушло строкой выше). await обязателен —
+    // без него serverless-функция Vercel завершается раньше, чем fetch
+    // успевает уйти (в отличие от Cloudflare Workers с ctx.waitUntil).
+       await fetch("https://cosmo-bong-telegram-relay.chooss9.workers.dev/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "push", text: `Посетитель: ${customerId}\n${adminMessage}` })
+    }).catch((e) => console.error("❌ PUSH RELAY ERROR:", e.message));
 
     if (sendResult.ok && sendResult.result) {
       // Reply админа на ЭТО сообщение уйдёт именно этому клиенту
@@ -134,7 +148,16 @@ router.post("/send-voice", async (req, res) => {
       }
     }
 
-    await appendChatMessage(customerId, { from: "customer", audioUrl });
+       await appendChatMessage(customerId, { from: "customer", audioUrl });
+
+      const voiceAdminMessage =
+      `🎤 Голосовое сообщение от клиента (Android)` + (phone ? `\n📞 ${phone}` : "");
+
+    await fetch("https://cosmo-bong-telegram-relay.chooss9.workers.dev/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "push", text: `Посетитель: ${customerId}\n${voiceAdminMessage}` })
+    }).catch((e) => console.error("❌ PUSH RELAY ERROR (voice):", e.message));
 
     res.json({ success: true });
   } catch (error) {
@@ -189,7 +212,16 @@ router.post("/send-image", async (req, res) => {
       }
     }
 
-    await appendChatMessage(customerId, { from: "customer", imageUrl });
+       await appendChatMessage(customerId, { from: "customer", imageUrl });
+
+       const imageAdminMessage =
+      `📷 Фото от клиента (Android)` + (phone ? `\n📞 ${phone}` : "");
+
+    await fetch("https://cosmo-bong-telegram-relay.chooss9.workers.dev/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "push", text: `Посетитель: ${customerId}\n${imageAdminMessage}` })
+    }).catch((e) => console.error("❌ PUSH RELAY ERROR (image):", e.message));
 
     res.json({ success: true });
   } catch (error) {
@@ -280,7 +312,8 @@ router.post("/mark-read", async (req, res) => {
       return res.status(400).json({ success: false, error: "customerId обязателен" });
     }
 
-    const pendingMessageIds = await popPendingReactions(customerId);
+     const pendingMessageIds = await popPendingReactions(customerId);
+    await markChatReadByCustomer(customerId);
 
     await Promise.all(
       pendingMessageIds.map((messageId) =>
