@@ -227,7 +227,7 @@ async function markDelivered(chatId, messageId) {
 
 }
 
-async function notifyCustomer(order, text, replyMarkup) {
+async function notifyCustomer(order, text, replyMarkup, pushType = "chat") {
 
   if (!order.telegramUserId) return { ok: false };
 
@@ -254,11 +254,11 @@ async function notifyCustomer(order, text, replyMarkup) {
 
                   await appendChatMessage(order.telegramUserId, { from: "admin", text, buttons });
 
-    const pushToken = await getPushToken(order.telegramUserId);
+       const pushToken = await getPushToken(order.telegramUserId);
     const pushResult = await sendExpoPush(pushToken, {
       title: "Cosmo Bong",
       body: text,
-      data: { type: "chat" }
+      data: { type: pushType }
     });
 
     // iPhone/десктоп (Web Push через Firebase) — отдельный токен, эта
@@ -928,13 +928,15 @@ ${contactHint}
         ? "Баланс баллов смотрите в разделе «Профиль» в этом приложении."
         : "Баланс баллов смотрите в разделе «Профиль» в мини-приложении магазина.";
 
-    await notifyCustomer(
+       await notifyCustomer(
       order,
       `✅ Ваш заказ успешно оплачен!
 
 Отправим в течение 3 дней, но обычно отправляем в день оплаты. Как только упакуем и отправим, пришлём трек-номер для отслеживания.
 
-🎁 Вам начислено ${cashback} баллов кэшбэка (${cashbackPercent}% от заказа) — можно списать до 50% суммы следующего заказа. ${balanceHint}`
+🎁 Вам начислено ${cashback} баллов кэшбэка (${cashbackPercent}% от заказа) — можно списать до 50% суммы следующего заказа. ${balanceHint}`,
+      undefined,
+      "order"
     );
 
     return;
@@ -986,11 +988,13 @@ ${contactHint}
     await ack(`Статус обновлён: ${STATUS_LABELS.ready.label}`);
     await clearButtons(fromChatId, messageId);
 
-    await notifyCustomer(
+      await notifyCustomer(
       order,
       `✅ Ваш заказ собран и доступен к самовывозу.
 
-Оплатить заказ можно в магазине наличными, картой, по QR-коду или переводом. Ждём вас!`
+Оплатить заказ можно в магазине наличными, картой, по QR-коду или переводом. Ждём вас!`,
+      undefined,
+      "order"
     );
 
     return;
@@ -1094,9 +1098,11 @@ async function tryHandleTrackingReply(message) {
 
     await notifyAdmin(`✅ Заказ №${orderLabel} отмечен как отправленный. Трек-номер: ${trackingNumber}`);
 
-    await notifyCustomer(
+       await notifyCustomer(
       order,
-      `📦 Ваш заказ №${orderLabel} отправлен!\n\nТрек-номер: ${trackingNumber}`
+      `📦 Ваш заказ №${orderLabel} отправлен!\n\nТрек-номер: ${trackingNumber}`,
+      undefined,
+      "order"
     );
 
   } else {
