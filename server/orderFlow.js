@@ -1354,6 +1354,25 @@ async function cancelOrder(order, reason) {
 // последним заказам и рассылает напоминания/отмены там, где нужно
 async function checkOrderTimeouts() {
 
+  // Подстраховка: если каталог не обновлялся дольше суток (например, cron
+  // перестал срабатывать), предупреждаем админа явно, а не полагаемся,
+  // что кто-то случайно заметит отсутствие новых товаров.
+  try {
+    const client = await require("./replyMapping").getRedisClient();
+    const lastRun = await client.get("lastCatalogRunAt");
+    const hoursSinceLastRun = lastRun ? (Date.now() - Number(lastRun)) / (60 * 60 * 1000) : null;
+
+    if (hoursSinceLastRun === null || hoursSinceLastRun > 24) {
+      await notifyAdmin(
+        hoursSinceLastRun === null
+          ? "⚠️ Каталог новых товаров ещё ни разу не обновлялся автоматически — проверьте cron /api/refresh-catalog."
+          : `⚠️ Каталог новых товаров не обновлялся уже ${Math.round(hoursSinceLastRun)} ч. — проверьте cron /api/refresh-catalog.`
+      );
+    }
+  } catch (error) {
+    console.error("❌ Ошибка проверки давности обновления каталога:", error.message);
+  }
+
   const orders = await getRecentOrders();
   const now = Date.now();
 

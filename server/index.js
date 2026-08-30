@@ -297,6 +297,26 @@ async function writeNewProductQueueToRedis(data) {
   }
 }
 
+async function writeLastCatalogRunToRedis() {
+  try {
+    const client = await getRedisClient();
+    await client.set("lastCatalogRunAt", String(Date.now()));
+  } catch (error) {
+    console.error("❌ Не удалось записать время последнего скана каталога:", error.message);
+  }
+}
+
+async function readLastCatalogRunFromRedis() {
+  try {
+    const client = await getRedisClient();
+    const stored = await client.get("lastCatalogRunAt");
+    return stored ? Number(stored) : null;
+  } catch (error) {
+    console.error("❌ Не удалось прочитать время последнего скана каталога:", error.message);
+    return null;
+  }
+}
+
 // ==============================
 // КЭШ РАСПРОДАЖИ (запасной вариант в памяти + фоновое обновление)
 // ==============================
@@ -687,11 +707,12 @@ async function scrapeNewProductsChunk() {
 
   }
 
-  const existingNewProducts = await readNewProductsFromRedis();
+   const existingNewProducts = await readNewProductsFromRedis();
   const merged = existingNewProducts.concat(newlyFound);
 
   await writeNewProductsToRedis(merged);
   await writeNewProductQueueToRedis(remaining);
+  await writeLastCatalogRunToRedis();
 
   console.log(
     `✅ Порция обработана: ${chunk.length} ссылок (успешно ${newlyFound.length}), ` +
