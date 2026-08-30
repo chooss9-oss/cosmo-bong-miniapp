@@ -14,10 +14,14 @@
       "destination": "/index.html"
     }
   ],
-  "crons": [
+    "crons": [
     {
       "path": "/api/refresh-subcategories",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/refresh-catalog",
+      "schedule": "0 2,4,6,8,10,12,14,16,18,20,22 * * *"
     }
   ]
 }
