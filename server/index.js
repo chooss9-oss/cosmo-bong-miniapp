@@ -1346,19 +1346,6 @@ app.get("/api/privacy", (req, res) => {
 // ==============================
 // CATEGORIES
 // ==============================
-// ВРЕМЕННЫЙ диагностический эндпоинт — определить, к какому Firebase-проекту
-// привязан FIREBASE_SERVICE_ACCOUNT. Убрать сразу после проверки.
-app.get("/api/_debug-firebase-project", (req, res) => {
-  try {
-    const sa = process.env.FIREBASE_SERVICE_ACCOUNT
-      ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-      : null;
-    res.json({ project_id: sa ? sa.project_id : "переменная не установлена" });
-  } catch (e) {
-    res.json({ error: e.message });
-  }
-});
-
 app.get("/api/categories", (req, res) => {
   res.json(categories);
 });
