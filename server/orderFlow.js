@@ -26,7 +26,8 @@ const {
 } = require("./bonusStore");
 
 const { appendChatMessage, addPendingReaction } = require("./chatStore");
-const { getPushToken, sendExpoPush, sendWebPush } = require("./pushStore");
+const { getPushToken, sendExpoPush, sendWebPush, listAndroidInstalls } = require("./pushStore");
+const { getRedisClient } = require("./replyMapping");
 
 // ==============================
 // Полный сценарий обработки заказа кнопками в Telegram:
@@ -1355,7 +1356,70 @@ async function cancelOrder(order, reason) {
   await notifyAdmin(`❌ Заказ №${orderLabel} аннулирован (${adminReasonText}).`);
 
 }
+// ==============================
+// НАПОМИНАНИЕ О ПРОМОКОДЕ клиентам, которые установили приложение (есть
+// зафиксированная дата установки в androidInstalls), но не сделали ни
+// одного заказа за PROMO_REMINDER_AFTER_DAYS дней. Шлётся ОДИН раз на
+// клиента — после отправки в Redis ставится флаг
+// promoReminderSent:<customerId>, чтобы не заспамить повторными
+// напоминаниями.
+// ==============================
 
+const PROMO_REMINDER_AFTER_DAYS = 3;
+
+async function sendPromoReminderIfNeeded() {
+
+  const installs = await listAndroidInstalls();
+  const now = Date.now();
+  const client = await getRedisClient();
+
+  for (const install of installs) {
+
+    try {
+
+      const daysSinceInstall = (now - install.installedAt) / (24 * 60 * 60 * 1000);
+
+      if (daysSinceInstall < PROMO_REMINDER_AFTER_DAYS) continue;
+
+      const alreadySent = await client.get(`promoReminderSent:${install.customerId}`);
+      if (alreadySent) continue;
+
+      const existingOrders = await getOrdersForUser(install.customerId);
+      if (existingOrders.length > 0) {
+        await client.set(`promoReminderSent:${install.customerId}`, "1");
+        continue;
+      }
+
+      const text =
+        `👋 Не забудьте про скидку 10% на первый заказ по промокоду COSMO420!\n\n` +
+        `Загляните в каталог — промокод действует, пока вы не сделали первый заказ.`;
+
+      const pushToken = await getPushToken(install.customerId, install.platform === "web" ? "web" : "android");
+
+      if (pushToken) {
+        if (install.platform === "web") {
+          await sendWebPush(pushToken, { title: "Cosmo Bong", body: text });
+        } else {
+          await sendExpoPush(pushToken, {
+            title: "Cosmo Bong",
+            body: text,
+            data: { type: "chat" }
+          });
+        }
+        await appendChatMessage(install.customerId, { from: "admin", text });
+      }
+
+      await client.set(`promoReminderSent:${install.customerId}`, "1");
+
+      console.log(`✅ Напоминание о промокоде отправлено клиенту ${install.customerId}`);
+
+    } catch (error) {
+      console.error(`❌ Ошибка отправки напоминания о промокоде для ${install.customerId}:`, error.message);
+    }
+
+  }
+
+}
 // Вызывается по расписанию (см. /api/check-order-timeouts) — проходит по
 // последним заказам и рассылает напоминания/отмены там, где нужно
 async function checkOrderTimeouts() {
@@ -1443,11 +1507,15 @@ async function checkOrderTimeouts() {
 
       }
 
-    } catch (error) {
+       } catch (error) {
       console.error(`❌ Ошибка проверки таймаута заказа №${order.id}:`, error.message);
     }
 
   }
+
+  await sendPromoReminderIfNeeded().catch(error => {
+    console.error("❌ Ошибка рассылки напоминаний о промокоде:", error.message);
+  });
 
 }
 
