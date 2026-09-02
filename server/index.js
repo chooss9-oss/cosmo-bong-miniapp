@@ -43,6 +43,8 @@ const {
   getMaxRedeemable
 } = require("./bonusStore");
 
+const { saveCart, clearCart, checkAbandonedCarts } = require("./cartStore");
+
 const {
   isAndroidCustomerId,
   appendChatMessage,
@@ -202,6 +204,34 @@ async function writeStockCacheToRedis(data) {
     await client.set("stockCache", JSON.stringify(data));
   } catch (error) {
     console.error("❌ Не удалось записать наличие в Redis:", error.message);
+  }
+}
+
+// Актуальная цена товара — собирается тем же обходом, что и наличие
+// (scrapeStockChunk уже заходит на страницу товара и видит price_now),
+// поэтому отдельного процесса не заводим, а просто параллельно копим
+// цену в свой кэш и накладываем её поверх статического cache/products.json.
+async function readPriceCacheFromRedis() {
+  try {
+    const client = await getRedisClient();
+    const stored = await client.get("priceCache");
+
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (error) {
+    console.error("❌ Не удалось прочитать цены из Redis:", error.message);
+  }
+
+  return null;
+}
+
+async function writePriceCacheToRedis(data) {
+  try {
+    const client = await getRedisClient();
+    await client.set("priceCache", JSON.stringify(data));
+  } catch (error) {
+    console.error("❌ Не удалось записать цены в Redis:", error.message);
   }
 }
 
@@ -417,6 +447,7 @@ async function scrapeStockChunk(productUrls, offset, chunkSize, urlToIds = {}) {
 
   const chunk = productUrls.slice(offset, offset + chunkSize);
   const newStockCache = {};
+  const newPriceCache = {};
   const BATCH_SIZE = 50;
 
   for (let i = 0; i < chunk.length; i += BATCH_SIZE) {
@@ -435,13 +466,18 @@ async function scrapeStockChunk(productUrls, offset, chunkSize, urlToIds = {}) {
 
           const $product = cheerio.load(productPage);
 
-          $product('.goodsDataMainModificationsList').each((i, el) => {
+                   $product('.goodsDataMainModificationsList').each((i, el) => {
             const modId = $product(el).find('input[name="id"]').attr('value');
             const restValueAttr = $product(el).find('input[name="rest_value"]').attr('value');
             const restValue = parseInt(restValueAttr, 10);
+            const priceNowAttr = $product(el).find('input[name="price_now"]').attr('value');
+            const priceNow = parseInt(priceNowAttr, 10);
 
             if (modId) {
               newStockCache[modId] = isNaN(restValue) ? 0 : restValue;
+              if (!isNaN(priceNow) && priceNow > 0) {
+                newPriceCache[modId] = priceNow;
+              }
             }
           });
 
@@ -499,9 +535,9 @@ async function scrapeStockChunk(productUrls, offset, chunkSize, urlToIds = {}) {
 
   }
 
-  const nextOffset = (offset + chunkSize >= productUrls.length) ? 0 : offset + chunkSize;
+    const nextOffset = (offset + chunkSize >= productUrls.length) ? 0 : offset + chunkSize;
 
-  return { newStockCache, nextOffset };
+  return { newStockCache, newPriceCache, nextOffset };
 }
 
 // ==============================
@@ -898,13 +934,17 @@ app.get("/api/refresh-stock", async (req, res) => {
 
       const offset = await readStockOffsetFromRedis();
 
-      const { newStockCache, nextOffset } = await scrapeStockChunk(productUrls, offset, CHUNK_SIZE, urlToIds);
+          const { newStockCache, newPriceCache, nextOffset } = await scrapeStockChunk(productUrls, offset, CHUNK_SIZE, urlToIds);
 
       const existingStock = (await readStockCacheFromRedis()) || {};
       const mergedStock = { ...existingStock, ...newStockCache };
 
+      const existingPrices = (await readPriceCacheFromRedis()) || {};
+      const mergedPrices = { ...existingPrices, ...newPriceCache };
+
       await writeStockCacheToRedis(mergedStock);
       await writeStockOffsetToRedis(nextOffset);
+      await writePriceCacheToRedis(mergedPrices);
 
       const end = Math.min(offset + CHUNK_SIZE, productUrls.length);
 
@@ -979,6 +1019,44 @@ app.get("/api/refresh-subcategories", async (req, res) => {
 // ==============================
 // CHECK ORDER TIMEOUTS (напоминания и автоотмена заказов без подтверждения/оплаты)
 // ==============================
+// Клиент сообщает состояние своей корзины (при каждом изменении состава) —
+// или что она опустела/заказ оформлен (items: []). id — telegramUserId
+// (Telegram Mini App) либо customerId вида "android:<телефон>" (Android/
+// iPhone-приложение).
+app.post("/api/cart-sync", async (req, res) => {
+  try {
+    const { id, platform, items } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ success: false, error: "id обязателен" });
+    }
+
+    await saveCart(String(id), platform === "android" ? "android" : "telegram", items || []);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("❌ CART SYNC ERROR:", error.message);
+    res.status(500).json({ success: false });
+  }
+});
+
+app.get("/api/check-abandoned-carts", async (req, res) => {
+  if (!isAuthorizedRefresh(req)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  res.json({ success: true, status: "started" });
+
+  const task = checkAbandonedCarts().catch(error => {
+    console.error("❌ Ошибка проверки брошенных корзин:", error.message);
+  });
+
+  try {
+    waitUntil(task);
+  } catch (e) {
+    // waitUntil доступен только в среде Vercel
+  }
+});
+
 app.get("/api/check-order-timeouts", async (req, res) => {
   if (!isAuthorizedRefresh(req)) {
     return res.status(403).json({ error: "Forbidden" });
@@ -1017,9 +1095,10 @@ function descriptionToSearchText(html) {
 
 app.get("/api/products", async (req, res) => {
   try {
-    const redisSalesData = await readSalesCacheFromRedis();
+       const redisSalesData = await readSalesCacheFromRedis();
     const salesData = redisSalesData || salesCache;
     const stockData = await readStockCacheFromRedis();
+    const priceData = await readPriceCacheFromRedis();
     const newProducts = await readNewProductsFromRedis();
     const subcategoryData = await readSubcategoryCacheFromRedis();
 
@@ -1033,6 +1112,9 @@ app.get("/api/products", async (req, res) => {
       const saleInfo = salesData[product.id];
       const stockValue = stockData ? stockData[product.id] : undefined;
       const inStock = stockValue === undefined ? true : stockValue > 0;
+      const actualPrice = priceData && priceData[product.id] !== undefined
+        ? priceData[product.id]
+        : product.price;
 
       const extraSubIds = subcategoryData[product.id] || [];
       const categoryIds = extraSubIds.length
@@ -1042,7 +1124,7 @@ app.get("/api/products", async (req, res) => {
       const lightProduct = {
         id: product.id,
         name: product.name,
-        price: product.price,
+        price: actualPrice,
         images: product.images,
         categoryIds,
         inStock,
@@ -1082,9 +1164,10 @@ app.get("/api/product/:id", async (req, res) => {
     return res.status(404).json({ error: "Product not found" });
   }
 
-  const redisSalesData = await readSalesCacheFromRedis();
+   const redisSalesData = await readSalesCacheFromRedis();
   const salesData = redisSalesData || salesCache;
   const stockData = await readStockCacheFromRedis();
+  const priceData = await readPriceCacheFromRedis();
 
   if (!redisSalesData) {
     refreshSalesDataInBackground();
@@ -1093,6 +1176,7 @@ app.get("/api/product/:id", async (req, res) => {
   const saleInfo = salesData[id];
   const stockValue = stockData ? stockData[id] : undefined;
   const inStock = stockValue === undefined ? true : stockValue > 0;
+  const actualPrice = priceData && priceData[id] !== undefined ? priceData[id] : product.price;
 
   const subcategoryData = await readSubcategoryCacheFromRedis();
   const extraSubIds = subcategoryData[id] || [];
@@ -1103,7 +1187,7 @@ app.get("/api/product/:id", async (req, res) => {
   res.json({
     id: product.id,
     name: product.name,
-    price: Number(product.price),
+    price: Number(actualPrice),
     oldPrice: saleInfo ? saleInfo.oldPrice : undefined,
     discount: saleInfo ? saleInfo.discount : undefined,
     inStock,
@@ -1403,7 +1487,7 @@ app.get("/api/my-orders", async (req, res) => {
 // ==============================
 const PROMO_CONFIGS = {
   telegram: { code: "cosmo420tg", rate: 0.10, firstOrderOnly: true },
-  android: { code: "cosmo420", rate: 0.07, firstOrderOnly: false }
+  android: { code: "cosmo420", rate: 0.10, firstOrderOnly: false }
 };
 
 app.get("/api/promo-check", async (req, res) => {

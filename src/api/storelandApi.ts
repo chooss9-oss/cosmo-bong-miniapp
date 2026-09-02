@@ -105,3 +105,30 @@ export async function getProduct(id: string) {
   return data;
 
 }
+
+// Сообщаем backend'у состояние корзины при каждом изменении — сервер не
+// хранит корзину сам по себе, но по этому сигналу шлёт напоминание, если
+// клиент положил товары и долго не оформляет заказ (см.
+// server/cartStore.js). items: [] — корзина пуста/заказ оформлен.
+export async function syncCart(
+  telegramUserId: number | string,
+  items: { id: string; name: string; price: number; quantity: number }[]
+) {
+
+  try {
+
+    await fetch(`${API_URL}/cart-sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: String(telegramUserId),
+        platform: "telegram",
+        items
+      })
+    });
+
+  } catch {
+    // не критично — просто не отправится напоминание
+  }
+
+}

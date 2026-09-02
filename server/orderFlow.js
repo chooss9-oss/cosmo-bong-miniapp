@@ -25,7 +25,7 @@ const {
   addBonusPoints
 } = require("./bonusStore");
 
-const { appendChatMessage, addPendingReaction } = require("./chatStore");
+const { appendChatMessage, addPendingReaction, updateOrderButtonsInChat, clearButtonsInChat } = require("./chatStore");
 const { getPushToken, sendExpoPush, sendWebPush, listAndroidInstalls } = require("./pushStore");
 const { getRedisClient } = require("./replyMapping");
 
@@ -115,13 +115,22 @@ function getCustomerLabel(order) {
 // не просто "не пришли к сделке", а возврат денег, руками через Reply.
 function buildOrderActionButtons(order, orderId) {
 
-  if (["cancelled", "shipped", "ready"].includes(order.status)) {
+      if (["cancelled", "shipped", "delivered", "completed"].includes(order.status)) {
     return [];
   }
 
-  const secondButton =
+  if (order.status === "ready") {
+    return [[
+      { text: "✅ Выполнен", callback_data: `order_complete:${orderId}` },
+      { text: "❌ Отменить", callback_data: `order_cancel:${orderId}` }
+    ]];
+  }
+
+    const secondButton =
     order.deliveryMethod === "pickup_yar"
     ? { text: "✅ Собран", callback_data: `order_ready:${orderId}` }
+    : order.deliveryMethod === "delivery_yar"
+    ? { text: "🚗 Доставлено", callback_data: `order_delivered:${orderId}` }
     : { text: "📦 Отправлен", callback_data: `order_shipped:${orderId}` };
 
   if (order.status === "paid") {
@@ -205,6 +214,31 @@ async function notifyAdmin(text, extraReplyMarkup, parseMode) {
     reply_markup: extraReplyMarkup,
     parse_mode: parseMode
   });
+
+  return result;
+
+}
+
+// Уведомление админу о действии КЛИЕНТА (нажатие кнопки — подтверждение
+// заказа, выбор способа/времени доставки и т.п.), а не о статусе заказа.
+// Для заказов из Android-приложения дублируем то же сообщение в историю
+// чата панели (internal) и пушим через relay — иначе оператор видит такие
+// клики только в Telegram и может пропустить их, если не следит за ботом.
+async function notifyAdminClientAction(order, text) {
+
+  const result = await notifyAdmin(text);
+
+  if (order.platform === "android" && order.telegramUserId) {
+
+    await appendChatMessage(order.telegramUserId, { from: "admin", text, internal: true });
+
+    await fetch("https://cosmo-bong-telegram-relay.chooss9.workers.dev/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "push", text: `Посетитель: ${order.telegramUserId}\n${text}` })
+    }).catch((e) => console.error("❌ PUSH RELAY ERROR (client action):", e.message));
+
+  }
 
   return result;
 
@@ -454,11 +488,15 @@ async function confirmOrderByCustomer(orderId) {
   // подтверждён (или клиент нажал кнопку повторно), просто ничего не делаем
   if (order.status !== "accepted") return { ok: false, reason: "already_processed" };
 
-  await updateOrderStatus(orderId, "confirmed", { confirmedAt: Date.now() });
+    await updateOrderStatus(orderId, "confirmed", { confirmedAt: Date.now() });
+
+  if (order.platform === "android" && order.telegramUserId) {
+    await clearButtonsInChat(order.telegramUserId, orderId, ["order_confirm"]).catch(() => {});
+  }
 
   const orderLabel = order.storelandOrderNum || order.id;
 
-  await notifyAdmin(`✅ ${getCustomerLabel(order)} подтвердил заказ №${orderLabel}. Отправил ему выбор способа доставки и оплаты.`);
+  await notifyAdminClientAction(order, `✅ ${getCustomerLabel(order)} подтвердил заказ №${orderLabel}. Отправил ему выбор способа доставки и оплаты.`);
 
   const text =
 `Отлично! Как вам удобнее оплатить и получить заказ?
@@ -515,14 +553,19 @@ async function selectDeliveryMethodByCustomer(methodCode, orderId) {
     ? null
     : paymentPart; // "qr" | "transfer"
 
-  await updateOrder(orderId, { deliveryMethod, paymentMethod });
+    await updateOrder(orderId, { deliveryMethod, paymentMethod });
+
+  if (order.platform === "android" && order.telegramUserId) {
+    await clearButtonsInChat(order.telegramUserId, orderId, ["order_method"]).catch(() => {});
+  }
 
   const orderLabel = order.storelandOrderNum || order.id;
 
   // Единое уведомление о нажатой кнопке доставки/оплаты — это в первую
   // очередь интересующие админа кнопки, отдельно от текста сообщений
   // клиенту
-  await notifyAdmin(
+    await notifyAdminClientAction(
+    order,
     `🚚 ${getCustomerLabel(order)} нажал кнопку доставки/оплаты по заказу №${orderLabel}: «${METHOD_LABELS[methodCode] || methodCode}»`
   );
 
@@ -530,11 +573,9 @@ async function selectDeliveryMethodByCustomer(methodCode, orderId) {
   // автоматически, плюс меняем кнопку "Отправлен" у админа на "Собран"
   if (methodCode === "pickup_yar") {
 
-    await notifyCustomer(
+       await notifyCustomer(
       order,
-      `Наш магазин работает с 13:00 до 18:30 со вторника по субботу по адресу Депутатский переулок 6, вход с левого торца здания.
-
-Как только заказ будет собран, вам придёт соответствующее уведомление.`
+      `Уже собираем ваш заказ! Как только соберём — вам придёт уведомление.`
     );
 
     const adminResult = await notifyAdmin(
@@ -547,30 +588,35 @@ async function selectDeliveryMethodByCustomer(methodCode, orderId) {
       await saveReplyMapping(adminResult.result.message_id, order.telegramUserId);
     }
 
-    // Меняем "Отправлен" на "Собран" в исходном уведомлении о заказе
-    if (order.adminMessageId) {
-
-      await telegramApi("editMessageReplyMarkup", {
-        chat_id: process.env.ADMIN_ID,
-        message_id: order.adminMessageId,
-        reply_markup: {
-          inline_keyboard: buildOrderActionButtons(
-            { ...order, deliveryMethod, paymentMethod },
-            orderId
-          )
-        }
-      });
-
-    }
+      // Меняем "Отправлен" на "Собран" в исходном уведомлении о заказе
+    await refreshAdminMessageButtons({ ...order, deliveryMethod, paymentMethod }, orderId);
 
     return { ok: true };
 
   }
 
   // Доставка по Ярославлю — дальше вручную через Reply
-  if (methodCode === "delivery_yar") {
+    if (methodCode === "delivery_yar") {
 
-    await notifyCustomer(order, "Секунду, уже пишем вам 🙂");
+    await notifyCustomer(
+      order,
+      `Доставка по городу осуществляется в нерабочее время магазина — в первой половине дня до 12:30 или вечером, примерно с 19:00 до 20:00.
+
+В какое время вам удобнее получить заказ?
+
+Стоимость доставки по городу — 250 ₽.`,
+      {
+        inline_keyboard: [
+          [
+            { text: "Утро", callback_data: `order_delivery_time:morning:${orderId}` },
+            { text: "Вечер", callback_data: `order_delivery_time:evening:${orderId}` }
+          ],
+          [
+            { text: "Заберу самовывозом", callback_data: `order_delivery_time:pickup:${orderId}` }
+          ]
+        ]
+      }
+    );
 
     const adminResult = await notifyAdmin(
       `✍️ *Можно ответить (Reply)* на это сообщение, чтобы написать клиенту заказа №${orderLabel} напрямую.`,
@@ -604,11 +650,129 @@ async function selectDeliveryMethodByCustomer(methodCode, orderId) {
 
 Если нужна доставка до двери: полное ФИО и телефон получателя, полный адрес получателя.`;
 
-  await notifyCustomer(order, dataRequestText);
+    await notifyCustomer(order, dataRequestText);
 
   if (order.telegramUserId) {
     await saveAwaitingShippingData(order.telegramUserId, orderId);
   }
+
+  return { ok: true };
+
+}
+
+// Клиент выбрал время доставки по Ярославлю (утро/вечер) или передумал и
+// решил забрать самовывозом — кнопки на сообщении из selectDeliveryMethodByCustomer
+// (ветка delivery_yar). Утро/вечер — просим точный адрес (через тот же
+// механизм ожидания текста, что и для СДЭК/Почты). Самовывоз — переключаем
+// deliveryMethod на pickup_yar и сразу шлём адрес и часы работы магазина.
+async function selectDeliveryTimeByCustomer(timeCode, orderId) {
+
+  const order = await getOrder(orderId);
+
+  if (!order) return { ok: false, reason: "not_found" };
+
+  if (order.deliveryTimeSlot) return { ok: false, reason: "already_processed" };
+
+   await updateOrder(orderId, { deliveryTimeSlot: timeCode });
+
+  if (order.platform === "android" && order.telegramUserId) {
+    await clearButtonsInChat(order.telegramUserId, orderId, ["order_delivery_time"]).catch(() => {});
+  }
+
+  const orderLabel = order.storelandOrderNum || order.id;
+
+  const TIME_LABELS = {
+    morning: "Утро",
+    evening: "Вечер",
+    pickup: "Заберу самовывозом"
+  };
+
+    await notifyAdminClientAction(
+    order,
+    `🕐 ${getCustomerLabel(order)} выбрал время доставки по заказу №${orderLabel}: «${TIME_LABELS[timeCode] || timeCode}»`
+  );
+
+   if (timeCode === "pickup") {
+
+    await updateOrder(orderId, { deliveryMethod: "pickup_yar" });
+
+    await notifyCustomer(order, `Уже собираем ваш заказ! Как только соберём — вам придёт уведомление.`);
+
+       // Обновляем кнопки у админа — вторая кнопка должна стать "✅ Собран"
+    // вместо "📦 Отправлен"/"🚗 Доставлено", раз deliveryMethod поменялся.
+    // Логируем результат явно — editMessageReplyMarkup может тихо
+    // вернуться с ok:false (например, если сообщение слишком старое или
+    // reply_markup не изменился), и раньше это никак не было видно.
+       await refreshAdminMessageButtons({ ...order, deliveryMethod: "pickup_yar" }, orderId);
+
+    return { ok: true };
+
+  }
+
+   await notifyCustomer(
+    order,
+    "Напишите, пожалуйста, точный адрес для доставки (улица, дом, квартира/подъезд/этаж).",
+    {
+      inline_keyboard: [[
+        { text: "🔄 Изменить время", callback_data: `order_delivery_time_change:${orderId}` }
+      ]]
+    }
+  );
+
+  if (order.telegramUserId) {
+    await saveAwaitingShippingData(order.telegramUserId, orderId);
+  }
+
+  return { ok: true };
+
+}
+
+// Клиент передумал насчёт времени доставки (утро/вечер) уже после того,
+// как согласился — сбрасываем выбор и снимаем ожидание адреса (если он
+// ещё не успел его прислать), затем снова показываем кнопки
+// утро/вечер/самовывоз, как в исходном сообщении про доставку по городу.
+async function changeDeliveryTimeByCustomer(orderId) {
+
+  const order = await getOrder(orderId);
+
+  if (!order) return { ok: false, reason: "not_found" };
+
+   await updateOrder(orderId, { deliveryTimeSlot: null });
+
+  if (order.telegramUserId) {
+    await clearAwaitingShippingData(order.telegramUserId);
+  }
+
+  if (order.platform === "android" && order.telegramUserId) {
+    await clearButtonsInChat(order.telegramUserId, orderId, ["order_delivery_time_change"]).catch(() => {});
+  }
+
+  const orderLabel = order.storelandOrderNum || order.id;
+
+  await notifyAdminClientAction(
+    order,
+    `🔄 ${getCustomerLabel(order)} передумал насчёт времени доставки по заказу №${orderLabel} — показали выбор заново.`
+  );
+
+  await notifyCustomer(
+    order,
+    `Доставка по городу осуществляется в нерабочее время магазина — в первой половине дня до 12:30 или вечером, примерно с 19:00 до 20:00.
+
+В какое время вам удобнее получить заказ?
+
+Стоимость доставки по городу — 250 ₽.`,
+    {
+      inline_keyboard: [
+        [
+          { text: "Утро", callback_data: `order_delivery_time:morning:${orderId}` },
+          { text: "Вечер", callback_data: `order_delivery_time:evening:${orderId}` }
+        ],
+        [
+          { text: "Заберу самовывозом", callback_data: `order_delivery_time:pickup:${orderId}` }
+        ]
+      ]
+    }
+  );
 
   return { ok: true };
 
@@ -635,16 +799,26 @@ async function submitShippingDataText(customerId, text) {
 
   const orderLabel = order.storelandOrderNum || order.id;
 
-  const methodLabel =
-    order.deliveryMethod === "cdek" ? "СДЭК" : "Почта";
+    const methodLabel =
+    order.deliveryMethod === "cdek" ? "СДЭК"
+    : order.deliveryMethod === "delivery_yar" ? "Доставка по городу"
+    : "Почта";
+
+  // Доставка по городу — сумма и способ оплаты уже известны заранее
+  // (250₽, фиксированная), кнопка "Посчитать доставку" (которая ведёт на
+  // сценарий СДЭК/Почты с выбором банка) здесь не нужна — дальше админ
+  // просто пишет клиенту вручную через Reply.
+  const isDeliveryYar = order.deliveryMethod === "delivery_yar";
 
   // Текст содержит то, что напечатал клиент сам (ФИО, адрес и т.д.) —
   // Markdown сюда не добавляем, чтобы случайный спецсимвол не сломал
   // отправку сообщения
-    const calcButton = { inline_keyboard: [[{ text: "📐 Посчитать доставку", callback_data: `order_calc:${orderId}` }]] };
+  const calcButton = isDeliveryYar
+    ? undefined
+    : { inline_keyboard: [[{ text: "📐 Посчитать доставку", callback_data: `order_calc:${orderId}` }]] };
 
   const adminResult = await notifyAdmin(
-    `📥 ${getCustomerLabel(order)} прислал данные получателя по заказу №${orderLabel} (${methodLabel}):\n\n${shippingData}`,
+    `📥 ${getCustomerLabel(order)} прислал адрес по заказу №${orderLabel} (${methodLabel}):\n\n${shippingData}`,
     calcButton
   );
 
@@ -656,7 +830,7 @@ async function submitShippingDataText(customerId, text) {
     await appendChatMessage(order.telegramUserId, {
       from: "admin",
       text: `📥 Данные получателя по заказу №${orderLabel} (${methodLabel}):\n\n${shippingData}`,
-      buttons: calcButton.inline_keyboard,
+      buttons: calcButton ? calcButton.inline_keyboard : undefined,
       internal: true
     });
   }
@@ -777,7 +951,7 @@ ${contactHint}
 
   }
 
-  // ---- Клиент выбрал способ доставки/оплаты ----
+    // ---- Клиент выбрал способ доставки/оплаты ----
   if (action === "order_method") {
 
     const methodCode = parts[1];
@@ -791,6 +965,45 @@ ${contactHint}
     }
 
     await ack(METHOD_LABELS[methodCode] || "Принято");
+    await clearButtons(fromChatId, messageId);
+
+    return;
+
+  }
+
+   // ---- Клиент выбрал время доставки по Ярославлю (утро/вечер/самовывоз) ----
+  if (action === "order_delivery_time") {
+
+    const timeCode = parts[1];
+    const orderId = parts[2];
+
+    const result = await selectDeliveryTimeByCustomer(timeCode, orderId);
+
+    if (!result.ok) {
+      await ack(result.reason === "not_found" ? "Заказ не найден" : "Уже обработано");
+      return;
+    }
+
+    await ack("Принято");
+    await clearButtons(fromChatId, messageId);
+
+    return;
+
+  }
+
+  // ---- Клиент передумал насчёт времени доставки — показываем выбор заново ----
+  if (action === "order_delivery_time_change") {
+
+    const orderId = parts[1];
+
+    const result = await changeDeliveryTimeByCustomer(orderId);
+
+    if (!result.ok) {
+      await ack("Заказ не найден");
+      return;
+    }
+
+    await ack("Хорошо, выберите заново");
     await clearButtons(fromChatId, messageId);
 
     return;
@@ -920,8 +1133,8 @@ ${contactHint}
     // Начисляем кэшбэк баллами — ставка зависит от платформы заказа
     // (5% Telegram Mini App / 3% Android), доступны для списания
     // (до 50% суммы) при следующей покупке
-    const cashback = computeCashback(order.total, order.platform);
-    const cashbackPercent = order.platform === "android" ? 3 : 5;
+       const cashback = computeCashback(order.total, order.platform);
+    const cashbackPercent = 5;
     await addBonusPoints(order.telegramUserId, cashback);
 
     const balanceHint =
@@ -969,7 +1182,7 @@ ${contactHint}
 
   }
 
-  // ---- Собран (самовывоз) — сообщаем клиенту, что можно забрать заказ ----
+    // ---- Собран (самовывоз) — сообщаем клиенту, что можно забрать заказ ----
   if (action === "order_ready") {
 
     const orderId = parts[1];
@@ -986,17 +1199,92 @@ ${contactHint}
       return;
     }
 
-    await ack(`Статус обновлён: ${STATUS_LABELS.ready.label}`);
+        await ack(`Статус обновлён: ${STATUS_LABELS.ready.label}`);
     await clearButtons(fromChatId, messageId);
+    await telegramApi("editMessageReplyMarkup", {
+      chat_id: fromChatId,
+      message_id: messageId,
+      reply_markup: { inline_keyboard: buildOrderActionButtons(order, orderId) }
+    }).catch(() => {});
 
       await notifyCustomer(
       order,
       `✅ Ваш заказ собран и доступен к самовывозу.
 
+Ждём вас в нашем шоуруме с 13:00 до 18:30, работаем со вторника по субботу, по адресу Депутатский переулок 6, вход с левого торца здания.
+
+Заберите, пожалуйста, заказ в течение 2 рабочих дней (без учёта воскресенья и понедельника — в эти дни магазин закрыт).
+
 Оплатить заказ можно в магазине наличными, картой, по QR-коду или переводом. Ждём вас!`,
       undefined,
       "order"
     );
+
+    return;
+
+  }
+
+  // ---- Выполнен (самовывоз завершён) — начисляем кэшбэк, как при оплате ----
+  if (action === "order_complete") {
+
+    const orderId = parts[1];
+
+    if (clickerId !== adminId) {
+      await ack("Недоступно");
+      return;
+    }
+
+    const order = await updateOrderStatus(orderId, "completed");
+
+    if (!order) {
+      await ack("Заказ не найден");
+      return;
+    }
+
+    await ack(`Статус обновлён: ${STATUS_LABELS.completed.label}`);
+    await clearButtons(fromChatId, messageId);
+
+       const cashback = computeCashback(order.total, order.platform);
+    const cashbackPercent = 5;
+    await addBonusPoints(order.telegramUserId, cashback);
+
+    const balanceHint =
+      order.platform === "android"
+        ? "Баланс баллов смотрите в разделе «Профиль» в этом приложении."
+        : "Баланс баллов смотрите в разделе «Профиль» в мини-приложении магазина.";
+
+    await notifyCustomer(
+      order,
+      `🎉 Спасибо за покупку!
+
+🎁 Вам начислено ${cashback} баллов кэшбэка (${cashbackPercent}% от заказа) — можно списать до 50% суммы следующего заказа. ${balanceHint}`,
+      undefined,
+      "order"
+    );
+
+    return;
+
+  }
+
+  // ---- Доставлено (доставка по городу) — финальный статус ----
+  if (action === "order_delivered") {
+
+    const orderId = parts[1];
+
+    if (clickerId !== adminId) {
+      await ack("Недоступно");
+      return;
+    }
+
+    const order = await updateOrderStatus(orderId, "delivered");
+
+    if (!order) {
+      await ack("Заказ не найден");
+      return;
+    }
+
+    await ack(`Статус обновлён: ${STATUS_LABELS.delivered.label}`);
+    await clearButtons(fromChatId, messageId);
 
     return;
 
@@ -1528,12 +1816,29 @@ async function checkOrderTimeouts() {
 // ==============================
 
 async function refreshAdminMessageButtons(order, orderId) {
-  if (!order.adminMessageId) return;
-  await telegramApi("editMessageReplyMarkup", {
-    chat_id: process.env.ADMIN_ID,
-    message_id: order.adminMessageId,
-    reply_markup: { inline_keyboard: buildOrderActionButtons(order, orderId) }
-  }).catch(() => {});
+
+  const newButtons = buildOrderActionButtons(order, orderId);
+
+  if (order.adminMessageId) {
+    const result = await telegramApi("editMessageReplyMarkup", {
+      chat_id: process.env.ADMIN_ID,
+      message_id: order.adminMessageId,
+      reply_markup: { inline_keyboard: newButtons }
+    }).catch((err) => ({ ok: false, description: err.message }));
+
+    if (!result.ok) {
+      console.log("orderFlow: refreshAdminMessageButtons FAILED:", JSON.stringify(result));
+    }
+  }
+
+  // Для Android-заказов та же карточка заказа продублирована в чат
+  // панели оператора (см. routes/orders.js) — кнопки там хранятся в
+  // самом сообщении и не обновляются автоматически вместе с Telegram,
+  // поэтому синхронизируем их отдельно.
+  if (order.platform === "android" && order.telegramUserId) {
+    await updateOrderButtonsInChat(order.telegramUserId, orderId, newButtons).catch(() => {});
+  }
+
 }
 
 async function panelAcceptOrder(orderId) {
@@ -1580,7 +1885,7 @@ async function panelMarkPaid(orderId) {
   await refreshAdminMessageButtons(order, orderId);
 
   const cashback = computeCashback(order.total, order.platform);
-  const cashbackPercent = order.platform === "android" ? 3 : 5;
+  const cashbackPercent = 5;
   await addBonusPoints(order.telegramUserId, cashback);
 
   const balanceHint =
@@ -1632,7 +1937,45 @@ async function panelMarkReady(orderId) {
     order,
     `✅ Ваш заказ собран и доступен к самовывозу.
 
+Ждём вас в нашем шоуруме с 13:00 до 18:30, работаем со вторника по субботу, по адресу Депутатский переулок 6, вход с левого торца здания.
+
+Заберите, пожалуйста, заказ в течение 2 рабочих дней (без учёта воскресенья и понедельника — в эти дни магазин закрыт).
+
 Оплатить заказ можно в магазине наличными, картой, по QR-коду или переводом. Ждём вас!`
+  );
+
+  return { ok: true };
+}
+
+async function panelMarkDelivered(orderId) {
+  const order = await updateOrderStatus(orderId, "delivered");
+  if (!order) return { ok: false, reason: "not_found" };
+
+  await refreshAdminMessageButtons(order, orderId);
+
+  return { ok: true };
+}
+
+async function panelCompleteOrder(orderId) {
+  const order = await updateOrderStatus(orderId, "completed");
+  if (!order) return { ok: false, reason: "not_found" };
+
+  await refreshAdminMessageButtons(order, orderId);
+
+  const cashback = computeCashback(order.total, order.platform);
+  const cashbackPercent = 5;
+  await addBonusPoints(order.telegramUserId, cashback);
+
+  const balanceHint =
+    order.platform === "android"
+      ? "Баланс баллов смотрите в разделе «Профиль» в этом приложении."
+      : "Баланс баллов смотрите в разделе «Профиль» в мини-приложении магазина.";
+
+  await notifyCustomer(
+    order,
+    `🎉 Спасибо за покупку!
+
+🎁 Вам начислено ${cashback} баллов кэшбэка (${cashbackPercent}% от заказа) — можно списать до 50% суммы следующего заказа. ${balanceHint}`
   );
 
   return { ok: true };
@@ -1773,10 +2116,12 @@ module.exports = {
   handleOrderCallback,
   panelCalcOrder,
   panelChooseBankAndInvoice,
-  panelAcceptOrder,
+    panelAcceptOrder,
   panelMarkPaid,
   panelMarkShipped,
-  panelMarkReady,
+    panelMarkReady,
+  panelMarkDelivered,
+  panelCompleteOrder,
   panelEditOrder,
   panelCancelOrder,
   tryHandleTrackingReply,
@@ -1789,7 +2134,9 @@ module.exports = {
   notifyAdmin,
   buildOrderActionButtons,
   buildOrderCardText,
-  confirmOrderByCustomer,
+     confirmOrderByCustomer,
   selectDeliveryMethodByCustomer,
+  selectDeliveryTimeByCustomer,
+  changeDeliveryTimeByCustomer,
   submitShippingDataText
 };

@@ -15,7 +15,7 @@ const router = express.Router();
 // постоянный промокод, можно применять к каждому заказу.
 const PROMO_CONFIGS = {
   telegram: { code: "cosmo420tg", rate: 0.10, firstOrderOnly: true },
-  android: { code: "cosmo420", rate: 0.07, firstOrderOnly: false }
+  android: { code: "cosmo420", rate: 0.10, firstOrderOnly: false }
 };
 
 const STORELAND_API_URL = "https://cosmo-bong.ru/api/v1";

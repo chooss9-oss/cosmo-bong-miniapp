@@ -11,7 +11,7 @@ const { getRedisClient } = require("./replyMapping");
 // ==============================
 
 const CASHBACK_RATE = 0.05;
-const ANDROID_CASHBACK_RATE = 0.03;
+const ANDROID_CASHBACK_RATE = 0.05;
 const MAX_REDEEM_SHARE = 0.5;
 
 async function getBonusBalance(telegramUserId) {

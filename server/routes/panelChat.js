@@ -6,20 +6,24 @@ const {
   getChatMessages,
   getAndroidChatList,
   getChatMeta,
-  markCustomerMessagesRead
+  markCustomerMessagesRead,
+  editChatMessage,
+  deleteChatMessage
 } = require("../chatStore");
 const {
   panelAcceptOrder,
   panelMarkPaid,
   panelMarkShipped,
   panelMarkReady,
+  panelMarkDelivered,
+  panelCompleteOrder,
   panelEditOrder,
   panelCancelOrder,
   panelCalcOrder,
   panelChooseBankAndInvoice
 } = require("../orderFlow");
 const { getOrder } = require("../orderStore");
-const { saveReplyMapping, telegramApi } = require("../replyMapping");
+const { saveReplyMapping, telegramApi, telegramApiFile, buildTelegramFileProxyUrl } = require("../replyMapping");
 const { getPushToken, sendExpoPush, sendWebPush, listAndroidInstalls } = require("../pushStore");
 
 const router = express.Router();
@@ -183,11 +187,15 @@ router.post("/order-action", async (req, res) => {
       result = await panelAcceptOrder(orderId);
     } else if (action === "paid") {
       result = await panelMarkPaid(orderId);
-    } else if (action === "shipped") {
+        } else if (action === "shipped") {
       const order = await getOrder(orderId);
       result = order && order.deliveryMethod === "pickup_yar"
         ? await panelMarkReady(orderId)
+        : order && order.deliveryMethod === "delivery_yar"
+        ? await panelMarkDelivered(orderId)
         : await panelMarkShipped(orderId, extra);
+        } else if (action === "complete") {
+      result = await panelCompleteOrder(orderId);
     } else if (action === "edit") {
       result = await panelEditOrder(orderId, extra);
         } else if (action === "cancel") {
@@ -216,6 +224,110 @@ router.post("/order-action", async (req, res) => {
 router.get("/installs", async (req, res) => {
   const installs = await listAndroidInstalls();
   res.json({ installs });
+});
+
+// Админ отправляет голосовое сообщение клиенту из панели (запись прямо в
+// браузере). Пересылаем как аудио в Telegram (мирроринг, как для текста и
+// фото) — заодно оттуда же получаем file_id, чтобы построить свою ссылку-
+// прокси (buildTelegramFileProxyUrl) для истории чата и самого клиента.
+router.post("/send-voice", async (req, res) => {
+  try {
+    const { customerId, audioBase64, mimeType } = req.body;
+
+    if (!customerId || !isAndroidCustomerId(String(customerId)) || !audioBase64) {
+      return res.status(400).json({ success: false, error: "customerId и audioBase64 обязательны" });
+    }
+
+    const buffer = Buffer.from(audioBase64, "base64");
+    const phone = String(customerId).startsWith("android:")
+      ? String(customerId).slice("android:".length)
+      : customerId;
+
+    const sendResult = await telegramApiFile(
+      "sendAudio",
+      { chat_id: process.env.ADMIN_ID, caption: `🖥 Голосовое из панели (Android)\n📞 ${phone}` },
+      "audio",
+      buffer,
+      "panel-voice.webm",
+      mimeType || "audio/webm"
+    );
+
+    if (!sendResult.ok || !sendResult.result) {
+      console.error("❌ PANEL VOICE: sendAudio failed:", JSON.stringify(sendResult));
+      return res.json({ success: false });
+    }
+
+    await saveReplyMapping(sendResult.result.message_id, customerId);
+
+    let audioUrl;
+    const audioFileId = sendResult.result.audio && sendResult.result.audio.file_id;
+
+    if (audioFileId) {
+      const fileInfo = await telegramApi("getFile", { file_id: audioFileId }).catch(() => null);
+      if (fileInfo && fileInfo.ok && fileInfo.result && fileInfo.result.file_path) {
+        audioUrl = buildTelegramFileProxyUrl(fileInfo.result.file_path);
+      }
+    }
+
+    if (!audioUrl) {
+      return res.json({ success: false, error: "no_audio_url" });
+    }
+
+    await appendChatMessage(customerId, { from: "admin", audioUrl });
+
+    const androidToken = await getPushToken(customerId, "android");
+    const pushResult = await sendExpoPush(androidToken, {
+      title: "Cosmo Bong",
+      body: "🎤 Голосовое сообщение",
+      data: { type: "chat" }
+    });
+
+    const webToken = await getPushToken(customerId, "web");
+    if (webToken) {
+      await sendWebPush(webToken, { title: "Cosmo Bong", body: "🎤 Голосовое сообщение" });
+    }
+
+      res.json({ success: true, pushDelivered: !!(pushResult && pushResult.ok) });
+  } catch (error) {
+    console.error("❌ PANEL VOICE SEND ERROR:", error.message);
+    res.status(500).json({ success: false });
+  }
+});
+
+// Админ редактирует своё уже отправленное сообщение из панели — только в
+// приложении клиента, в Telegram у мирорной копии старый текст останется
+// без изменений (как и в клиентском /api/chat/edit).
+router.post("/edit", async (req, res) => {
+  try {
+    const { customerId, createdAt, text } = req.body;
+
+    if (!customerId || !isAndroidCustomerId(String(customerId)) || !createdAt || !text) {
+      return res.status(400).json({ success: false, error: "customerId, createdAt и text обязательны" });
+    }
+
+    const ok = await editChatMessage(customerId, Number(createdAt), text, "admin");
+    res.json({ success: ok });
+  } catch (error) {
+    console.error("❌ PANEL CHAT EDIT ERROR:", error.message);
+    res.status(500).json({ success: false });
+  }
+});
+
+// Админ удаляет своё сообщение из панели — только в приложении клиента.
+router.post("/delete", async (req, res) => {
+  try {
+    const { customerId, createdAt } = req.body;
+
+    if (!customerId || !isAndroidCustomerId(String(customerId)) || !createdAt) {
+      return res.status(400).json({ success: false, error: "customerId и createdAt обязательны" });
+    }
+
+    const ok = await deleteChatMessage(customerId, Number(createdAt), "admin");
+    res.json({ success: ok });
+  } catch (error) {
+    console.error("❌ PANEL CHAT DELETE ERROR:", error.message);
+    res.status(500).json({ success: false });
+  }
 });
 
 module.exports = router;

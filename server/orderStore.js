@@ -13,6 +13,8 @@ const STATUS_LABELS = {
   paid: { label: "Оплачен", emoji: "💰" },
   shipped: { label: "Отправлен", emoji: "📦" },
   ready: { label: "Готов к самовывозу", emoji: "📍" },
+  delivered: { label: "Доставлен", emoji: "🚗" },
+  completed: { label: "Выполнен", emoji: "🎉" },
   cancelled: { label: "Отменён", emoji: "❌" }
 };
 

@@ -20,6 +20,8 @@ const { getAwaitingShippingData } = require("../orderStore");
 const {
   confirmOrderByCustomer,
   selectDeliveryMethodByCustomer,
+  selectDeliveryTimeByCustomer,
+  changeDeliveryTimeByCustomer,
   submitShippingDataText
 } = require("../orderFlow");
 
@@ -284,10 +286,14 @@ router.post("/button", async (req, res) => {
 
     let result;
 
-    if (action === "order_confirm") {
+          if (action === "order_confirm") {
       result = await confirmOrderByCustomer(parts[1]);
     } else if (action === "order_method") {
       result = await selectDeliveryMethodByCustomer(parts[1], parts[2]);
+    } else if (action === "order_delivery_time") {
+      result = await selectDeliveryTimeByCustomer(parts[1], parts[2]);
+    } else if (action === "order_delivery_time_change") {
+      result = await changeDeliveryTimeByCustomer(parts[1]);
     } else {
       return res.status(403).json({ success: false, error: "Действие недоступно" });
     }

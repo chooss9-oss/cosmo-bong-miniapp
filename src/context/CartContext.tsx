@@ -5,6 +5,8 @@ import {
 } from "react";
 
 import { cleanProductName } from "../utils/productName";
+import { getTelegramUser } from "../utils/telegram";
+import { syncCart } from "../api/storelandApi";
 
 
 
@@ -171,6 +173,31 @@ localStorage.setItem(
 JSON.stringify(newCart)
 
 );
+
+
+const tgUser = getTelegramUser();
+
+if(tgUser?.id){
+
+  syncCart(
+
+    tgUser.id,
+
+    newCart.map(item=>({
+
+      id:item.id,
+
+      name:item.name,
+
+      price:Number(item.price),
+
+      quantity:item.quantity
+
+    }))
+
+  ).catch(()=>{});
+
+}
 
 
 }

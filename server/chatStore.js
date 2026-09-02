@@ -268,7 +268,7 @@ async function getChatMeta(customerId) {
 // Сообщения не имеют собственного ID, поэтому ищем по паре (from:
 // "customer", createdAt) — этого достаточно, так как createdAt выставляется
 // сервером в момент отправки и уникален для каждого сообщения одного клиента.
-async function editChatMessage(customerId, createdAt, newText) {
+async function editChatMessage(customerId, createdAt, newText, from = "customer") {
   if (!customerId || !createdAt || !newText) return false;
 
   try {
@@ -284,7 +284,7 @@ async function editChatMessage(customerId, createdAt, newText) {
         continue;
       }
 
-      if (message.from === "customer" && message.createdAt === createdAt && !message.imageUrl && !message.audioUrl) {
+      if (message.from === from && message.createdAt === createdAt && !message.imageUrl && !message.audioUrl) {
         message.text = String(newText);
         message.edited = true;
         await client.lSet(key, i, JSON.stringify(message));
@@ -298,7 +298,7 @@ async function editChatMessage(customerId, createdAt, newText) {
   }
 }
 
-async function deleteChatMessage(customerId, createdAt) {
+async function deleteChatMessage(customerId, createdAt, from = "customer") {
   if (!customerId || !createdAt) return false;
 
   try {
@@ -314,7 +314,7 @@ async function deleteChatMessage(customerId, createdAt) {
         continue;
       }
 
-      if (message.from === "customer" && message.createdAt === createdAt) {
+      if (message.from === from && message.createdAt === createdAt) {
         // Redis-списки не поддерживают удаление по индексу напрямую — по
         // конвенции клиента redis: помечаем уникальным маркером и удаляем
         // все вхождения этого маркера.
@@ -387,6 +387,95 @@ async function markCustomerMessagesRead(customerId) {
   }
 }
 
+// Обновляет кнопки в уже сохранённом сообщении заказа (карточка с
+// Принять/Оплачен/Отправлен и т.п.) — ищем сообщение по совпадению
+// orderId в конце callback_data одной из его кнопок, а не по id
+// сообщения (сообщения в чате его не имеют). Нужно, когда кнопки заказа
+// меняются уже ПОСЛЕ отправки сообщения (например, после смены статуса
+// или способа доставки), чтобы панель оператора не показывала устаревшие
+// кнопки, оставшиеся с момента создания заказа.
+async function updateOrderButtonsInChat(customerId, orderId, newButtons) {
+  if (!customerId || !orderId) return false;
+
+  try {
+    const client = await getRedisClient();
+    const key = `chat:${customerId}`;
+    const raw = await client.lRange(key, 0, -1);
+
+    for (let i = 0; i < raw.length; i++) {
+      let message;
+      try {
+        message = JSON.parse(raw[i]);
+      } catch {
+        continue;
+      }
+
+      const isOrderCard = (message.buttons || []).some((row) =>
+        row.some((btn) => {
+          const parts = String(btn.callback_data || "").split(":");
+          const action = parts[0];
+          const btnOrderId = parts[parts.length - 1];
+          return btnOrderId === String(orderId) &&
+            ["order_accept", "order_paid", "order_shipped", "order_ready", "order_delivered", "order_edit", "order_cancel"].includes(action);
+        })
+      );
+
+      if (isOrderCard) {
+        message.buttons = newButtons && newButtons.length ? newButtons : undefined;
+        await client.lSet(key, i, JSON.stringify(message));
+        return true;
+      }
+    }
+    return false;
+  } catch (error) {
+    console.error("❌ Не удалось обновить кнопки заказа в чате:", error.message);
+    return false;
+  }
+}
+
+// Убирает кнопки с сообщения после того, как клиент по ним уже нажал —
+// иначе при следующем открытии чата (перезагрузка истории) кнопки
+// подгружаются заново из сохранённого сообщения, хотя шаг уже пройден.
+// Ищем сообщение по совпадению orderId (последний сегмент callback_data)
+// и совпадению action с одним из переданных.
+async function clearButtonsInChat(customerId, orderId, actions) {
+  if (!customerId || !orderId) return false;
+
+  try {
+    const client = await getRedisClient();
+    const key = `chat:${customerId}`;
+    const raw = await client.lRange(key, 0, -1);
+
+    for (let i = 0; i < raw.length; i++) {
+      let message;
+      try {
+        message = JSON.parse(raw[i]);
+      } catch {
+        continue;
+      }
+
+      const matches = (message.buttons || []).some((row) =>
+        row.some((btn) => {
+          const parts = String(btn.callback_data || "").split(":");
+          const action = parts[0];
+          const btnOrderId = parts[parts.length - 1];
+          return btnOrderId === String(orderId) && actions.includes(action);
+        })
+      );
+
+      if (matches) {
+        delete message.buttons;
+        await client.lSet(key, i, JSON.stringify(message));
+        return true;
+      }
+    }
+    return false;
+  } catch (error) {
+    console.error("❌ Не удалось очистить кнопки клиента в чате:", error.message);
+    return false;
+  }
+}
+
 module.exports = {
   isAndroidCustomerId,
   appendChatMessage,
@@ -398,5 +487,7 @@ module.exports = {
   markCustomerMessagesRead,
   markChatReadByCustomer,
   addPendingReaction,
-  popPendingReactions
+  popPendingReactions,
+  updateOrderButtonsInChat,
+  clearButtonsInChat
 };
