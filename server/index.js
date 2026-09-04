@@ -310,6 +310,25 @@ async function writeNewProductsToRedis(data) {
   }
 }
 
+async function readModRescanQueueFromRedis() {
+  try {
+    const client = await getRedisClient();
+    const stored = await client.get("modRescanQueue");
+    return stored ? JSON.parse(stored) : null;
+  } catch (error) {
+    console.error("❌ Не удалось прочитать очередь пересканирования:", error.message);
+    return null;
+  }
+}
+
+async function writeModRescanQueueToRedis(data) {
+  try {
+    const client = await getRedisClient();
+    await client.set("modRescanQueue", JSON.stringify(data));
+  } catch (error) {
+    console.error("❌ Не удалось записать очередь пересканирования:", error.message);
+  }
+}
 async function readNewProductQueueFromRedis() {
   try {
     const client = await getRedisClient();
@@ -1024,6 +1043,26 @@ app.get("/api/refresh-catalog", async (req, res) => {
 });
 
 // ==============================
+// RESCAN MODS (проверка новых модификаций у уже известных товаров) —
+// порциями, как refresh-catalog. Открывать несколько раз подряд, пока в
+// логах не появится "осталось в очереди: 0".
+// ==============================
+app.get("/api/rescan-mods", async (req, res) => {
+  if (!isAuthorizedRefresh(req)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  res.json({ success: true, status: "started" });
+
+  const task = rescanModsChunk().catch(error => {
+    console.error("❌ Ошибка пересканирования модификаций:", error.message);
+  });
+
+  try {
+    waitUntil(task);
+  } catch (e) {}
+});
+// ==============================
 // REFRESH SUBCATEGORIES
 // ==============================
 app.get("/api/refresh-subcategories", async (req, res) => {
@@ -1617,6 +1656,95 @@ app.get("/api/qr/:customerId", async (req, res) => {
 
 });
 
+// ==============================
+// ПЕРЕСКАНИРОВАНИЕ ВСЕХ ТОВАРОВ НА НОВЫЕ МОДИФИКАЦИИ — порциями, как и
+// поиск новых товаров. Проходит по всем уже известным URL и donpроверяет,
+// не появились ли у них новые ID модификаций (см. rescan-product выше —
+// тот же принцип, но для всего каталога сразу и по расписанию).
+// ==============================
+async function rescanModsChunk() {
+
+  let queue = await readModRescanQueueFromRedis();
+
+  if (!queue || queue.length === 0) {
+    const newProducts = await readNewProductsFromRedis();
+    const allKnown = products.concat(newProducts);
+    const urlToEntry = new Map();
+    for (const p of allKnown) {
+      if (!p.url) continue;
+      const key = p.url.split("?")[0];
+      if (!urlToEntry.has(key)) urlToEntry.set(key, p);
+    }
+    queue = Array.from(urlToEntry.keys());
+  }
+
+  const CHUNK_SIZE = 20;
+  const chunk = queue.slice(0, CHUNK_SIZE);
+  const remaining = queue.slice(CHUNK_SIZE);
+
+  const newProducts = await readNewProductsFromRedis();
+  const allKnown = products.concat(newProducts);
+  const existingIds = new Set(allKnown.map(p => String(p.id)));
+  const urlToCategoryIds = new Map();
+  for (const p of allKnown) {
+    if (p.url) {
+      const key = p.url.split("?")[0];
+      if (!urlToCategoryIds.has(key)) urlToCategoryIds.set(key, p.categoryIds);
+    }
+  }
+
+  const foundNew = [];
+
+  for (const url of chunk) {
+
+    try {
+
+      const { data: productPage } = await axios.get(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        timeout: 10000
+      });
+
+      const $product = cheerio.load(productPage);
+      const name = $product('.product-name h1').first().text().trim();
+      const description = $product('.htmlDataBlock').first().html() || "";
+      const images = [];
+
+      $product('.thumblist img').each((i, el) => {
+        const src = $product(el).attr('src');
+        if (src) images.push(src.replace('/baec64/', '/075a3e/'));
+      });
+
+      const categoryIds = urlToCategoryIds.get(url) || [];
+
+      $product('.goodsDataMainModificationsList').each((i, el) => {
+        const modId = $product(el).find('input[name="id"]').attr('value');
+        const priceAttr = $product(el).find('input[name="price_now"]').attr('value');
+        const price = parseFloat(priceAttr);
+
+        if (modId && name && !existingIds.has(String(modId))) {
+          foundNew.push({ id: modId, name, price: isNaN(price) ? 0 : price, description, images, categoryIds, url });
+          existingIds.add(String(modId));
+        }
+      });
+
+    } catch (error) {
+      // Молча пропускаем — 503/таймаут на отдельном товаре не должен
+      // останавливать весь проход по очереди
+    }
+
+  }
+
+  if (foundNew.length > 0) {
+    const merged = newProducts.concat(foundNew);
+    await writeNewProductsToRedis(merged);
+  }
+
+  await writeModRescanQueueToRedis(remaining);
+
+  console.log(`✅ Пересканирование модификаций: обработано ${chunk.length}, найдено новых ${foundNew.length}, осталось в очереди ${remaining.length}.`);
+
+  return { processed: chunk.length, newlyFound: foundNew.length, remaining: remaining.length };
+}
 // ==============================
 // ПЕРЕСКАНИРОВАТЬ ТОВАР ПО URL — для случаев, когда у УЖЕ известного товара
 // на сайте появились новые ID модификаций (например, Storeland пересоздал
