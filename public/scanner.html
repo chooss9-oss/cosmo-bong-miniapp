@@ -140,11 +140,18 @@
   const passBtn = document.getElementById("passBtn");
   const passError = document.getElementById("passError");
 
-   passBtn.addEventListener("click", () => {
+   const STORAGE_KEY = "cosmoBongScannerAuth";
+
+  function unlockScanner() {
+    passScreen.style.display = "none";
+    mainScreen.style.display = "block";
+    startCamera();
+  }
+
+  passBtn.addEventListener("click", () => {
     if (passInput.value.trim() === LOGIN_PASSWORD) {
-      passScreen.style.display = "none";
-      mainScreen.style.display = "block";
-      startCamera();
+      localStorage.setItem(STORAGE_KEY, "1");
+      unlockScanner();
     } else {
       passError.style.display = "block";
     }
@@ -152,6 +159,11 @@
   passInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") passBtn.click();
   });
+
+  // Уже вводили пароль раньше на этом устройстве — не спрашиваем снова
+  if (localStorage.getItem(STORAGE_KEY) === "1") {
+    unlockScanner();
+  }
 
   const video = document.getElementById("video");
   const canvas = document.getElementById("canvas");
