@@ -40,7 +40,9 @@ const {
 
 const {
   getBonusBalance,
-  getMaxRedeemable
+  getMaxRedeemable,
+  computeCashback,
+  addBonusPoints
 } = require("./bonusStore");
 
 const { saveCart, clearCart, checkAbandonedCarts } = require("./cartStore");
@@ -1545,6 +1547,63 @@ app.get("/api/bonus-balance", async (req, res) => {
 
 });
 
+// ==============================
+// RETAIL BONUS — начисление кэшбэка за покупку в розничном магазине по QR-коду
+// клиента (см. QR в профиле Android-приложения). Продавец сканирует код на
+// отдельной странице /scanner (защищена тем же секретом, что /api/refresh-*),
+// вводит сумму покупки вручную — эндпоинт начисляет 5% баллами и уведомляет
+// клиента в чате приложения + push.
+// ==============================
+app.post("/api/retail-bonus", express.json(), async (req, res) => {
+
+  if (!isAuthorizedRefresh(req)) {
+    return res.status(403).json({ success: false, error: "Forbidden" });
+  }
+
+  const { customerId, amount } = req.body;
+
+  if (!customerId || !isAndroidCustomerId(String(customerId))) {
+    return res.status(400).json({ success: false, error: "Некорректный customerId" });
+  }
+
+  const purchaseAmount = Number(amount);
+
+  if (!purchaseAmount || purchaseAmount <= 0) {
+    return res.status(400).json({ success: false, error: "Некорректная сумма покупки" });
+  }
+
+  try {
+
+    const cashback = computeCashback(purchaseAmount, "retail");
+
+    await addBonusPoints(customerId, cashback);
+
+    const text = `🎁 Вам начислено ${cashback} баллов кэшбэка (5%) за покупку в магазине на сумму ${purchaseAmount} ₽. Баллами можно оплатить до 50% суммы следующего заказа.`;
+
+    await appendChatMessage(customerId, { from: "admin", text });
+
+    const pushToken = await getPushToken(customerId, "android");
+    if (pushToken) {
+      await sendExpoPush(pushToken, { title: "Cosmo Bong", body: text, data: { type: "chat" } });
+    }
+
+    const webToken = await getPushToken(customerId, "web");
+    if (webToken) {
+      await sendWebPush(webToken, { title: "Cosmo Bong", body: text });
+    }
+
+    const newBalance = await getBonusBalance(customerId);
+
+    console.log(`✅ Розничный кэшбэк начислен: ${customerId}, покупка ${purchaseAmount}₽, начислено ${cashback}, новый баланс ${newBalance}`);
+
+    res.json({ success: true, cashback, newBalance });
+
+  } catch (error) {
+    console.error("❌ Ошибка начисления розничного кэшбэка:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+
+});
 // ==============================
 // TELEGRAM WEBHOOK — пересылка сообщений от клиентов админу и ответы обратно
 // ==============================
