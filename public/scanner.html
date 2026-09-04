@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cosmo Bong — сканер бонусов</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0d0d0d;
+    color: #f5f5f5;
+    font-family: -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 16px 60px;
+  }
+  h1 { font-size: 18px; margin: 0 0 20px; color: #58bb43; }
+
+  /* Экран пароля */
+  #passScreen { width: 100%; max-width: 320px; text-align: center; margin-top: 80px; }
+  #passInput {
+    width: 100%;
+    padding: 14px;
+    font-size: 20px;
+    text-align: center;
+    letter-spacing: 4px;
+    border-radius: 10px;
+    border: 1px solid #333;
+    background: #1a1a1a;
+    color: #fff;
+    margin-bottom: 12px;
+  }
+  #passBtn, .btn {
+    width: 100%;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    border: none;
+    border-radius: 10px;
+    background: #58bb43;
+    color: #0d0d0d;
+    cursor: pointer;
+  }
+  #passError { color: #e05555; font-size: 13px; margin-top: 8px; display: none; }
+
+  /* Основной экран */
+  #mainScreen { display: none; width: 100%; max-width: 380px; }
+
+  #video { width: 100%; border-radius: 12px; background: #000; }
+  #canvas { display: none; }
+
+  .card {
+    background: #161616;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 16px;
+  }
+  .label { font-size: 12px; color: #999; margin-bottom: 4px; }
+  .value { font-size: 15px; font-weight: 700; word-break: break-all; }
+
+  #amountInput {
+    width: 100%;
+    padding: 14px;
+    font-size: 18px;
+    border-radius: 10px;
+    border: 1px solid #333;
+    background: #1a1a1a;
+    color: #fff;
+    margin-top: 12px;
+    margin-bottom: 12px;
+  }
+
+  .btn:disabled { background: #333; color: #777; }
+
+  #resultBox {
+    margin-top: 16px;
+    padding: 16px;
+    border-radius: 12px;
+    text-align: center;
+    display: none;
+  }
+  #resultBox.success { background: #16341a; border: 1px solid #58bb43; }
+  #resultBox.error { background: #3a1616; border: 1px solid #e05555; }
+  #resultTitle { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+  #resultDetail { font-size: 13px; color: #ccc; }
+
+  #rescanBtn { margin-top: 12px; background: #333; color: #fff; }
+
+  #status { font-size: 13px; color: #999; text-align: center; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+  <div id="passScreen">
+    <h1>Cosmo Bong — сканер</h1>
+    <input id="passInput" type="password" inputmode="numeric" placeholder="Пароль" />
+    <button id="passBtn" class="btn">Войти</button>
+    <div id="passError">Неверный пароль</div>
+  </div>
+
+  <div id="mainScreen">
+    <h1>Сканер бонусов</h1>
+
+    <div id="scanBlock">
+      <video id="video" playsinline></video>
+      <canvas id="canvas"></canvas>
+      <div id="status">Наведите камеру на QR-код клиента</div>
+    </div>
+
+    <div id="clientBlock" style="display:none">
+      <div class="card">
+        <div class="label">Клиент найден</div>
+        <div class="value" id="clientId"></div>
+      </div>
+
+      <input id="amountInput" type="number" inputmode="decimal" placeholder="Сумма покупки, ₽" />
+      <button id="chargeBtn" class="btn">Начислить 5% кэшбэка</button>
+      <button id="rescanBtn" class="btn">Сканировать другого клиента</button>
+    </div>
+
+    <div id="resultBox">
+      <div id="resultTitle"></div>
+      <div id="resultDetail"></div>
+    </div>
+  </div>
+
+<script>
+  const SECRET = "1747";
+  const API_BASE = "https://cosmo-bong-miniapp.vercel.app";
+
+  const passScreen = document.getElementById("passScreen");
+  const mainScreen = document.getElementById("mainScreen");
+  const passInput = document.getElementById("passInput");
+  const passBtn = document.getElementById("passBtn");
+  const passError = document.getElementById("passError");
+
+  passBtn.addEventListener("click", () => {
+    if (passInput.value.trim() === SECRET) {
+      passScreen.style.display = "none";
+      mainScreen.style.display = "block";
+      startCamera();
+    } else {
+      passError.style.display = "block";
+    }
+  });
+  passInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") passBtn.click();
+  });
+
+  const video = document.getElementById("video");
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const statusEl = document.getElementById("status");
+  const scanBlock = document.getElementById("scanBlock");
+  const clientBlock = document.getElementById("clientBlock");
+  const clientIdEl = document.getElementById("clientId");
+  const amountInput = document.getElementById("amountInput");
+  const chargeBtn = document.getElementById("chargeBtn");
+  const rescanBtn = document.getElementById("rescanBtn");
+  const resultBox = document.getElementById("resultBox");
+  const resultTitle = document.getElementById("resultTitle");
+  const resultDetail = document.getElementById("resultDetail");
+
+  let scanning = false;
+  let currentCustomerId = null;
+  let stream = null;
+
+  async function startCamera() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      video.srcObject = stream;
+      video.setAttribute("playsinline", true);
+      await video.play();
+      scanning = true;
+      requestAnimationFrame(tick);
+    } catch (e) {
+      statusEl.textContent = "Не удалось получить доступ к камере: " + e.message;
+    }
+  }
+
+  function tick() {
+    if (!scanning) return;
+
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+      if (code && code.data && code.data.startsWith("android:")) {
+        onCodeFound(code.data);
+        return;
+      }
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  function onCodeFound(customerId) {
+    scanning = false;
+    currentCustomerId = customerId;
+    clientIdEl.textContent = customerId;
+    scanBlock.style.display = "none";
+    clientBlock.style.display = "block";
+    amountInput.value = "";
+    amountInput.focus();
+  }
+
+  rescanBtn.addEventListener("click", () => {
+    clientBlock.style.display = "none";
+    resultBox.style.display = "none";
+    scanBlock.style.display = "block";
+    currentCustomerId = null;
+    scanning = true;
+    requestAnimationFrame(tick);
+  });
+
+  chargeBtn.addEventListener("click", async () => {
+    const amount = Number(amountInput.value);
+
+    if (!amount || amount <= 0) {
+      alert("Введите сумму покупки");
+      return;
+    }
+
+    chargeBtn.disabled = true;
+    chargeBtn.textContent = "Начисляем...";
+
+    try {
+      const res = await fetch(`${API_BASE}/api/retail-bonus?secret=${SECRET}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId: currentCustomerId, amount })
+      });
+      const data = await res.json();
+
+      resultBox.style.display = "block";
+
+      if (data.success) {
+        resultBox.className = "success";
+        resultTitle.textContent = `Начислено ${data.cashback} баллов`;
+        resultDetail.textContent = `Новый баланс клиента: ${data.newBalance} ₽`;
+      } else {
+        resultBox.className = "error";
+        resultTitle.textContent = "Не удалось начислить";
+        resultDetail.textContent = data.error || "Попробуйте ещё раз";
+      }
+
+    } catch (e) {
+      resultBox.style.display = "block";
+      resultBox.className = "error";
+      resultTitle.textContent = "Ошибка сети";
+      resultDetail.textContent = e.message;
+    } finally {
+      chargeBtn.disabled = false;
+      chargeBtn.textContent = "Начислить 5% кэшбэка";
+      clientBlock.style.display = "none";
+    }
+  });
+</script>
+
+</body>
+</html>
