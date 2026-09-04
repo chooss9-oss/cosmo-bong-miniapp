@@ -14,5 +14,18 @@
       "destination": "/index.html"
     }
   ],
-          "crons": []
+      "crons": [
+    {
+      "path": "/api/refresh-subcategories",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/refresh-catalog",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/rescan-mods",
+      "schedule": "0 5 * * *"
+    }
+  ]
 }
