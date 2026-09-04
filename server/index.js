@@ -1616,6 +1616,96 @@ app.get("/api/qr/:customerId", async (req, res) => {
   }
 
 });
+
+// ==============================
+// ПЕРЕСКАНИРОВАТЬ ТОВАР ПО URL — для случаев, когда у УЖЕ известного товара
+// на сайте появились новые ID модификаций (например, Storeland пересоздал
+// вариант при редактировании), которые не заметит обычный поиск новых
+// товаров (он смотрит только на новые URL, не на новые ID внутри уже
+// известных страниц). Ручной инструмент на такой случай: передаём URL
+// товара, он донаходит недостающие модификации и добавляет их в базу.
+// ==============================
+app.get("/api/rescan-product", async (req, res) => {
+
+  if (!isAuthorizedRefresh(req)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const url = String(req.query.url || "").split("?")[0];
+
+  if (!url) {
+    return res.status(400).json({ error: "Нужен параметр url" });
+  }
+
+  try {
+
+    const newProducts = await readNewProductsFromRedis();
+    const allKnown = products.concat(newProducts);
+
+    const existingForUrl = allKnown.filter(p => p.url && p.url.split("?")[0] === url);
+    const existingIds = new Set(allKnown.map(p => String(p.id)));
+
+    // Категорию берём с уже существующей модификации того же товара — так
+    // новые модификации попадают в ту же категорию, что и старые
+    const categoryIds = existingForUrl.length ? existingForUrl[0].categoryIds : [];
+
+    const { data: productPage } = await axios.get(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+      timeout: 12000
+    });
+
+    const $product = cheerio.load(productPage);
+
+    const name = $product('.product-name h1').first().text().trim();
+    const description = $product('.htmlDataBlock').first().html() || "";
+    const images = [];
+
+    $product('.thumblist img').each((i, el) => {
+      const src = $product(el).attr('src');
+      if (src) images.push(src.replace('/baec64/', '/075a3e/'));
+    });
+
+    const foundNew = [];
+
+    $product('.goodsDataMainModificationsList').each((i, el) => {
+
+      const modId = $product(el).find('input[name="id"]').attr('value');
+      const priceAttr = $product(el).find('input[name="price_now"]').attr('value');
+      const price = parseFloat(priceAttr);
+
+      if (modId && name && !existingIds.has(String(modId))) {
+        foundNew.push({
+          id: modId,
+          name,
+          price: isNaN(price) ? 0 : price,
+          description,
+          images,
+          categoryIds,
+          url
+        });
+      }
+
+    });
+
+    if (foundNew.length > 0) {
+      const merged = newProducts.concat(foundNew);
+      await writeNewProductsToRedis(merged);
+    }
+
+    res.json({
+      success: true,
+      url,
+      alreadyKnownCount: existingForUrl.length,
+      newlyAddedCount: foundNew.length,
+      newlyAdded: foundNew.map(p => ({ id: p.id, name: p.name, price: p.price }))
+    });
+
+  } catch (error) {
+    console.error("❌ Ошибка пересканирования товара:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+
+});
 // ==============================
 // RETAIL BONUS — начисление кэшбэка за покупку в розничном магазине по QR-коду
 // клиента (см. QR в профиле Android-приложения). Продавец сканирует код на
