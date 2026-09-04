@@ -406,28 +406,74 @@ async function scrapeSalesData() {
   });
 
   const newSalesCache = {};
+  const urlsArray = Array.from(productUrls);
+  const BATCH_SIZE = 15;
 
-  await Promise.allSettled(
+  for (let i = 0; i < urlsArray.length; i += BATCH_SIZE) {
 
-    Array.from(productUrls).map(async (url) => {
+    const batch = urlsArray.slice(i, i + BATCH_SIZE);
 
-      try {
-        const { data: productPage } = await axios.get(url, {
-          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
-          timeout: 12000
-        });
+    await Promise.allSettled(
 
-        const $product = cheerio.load(productPage);
+      batch.map(async (url) => {
 
-        $product('.goodsDataMainModificationsList').each((i, el) => {
-          const modId = $product(el).find('input[name="id"]').attr('value');
-          const priceNow = parseInt($product(el).find('input[name="price_now"]').attr('value'), 10);
-          const priceOld = parseInt($product(el).find('input[name="price_old"]').attr('value'), 10);
+        try {
 
-          if (modId && priceOld && priceNow && priceOld > priceNow) {
-            newSalesCache[modId] = {
-              oldPrice: priceOld,
-              discount: Math.round(((priceOld - priceNow) / priceOld) * 100)
+          let productPage;
+
+          // Retry при 503 — тот же паттерн, что и для поиска новых товаров
+          // (см. scrapeOneProduct) — сайт периодически отдаёт эту ошибку
+          // под нагрузкой, из-за чего скидка на товар могла просто
+          // "потеряться" из кэша при неудачном обновлении.
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              const response = await axios.get(url, {
+                headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+                timeout: 12000
+              });
+              productPage = response.data;
+              break;
+            } catch (retryError) {
+              const status = retryError.response?.status;
+              if (status === 503 && attempt < 2) {
+                await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
+                continue;
+              }
+              throw retryError;
+            }
+          }
+
+          const $product = cheerio.load(productPage);
+
+          $product('.goodsDataMainModificationsList').each((i, el) => {
+            const modId = $product(el).find('input[name="id"]').attr('value');
+            const priceNow = parseInt($product(el).find('input[name="price_now"]').attr('value'), 10);
+            const priceOld = parseInt($product(el).find('input[name="price_old"]').attr('value'), 10);
+
+            if (modId && priceOld && priceNow && priceOld > priceNow) {
+              newSalesCache[modId] = {
+                oldPrice: priceOld,
+                discount: Math.round(((priceOld - priceNow) / priceOld) * 100)
+              };
+            }
+          });
+
+        } catch (innerError) {
+          console.error(`⚠️ Не удалось загрузить товар ${url}:`, innerError.message);
+        }
+
+      })
+
+    );
+
+    if (i + BATCH_SIZE < urlsArray.length) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+  }
+
+  return newSalesCache;
+}
             };
           }
         });
