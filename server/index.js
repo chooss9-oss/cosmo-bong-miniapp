@@ -466,25 +466,11 @@ async function scrapeSalesData() {
 
     );
 
-    if (i + BATCH_SIZE < urlsArray.length) {
+        if (i + BATCH_SIZE < urlsArray.length) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
   }
-
-  return newSalesCache;
-}
-            };
-          }
-        });
-
-      } catch (innerError) {
-        console.error(`⚠️ Не удалось загрузить товар ${url}:`, innerError.message);
-      }
-
-    })
-
-  );
 
   return newSalesCache;
 }
