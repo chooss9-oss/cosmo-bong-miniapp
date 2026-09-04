@@ -130,7 +130,8 @@
   </div>
 
 <script>
-  const SECRET = "1747";
+   const LOGIN_PASSWORD = "1747";
+  const API_SECRET = "cb7f2a94e158d6b3f0a1c4e9d7b2f5a8";
   const API_BASE = "https://cosmo-bong-miniapp.vercel.app";
 
   const passScreen = document.getElementById("passScreen");
@@ -139,8 +140,8 @@
   const passBtn = document.getElementById("passBtn");
   const passError = document.getElementById("passError");
 
-  passBtn.addEventListener("click", () => {
-    if (passInput.value.trim() === SECRET) {
+   passBtn.addEventListener("click", () => {
+    if (passInput.value.trim() === LOGIN_PASSWORD) {
       passScreen.style.display = "none";
       mainScreen.style.display = "block";
       startCamera();
@@ -254,7 +255,7 @@
     chargeBtn.textContent = "Начисляем...";
 
     try {
-      const res = await fetch(`${API_BASE}/api/retail-bonus?secret=${SECRET}`, {
+            const res = await fetch(`${API_BASE}/api/retail-bonus?secret=${API_SECRET}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ customerId: currentCustomerId, amount })
