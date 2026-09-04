@@ -6,6 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
 const cheerio = require("cheerio");
+const QRCode = require("qrcode");
 const { waitUntil } = require("@vercel/functions");
 
 const orderRouter = require("./routes/orders");
@@ -1547,6 +1548,42 @@ app.get("/api/bonus-balance", async (req, res) => {
 
 });
 
+// ==============================
+// QR-КОД КЛИЕНТА — генерируется на сервере как PNG и просто показывается в
+// приложении через <Image>, а не рисуется на телефоне. Это специально
+// сделано так, а не через нативную библиотеку внутри приложения — на уже
+// установленных Android APK нет нужного нативного модуля, и такая
+// библиотека крашила бы приложение у всех текущих пользователей, требуя
+// от них переустановки APK. Картинка же работает сразу у всех, без единой
+// переустановки.
+// ==============================
+app.get("/api/qr/:customerId", async (req, res) => {
+
+  const customerId = String(req.params.customerId || "");
+
+  if (!isAndroidCustomerId(customerId)) {
+    return res.status(400).json({ error: "Некорректный customerId" });
+  }
+
+  try {
+
+    const buffer = await QRCode.toBuffer(customerId, {
+      type: "png",
+      width: 400,
+      margin: 1,
+      color: { dark: "#000000", light: "#ffffff" }
+    });
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.send(buffer);
+
+  } catch (error) {
+    console.error("❌ Не удалось сгенерировать QR:", error.message);
+    res.status(500).json({ error: "Не удалось сгенерировать QR" });
+  }
+
+});
 // ==============================
 // RETAIL BONUS — начисление кэшбэка за покупку в розничном магазине по QR-коду
 // клиента (см. QR в профиле Android-приложения). Продавец сканирует код на
