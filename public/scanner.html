@@ -170,13 +170,21 @@
   let currentCustomerId = null;
   let stream = null;
 
+  let scanAttempts = 0;
+  let lastDecodedRaw = null;
+
   async function startCamera() {
+    if (typeof jsQR !== "function") {
+      statusEl.textContent = "Ошибка: библиотека распознавания QR не загрузилась (проверьте интернет)";
+      return;
+    }
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
       video.srcObject = stream;
       video.setAttribute("playsinline", true);
       await video.play();
       scanning = true;
+      statusEl.textContent = `Камера запущена (${video.videoWidth}×${video.videoHeight}). Наведите на QR...`;
       requestAnimationFrame(tick);
     } catch (e) {
       statusEl.textContent = "Не удалось получить доступ к камере: " + e.message;
@@ -186,17 +194,30 @@
   function tick() {
     if (!scanning) return;
 
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: "attemptBoth"
+      });
 
-      if (code && code.data && code.data.startsWith("android:")) {
-        onCodeFound(code.data);
-        return;
+      scanAttempts++;
+
+      if (code && code.data) {
+        lastDecodedRaw = code.data;
+        if (code.data.startsWith("android:")) {
+          onCodeFound(code.data);
+          return;
+        } else {
+          statusEl.textContent = "QR найден, но формат неизвестен: " + code.data.slice(0, 40);
+        }
+      } else if (scanAttempts % 30 === 0) {
+        statusEl.textContent = `Ищу QR-код... (кадров обработано: ${scanAttempts}, ${canvas.width}×${canvas.height})`;
       }
+    } else if (scanAttempts % 30 === 0) {
+      statusEl.textContent = `Ожидание видео с камеры... readyState=${video.readyState}`;
     }
 
     requestAnimationFrame(tick);
