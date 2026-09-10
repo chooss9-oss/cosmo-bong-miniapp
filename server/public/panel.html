@@ -1982,8 +1982,8 @@
         const perm = await Notification.requestPermission();
         alert('шаг 3: perm = ' + perm);
         if (perm !== 'granted') { alert('Уведомления запрещены в настройках'); return; }
-        const reg = await navigator.serviceWorker.register('/api/panel/sw.js');
-        alert('шаг 4: sw зарегистрирован');
+               const reg = await navigator.serviceWorker.register('/api/panel/sw.js');
+        alert('шаг 4: sw зарегистрирован, installing=' + !!reg.installing + ' waiting=' + !!reg.waiting + ' active=' + !!reg.active);
         await navigator.serviceWorker.ready;
         alert('шаг 5: sw готов');
         let sub = await reg.pushManager.getSubscription();
