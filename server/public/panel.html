@@ -1971,29 +1971,24 @@
       return Math.abs(h).toString(36);
     }
 
-       async function enablePush() {
+           async function enablePush() {
       try {
-        alert('шаг 1: старт');
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
           alert('Браузер не поддерживает push-уведомления');
           return;
         }
-        alert('шаг 2: до requestPermission');
         const perm = await Notification.requestPermission();
-        alert('шаг 3: perm = ' + perm);
         if (perm !== 'granted') { alert('Уведомления запрещены в настройках'); return; }
-               const reg = await navigator.serviceWorker.register('/api/panel/sw.js');
-        alert('шаг 4: sw зарегистрирован, installing=' + !!reg.installing + ' waiting=' + !!reg.waiting + ' active=' + !!reg.active);
-        await navigator.serviceWorker.ready;
-        alert('шаг 5: sw готов');
+        const reg = await navigator.serviceWorker.register('/api/panel/sw.js');
+        if (!reg.active) {
+          await navigator.serviceWorker.ready;
+        }
         let sub = await reg.pushManager.getSubscription();
-        alert('шаг 6: getSubscription = ' + (sub ? 'есть' : 'нет'));
         if (!sub) {
           sub = await reg.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY)
           });
-          alert('шаг 7: subscribe успешно');
         }
         
         const id = 'sub_' + hashStr(sub.endpoint);
