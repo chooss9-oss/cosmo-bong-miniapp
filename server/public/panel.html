@@ -1425,7 +1425,7 @@
           $body.appendChild(buildAndroidMsg(m));
         };
 
-        if (isSimpleAppend) {
+               if (isSimpleAppend) {
           const newOnes = messages.slice(androidRenderedKeys.length);
           if (newOnes.length) {
             const wasNearBottom = $body.scrollHeight - $body.scrollTop - $body.clientHeight < 80;
@@ -1441,11 +1441,6 @@
           lastRenderedDateKey = null;
           messages.forEach(m => {
             appendWithDateSep(m);
-            androidRenderedKeys.push(keyOf(m));
-          });
-          $body.scrollTop = $body.scrollHeight;
-        }
-            $body.appendChild(buildAndroidMsg(m));
             androidRenderedKeys.push(keyOf(m));
           });
           $body.scrollTop = $body.scrollHeight;
