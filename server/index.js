@@ -949,14 +949,14 @@ app.get("/api/preview", async (req, res) => {
       $(`meta[name="${prop}"]`).attr("content") ||
       "";
 
-    const title = meta("og:title") || $("title").first().text() || "";
+       const title = meta("og:title") || $("title").first().text() || "";
     const image = meta("og:image") || "";
-    const price =
-      meta("product:price:amount") ||
-      meta("og:price:amount") ||
-      $('[itemprop="price"]').attr("content") ||
-      $("[data-price]").attr("data-price") ||
-      "";
+    const priceFromMods = $(".goodsDataMainModificationsList")
+      .first()
+      .find('input[name="price_now"]')
+      .attr("value");
+    const priceFromMain = $(".main-price").first().attr("content");
+    const price = priceFromMods || priceFromMain || "";
 
     res.set(cors).send(JSON.stringify({ title: title.trim(), image, price, url: target }));
 
