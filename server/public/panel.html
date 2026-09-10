@@ -268,7 +268,16 @@
     -webkit-user-select: none;
     user-select: none;
   }
-  .msg.event { background: none; color: #b7c4b3; font-size: 12px; align-self: center; }
+    .msg.event { background: none; color: #b7c4b3; font-size: 12px; align-self: center; }
+  .date-sep {
+    align-self: center;
+    color: #8fa08b;
+    font-size: 11.5px;
+    background: rgba(255,255,255,0.06);
+    padding: 3px 10px;
+    border-radius: 999px;
+    margin: 4px 0;
+  }
   .msg-act { display: flex; gap: 6px; margin-top: 6px; }
   .msg-act button {
     background: rgba(0,0,0,0.25);
@@ -690,7 +699,8 @@
         else if (e.data.type === 'open-latest') openLatestChat();
       });
     }
-    const renderedIds = new Set();
+       const renderedIds = new Set();
+    let lastRenderedDateKey = null;
     const chatLabels = {};
     const chatMeta = {};
     const onlineIds = new Set();
@@ -758,7 +768,18 @@
     });
 
     // Список чатов, обновляется в реальном времени
-       function relTime(d) {
+         function dateLabel(d) {
+      if (!d) return '';
+      const now = new Date();
+      const isSameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+      if (isSameDay(d, now)) return 'Сегодня';
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (isSameDay(d, yesterday)) return 'Вчера';
+      const sameYear = d.getFullYear() === now.getFullYear();
+      return d.toLocaleDateString('ru-RU', sameYear ? { day: 'numeric', month: 'long' } : { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+    function relTime(d) {
       if (!d) return '';
       const diff = (Date.now() - d.getTime()) / 1000;
       if (diff < 60) return 'только что';
@@ -1002,11 +1023,12 @@
       currentMode = 'site';
       androidActiveCustomerId = null;
       if (androidHistoryTimer) { clearInterval(androidHistoryTimer); androidHistoryTimer = null; }
-      activeChatId = chatId;
+           activeChatId = chatId;
       markRead(chatId);
       clearNotifications();
       if (lastChatsSnap) renderChatList(lastChatsSnap);
       renderedIds.clear();
+      lastRenderedDateKey = null;
       Object.keys(msgEls).forEach(k => delete msgEls[k]);
       $body.innerHTML = '';
       $header.style.display = 'flex';
@@ -1140,8 +1162,17 @@
               if (msgEls[id]) buildMsg(msgEls[id], m, chatId, id);
               return;
             }
-            if (renderedIds.has(id)) return;
+                      if (renderedIds.has(id)) return;
             renderedIds.add(id);
+            const msgDate = m.createdAt && m.createdAt.toDate ? m.createdAt.toDate() : new Date();
+            const dateKey = msgDate.toDateString();
+            if (dateKey !== lastRenderedDateKey) {
+              lastRenderedDateKey = dateKey;
+              const sep = document.createElement('div');
+              sep.className = 'date-sep';
+              sep.textContent = dateLabel(msgDate);
+              $body.appendChild(sep);
+            }
             const div = document.createElement('div');
             buildMsg(div, m, chatId, id);
             msgEls[id] = div;
@@ -1159,8 +1190,9 @@
       activeChatId = null;
       if (typingUnsub) { typingUnsub(); typingUnsub = null; }
       if (msgUnsub) { msgUnsub(); msgUnsub = null; }
-         androidActiveCustomerId = customerId;
+              androidActiveCustomerId = customerId;
       androidRenderedKeys = [];
+      lastRenderedDateKey = null;
       if (androidHistoryTimer) { clearInterval(androidHistoryTimer); androidHistoryTimer = null; }
       clearNotifications();
 
@@ -1378,12 +1410,27 @@
           androidRenderedKeys.length > 0 &&
           androidRenderedKeys.every((k, i) => k === keyOf(messages[i]));
 
+                const appendWithDateSep = (m) => {
+          if (m.createdAt) {
+            const msgDate = new Date(m.createdAt);
+            const dateKey = msgDate.toDateString();
+            if (dateKey !== lastRenderedDateKey) {
+              lastRenderedDateKey = dateKey;
+              const sep = document.createElement('div');
+              sep.className = 'date-sep';
+              sep.textContent = dateLabel(msgDate);
+              $body.appendChild(sep);
+            }
+          }
+          $body.appendChild(buildAndroidMsg(m));
+        };
+
         if (isSimpleAppend) {
           const newOnes = messages.slice(androidRenderedKeys.length);
           if (newOnes.length) {
             const wasNearBottom = $body.scrollHeight - $body.scrollTop - $body.clientHeight < 80;
             newOnes.forEach(m => {
-              $body.appendChild(buildAndroidMsg(m));
+              appendWithDateSep(m);
               androidRenderedKeys.push(keyOf(m));
             });
             if (wasNearBottom) $body.scrollTop = $body.scrollHeight;
@@ -1391,7 +1438,13 @@
         } else {
           $body.innerHTML = '';
           androidRenderedKeys = [];
+          lastRenderedDateKey = null;
           messages.forEach(m => {
+            appendWithDateSep(m);
+            androidRenderedKeys.push(keyOf(m));
+          });
+          $body.scrollTop = $body.scrollHeight;
+        }
             $body.appendChild(buildAndroidMsg(m));
             androidRenderedKeys.push(keyOf(m));
           });
