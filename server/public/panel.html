@@ -1,0 +1,2010 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Космо Бонг — панель ответов</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<style>
+  #client-card {
+    padding: 8px 12px;
+    border-bottom: 1px solid #24382c;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #b9c9be;
+    background: #16241c;
+  }
+  #client-card .cc-row { display: flex; gap: 6px; }
+  #client-card .cc-label { color: #7d9186; min-width: 78px; }
+  #client-card .cc-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+  #client-card .cc-id { user-select: all; word-break: break-all; font-size: 11px; color: #8fa08b; }
+  #client-card .cc-note { flex: 1; word-break: break-word; }
+    #client-card .cc-act {
+    color: #7fae63;
+    text-decoration: underline;
+    margin-right: 8px;
+    white-space: nowrap;
+  }
+  #client-card .cc-btn {
+    background: none; border: none; cursor: pointer;
+    color: #7fae63; font-size: 11.5px; padding: 0; text-decoration: underline;
+    font-family: inherit;
+  }
+  #cc-path-body { margin-top: 4px; }
+  .cc-path-row {
+    display: flex; justify-content: space-between; gap: 8px;
+    padding: 2px 0; font-size: 11.5px; color: #b9c9be;
+  }
+  .cc-path-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cc-path-t { color: #7d9186; flex-shrink: 0; }
+  #client-card .cc-on { background: #22c55e; }
+  #client-card .cc-off { background: #7d9186; }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #0f1a14;
+    color: #eef2ea;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    overflow: hidden;
+  }
+  #sidebar {
+    width: 280px;
+    background: #14231c;
+    border-right: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  #sidebar-scroll { flex: 1; overflow-y: auto; min-height: 0; }
+  #tabs {
+    display: flex;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+  }
+  #tabs .tab {
+    flex: 1;
+    background: none;
+    border: none;
+    color: #b7c4b3;
+    padding: 12px 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  #tabs .tab.active { color: #eef2ea; background: #1c2e25; }
+  #sidebar h1 {
+    font-size: 15px;
+    padding: 16px;
+    margin: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  #online-counter {
+    padding: 10px 16px;
+    font-size: 12.5px;
+    color: #b7c4b3;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #online-counter .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #7fae63;
+  }
+  #online-counter b { color: #eef2ea; }
+  .online-item {
+    padding: 9px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .online-item:hover { background: #1c2e25; }
+  .online-item .dev { color: #eef2ea; font-weight: 600; }
+  .online-item .pg { color: #b7c4b3; font-size: 11.5px; margin-top: 2px; word-break: break-all; }
+  .online-item { display: flex; gap: 10px; align-items: flex-start; }
+  .online-item .avatar {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: #24382d;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .online-item .col { flex: 1; min-width: 0; }
+  .online-item .last {
+    color: #8fa08b;
+    font-size: 11.5px;
+    margin-top: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #stats-controls {
+    display: flex; gap: 8px; padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  #stats-controls select, #stats-controls button {
+    background: #1c2e25; color: #eef2ea;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px; padding: 6px 10px; font-size: 12.5px;
+    font-family: inherit; cursor: pointer;
+  }
+  #stats-controls button { background: #7fae63; color: #0d160f; border: none; font-weight: 600; }
+  .stats-hint { padding: 12px 14px; color: #8fa08b; font-size: 12px; }
+  .st-block { padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .st-title {
+    font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
+    color: #8fa08b; margin-bottom: 6px;
+  }
+  .st-row {
+    display: flex; justify-content: space-between; gap: 10px;
+    font-size: 12.5px; padding: 3px 0; color: #b7c4b3;
+  }
+  .st-row b { color: #eef2ea; }
+  .list-title {
+    padding: 10px 16px 6px;
+    font-size: 11.5px;
+    color: #b7c4b3;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+    #chat-filter { padding: 8px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  #chat-filter button {
+    background: #1c2e25;
+    color: #b7c4b3;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 11.5px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  #chat-filter button.on { background: #7fae63; color: #0d160f; border-color: #7fae63; font-weight: 600; }
+  #chat-empty { padding: 16px 14px; color: #8fa08b; font-size: 12px; }
+  .chat-item {
+    padding: 11px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .chat-item:hover, .chat-item.active { background: #1c2e25; }
+  .chat-item .avatar {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: #24382d;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .chat-item .col { flex: 1; min-width: 0; }
+  .chat-item .row1 { display: flex; align-items: baseline; gap: 8px; }
+  .chat-item .name {
+    font-weight: 600;
+    font-size: 12.5px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .chat-item .time { color: #8fa08b; font-size: 10.5px; flex-shrink: 0; }
+  .chat-item .preview {
+    color: #b7c4b3;
+    font-size: 12px;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .chat-item.unread .avatar { box-shadow: 0 0 0 2px #7fae63; }
+  .chat-item .avatar { position: relative; }
+  .chat-item .avatar.is-online::after {
+    content: '';
+    position: absolute;
+    right: -1px; bottom: -1px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #22c55e;
+    border: 2px solid #14231c;
+  }
+  .chat-item.unread {
+    background: rgba(127,174,99,0.10);
+    border-left: 3px solid #7fae63;
+    padding-left: 11px;
+  }
+  .chat-item.unread .name { color: #cdf0b6; }
+  .chat-item.unread .preview { color: #dff3d2; font-weight: 600; }
+  .chat-item .badge {
+    display: inline-block;
+    background: #e0724a;
+    color: #fff;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    margin-left: 6px;
+  }
+
+  #main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+  #chat-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  #chat-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .msg {
+    max-width: 60%;
+    padding: 10px 13px;
+    border-radius: 12px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+  .msg.client { background: #1c2e25; align-self: flex-start; border-radius: 12px 12px 12px 2px; }
+  .msg.operator {
+    background: #4f7a4a;
+    align-self: flex-end;
+    border-radius: 12px 12px 2px 12px;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .msg.event { background: none; color: #b7c4b3; font-size: 12px; align-self: center; }
+  .msg-act { display: flex; gap: 6px; margin-top: 6px; }
+  .msg-act button {
+    background: rgba(0,0,0,0.25);
+    color: #eef2ea;
+    border: none;
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .msg .edited { font-size: 11px; opacity: .6; margin-left: 4px; }
+    .msg .ticks { font-size: 11px; margin-left: 6px; opacity: .65; white-space: nowrap; }
+  .msg .ticks.read { color: #cdf0b6; opacity: 1; }
+  .msg .msg-time { font-size: 10.5px; margin-left: 6px; opacity: .55; white-space: nowrap; display: inline-block; }
+  #quick-replies {
+    gap: 6px;
+    padding: 0 18px 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    -webkit-overflow-scrolling: touch;
+  }
+  #quick-replies::-webkit-scrollbar { display: none; }
+  #quick-replies button {
+    background: #1c2e25;
+    color: #cdf0b6;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-family: inherit;
+    white-space: nowrap;
+    cursor: pointer;
+    flex: 0 0 auto;
+  }
+  #quick-replies button:active { background: #24382d; }
+  #reply-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 14px 18px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  #reply-input {
+    flex: 1;
+    min-width: 0;
+    background: #1c2e25;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: #eef2ea;
+    font-size: 16px;
+    font-family: inherit;
+    line-height: 1.35;
+    resize: none;
+    overflow-y: auto;
+    max-height: 120px;
+    scrollbar-width: none;
+  }
+  #reply-input::-webkit-scrollbar { display: none; }
+    #reply-send, #reply-attach, #reply-mic { height: 40px; }
+  #reply-send {
+    background: #7fae63;
+    color: #0d160f;
+    border: none;
+    border-radius: 10px;
+    padding: 0 18px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+   #reply-attach {
+    background: #1c2e25;
+    color: #eef2ea;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    width: 40px;
+    flex-shrink: 0;
+    cursor: pointer;
+    font-size: 16px;
+  }
+  #reply-mic {
+    background: #1c2e25;
+    color: #eef2ea;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    width: 40px;
+    flex-shrink: 0;
+    cursor: pointer;
+    font-size: 16px;
+  }
+  .msg a.file-link { display: inline-flex; gap: 6px; text-decoration: underline; }
+    .msg img.file-img { max-width: 100%; border-radius: 8px; display: block; margin-top: 4px; }
+  .msg { overflow-wrap: anywhere; }
+  #login-overlay {
+    position: fixed;
+    inset: 0;
+    background: #0f1a14;
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .login-box {
+    width: 100%;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .login-box h2 { font-size: 16px; margin: 0 0 6px; }
+  .login-box input {
+    background: #1c2e25;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 11px 12px;
+    color: #eef2ea;
+    font-size: 16px;
+    font-family: inherit;
+  }
+  .login-box button {
+    background: #7fae63;
+    color: #0d160f;
+    border: none;
+    border-radius: 10px;
+    padding: 11px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  #login-err { color: #e0724a; font-size: 12px; }
+  #empty-state, #config-warning {
+    margin: auto;
+    text-align: center;
+    color: #b7c4b3;
+    max-width: 400px;
+    padding: 20px;
+  }
+
+  #chat-header { display: flex; align-items: center; gap: 10px; }
+  #back-btn {
+    display: none;
+    background: none;
+    border: none;
+    color: #eef2ea;
+    font-size: 22px;
+    line-height: 1;
+    padding: 0 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #chat-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  @media (max-width: 700px) {
+    #sidebar { width: 100%; border-right: none; }
+    #main { display: none; flex: 1; min-height: 0; }
+    #chat-body { padding: 12px; }
+    body.chat-open #sidebar { display: none; }
+    body.chat-open #main { display: flex; }
+    #back-btn { display: block; }
+  }
+</style>
+</head>
+<body>
+
+<div id="login-overlay">
+  <div class="login-box">
+    <h2>Космо Бонг — вход</h2>
+    <input id="login-email" type="email" placeholder="Почта" autocomplete="username" />
+    <input id="login-pass" type="password" placeholder="Пароль" autocomplete="current-password" />
+    <button id="login-btn">Войти</button>
+    <div id="login-err"></div>
+  </div>
+</div>
+
+<div id="sidebar">
+  <h1>Космо Бонг</h1>
+   <div id="tabs">
+       <button id="tab-chats" class="tab active">💬 Все чаты</button>
+    <button id="tab-android" class="tab">🤖 Android</button>
+    <button id="tab-installs" class="tab">📲 Установки</button>
+    <button id="tab-online" class="tab">🟢 Онлайн</button>
+    <button id="tab-stats" class="tab">📊 Отчёт</button>
+  </div>
+  <div id="sidebar-scroll">
+    <div id="pane-chats">
+      <div id="chat-filter"><button id="filter-unread">Только непрочитанные</button></div>
+      <div id="chat-list"></div>
+    </div>
+            <div id="pane-android" style="display:none;">
+      <div id="android-empty" style="padding:16px 14px;color:#8fa08b;font-size:12px;">Загрузка…</div>
+      <div id="android-list"></div>
+    </div>
+    <div id="pane-installs" style="display:none;">
+      <div id="installs-empty" style="padding:16px 14px;color:#8fa08b;font-size:12px;">Загрузка…</div>
+      <div id="installs-list"></div>
+    </div>
+    <div id="pane-stats" style="display:none;">
+      <div id="stats-controls">
+        <select id="stats-period">
+          <option value="1">Сутки</option>
+          <option value="7" selected>7 дней</option>
+          <option value="30">30 дней</option>
+        </select>
+        <button id="stats-refresh">Обновить</button>
+      </div>
+      <div id="stats-body"><div class="stats-hint">Нажми «Обновить», чтобы загрузить данные.</div></div>
+    </div>
+    <div id="pane-online" style="display:none;">
+      <div id="online-counter"><span class="dot"></span> Онлайн сейчас: <b id="online-count">—</b></div>
+      <div id="online-list"></div>
+    </div>
+  </div>
+  <div style="padding:10px 14px;border-top:1px solid rgba(255,255,255,0.08);">
+<button id="status-btn" style="width:100%;background:#1c2e25;color:#eef2ea;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:9px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:8px;">⏳ Статус…</button>
+    <button id="push-btn" style="width:100%;background:#1c2e25;color:#eef2ea;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:9px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;">🔔 Включить уведомления</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="chat-header" style="display:none;">
+    <button id="back-btn" title="Назад">←</button>
+    <span id="chat-title"></span>
+  </div>
+  <div id="client-card" style="display:none;"></div>
+  <div id="chat-body"></div>
+  <div id="typing-ind" style="display:none;padding:0 18px 8px;font-size:12px;color:#7fae63;">клиент печатает…</div>
+  <div id="quick-replies" style="display:none;"></div>
+  <div id="reply-row" style="display:none;">
+        <button id="reply-attach" title="Прикрепить файл">📎</button>
+    <input id="reply-file" type="file" accept="image/*" style="display:none;" />
+    <button id="reply-mic" title="Голосовое сообщение">🎤</button>
+    <textarea id="reply-input" rows="1" placeholder="Написать клиенту..."></textarea>
+    <button id="reply-send">Отправить</button>
+  </div>
+</div>
+
+<script>
+  // === ВСТАВЬ ТОТ ЖЕ КОНФИГ, ЧТО И В ВИДЖЕТЕ НА САЙТЕ ===
+  const FIREBASE_CONFIG = {
+    apiKey: 'AIzaSyALK5QcbERhpWycM0RYQGKDlwVEgLEKBBg',
+    authDomain: 'cosmo-bong-chat-forsite.firebaseapp.com',
+    projectId: 'cosmo-bong-chat-forsite',
+    storageBucket: 'cosmo-bong-chat-forsite.firebasestorage.app',
+    messagingSenderId: '174248020107',
+    appId: '1:174248020107:web:9f2542e0d28f13e7ae2c8e'
+  };
+  const IMGBB_API_KEY = '9491d998fe1a54d89a58da7aeb980c31';
+
+  // Бэкенд cosmo-bong-miniapp — новые эндпоинты для вкладки "Android"
+  // (список чатов / история / отправка) поверх существующего Redis-чата,
+  // без миграции на Firestore.
+  const PANEL_BACKEND_URL = '';
+  const PANEL_SECRET = 'k9mP2vXqR7wLtN4hYbJ8sD1fA6cZ3eU0';
+
+
+  if (!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey === 'ВСТАВЬ_СЮДА') {
+    document.getElementById('chat-body').innerHTML =
+      '<div id="config-warning">Сначала вставь настройки Firebase в код этой страницы (тот же конфиг, что в виджете на сайте).</div>';
+  } else {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    const db = firebase.firestore();
+    const $login = document.getElementById('login-overlay');
+    let panelStarted = false;
+    firebase.auth().onAuthStateChanged(u => {
+      if (u && !u.isAnonymous) {
+        $login.style.display = 'none';
+        if (!panelStarted) { panelStarted = true; startPanel(); }
+      } else {
+        $login.style.display = 'flex';
+      }
+    });
+    document.getElementById('login-btn').onclick = () => {
+      const em = document.getElementById('login-email').value.trim();
+      const pw = document.getElementById('login-pass').value;
+      const $err = document.getElementById('login-err');
+      $err.textContent = 'Вхожу…';
+      firebase.auth().signInWithEmailAndPassword(em, pw)
+        .then(() => { $err.textContent = ''; })
+        .catch(e => { $err.textContent = 'Не удалось войти: ' + e.message; });
+    };
+    document.getElementById('login-pass').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('login-btn').click();
+    });
+    function startPanel() {
+
+    // Онлайн-счётчик — посетитель считается активным, если "отмечался" в последние 2,5 минуты
+    let onlineLoadedOnce = false;
+    function refreshOnlineCounter() {
+      if (document.hidden) return;
+      if (onlineLoadedOnce && $paneOnline && $paneOnline.style.display === 'none') return;
+      onlineLoadedOnce = true;
+      const threshold = firebase.firestore.Timestamp.fromDate(new Date(Date.now() - 150000));
+      db.collection('presence').where('lastSeen', '>', threshold).get()
+        .then(snap => {
+          document.getElementById('online-count').textContent = snap.size;
+          const $ol = document.getElementById('online-list');
+          $ol.innerHTML = '';
+          const rows = [];
+          snap.forEach(doc => rows.push({ id: doc.id, d: doc.data() }));
+          rows.sort((a, b) => ((chatMeta[b.id] || {}).at || 0) - ((chatMeta[a.id] || {}).at || 0));
+          onlineIds.clear();
+          rows.forEach(r => {
+            onlineIds.add(r.id);
+            if (r.d.visitorLabel) presenceLabels[r.id] = r.d.visitorLabel;
+          });
+          if (lastChatsSnap) renderChatList(lastChatsSnap);
+          rows.forEach(r => {
+            const d = r.d;
+            const meta = chatMeta[r.id] || {};
+                        const dev = d.visitorLabel || chatLabels[r.id] || d.deviceType || 'неизвестно';
+            const item = document.createElement('div');
+            item.className = 'online-item';
+            const av = document.createElement('div');
+            av.className = 'avatar';
+            av.textContent = deviceIcon(dev);
+            const col = document.createElement('div');
+            col.className = 'col';
+            col.innerHTML = '<div class="dev"></div><div class="pg"></div><div class="last"></div>';
+            col.querySelector('.dev').textContent = dev;
+            col.querySelector('.pg').textContent = d.page || '—';
+            col.querySelector('.last').textContent = meta.text || 'сообщений пока нет';
+
+            // Длительность сессии (onlineSince) и время последней активности
+            // (lastSeen) — новые поля, появляются только у визитов ПОСЛЕ
+            // обновления виджета; для старых визитов onlineSince может
+            // отсутствовать, тогда просто не показываем эту строку.
+            const onlineSinceDate = d.onlineSince && d.onlineSince.toDate ? d.onlineSince.toDate() : null;
+            const lastSeenDate = d.lastSeen && d.lastSeen.toDate ? d.lastSeen.toDate() : null;
+
+            if (onlineSinceDate || lastSeenDate) {
+              const timing = document.createElement('div');
+              timing.className = 'pg';
+              timing.style.opacity = '0.75';
+              const parts = [];
+              if (onlineSinceDate) parts.push('⏱ ' + formatDuration(Date.now() - onlineSinceDate.getTime()) + ' на сайте');
+              if (lastSeenDate) parts.push('был(а) ' + relTime(lastSeenDate));
+              timing.textContent = parts.join(' · ');
+              col.appendChild(timing);
+            }
+
+            item.appendChild(av);
+            item.appendChild(col);
+            item.onclick = () => openChat(r.id);
+            $ol.appendChild(item);
+          });
+        })
+        .catch(e => console.error('presence count error', e));
+    }
+    setTimeout(() => {
+      refreshOnlineCounter();
+      setInterval(refreshOnlineCounter, 60000);
+    }, 1000);
+
+      let activeChatId = null;
+    let latestClientChatId = null;
+    let lastReadMs = 0;
+    let currentMode = 'site'; // 'site' | 'android' — какой тип чата сейчас открыт в #chat-body
+    function refreshTicks() {
+      $body.querySelectorAll('.ticks').forEach(el => {
+        const read = Number(el.dataset.ts) <= lastReadMs;
+        el.textContent = read ? '✓✓' : '✓';
+        el.classList.toggle('read', read);
+      });
+    }
+    let pendingOpenLatest = false;
+    function clearNotifications() {
+      if (navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});
+      if (navigator.serviceWorker) {
+        navigator.serviceWorker.ready
+          .then(reg => reg.getNotifications())
+          .then(list => list.forEach(n => n.close()))
+          .catch(() => {});
+      }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) clearNotifications();
+    });
+    function openLatestChat() {
+      if (latestClientChatId) openChat(latestClientChatId);
+      else pendingOpenLatest = true;
+    }
+      let pendingOpenChatId = null;
+    const startParams = new URLSearchParams(location.search);
+    if (startParams.get('chat')) {
+      pendingOpenChatId = startParams.get('chat');
+      history.replaceState(null, '', '/api/panel');
+    } else if (startParams.get('openLatest')) {
+      pendingOpenLatest = true;
+      history.replaceState(null, '', '/api/panel');
+    }
+    if (pendingOpenChatId && pendingOpenChatId.indexOf('android:') === 0) {
+      const androidIdFromUrl = pendingOpenChatId;
+      pendingOpenChatId = null;
+      setTimeout(() => {
+        switchTab('android');
+        startAndroidPolling();
+        openAndroidChat(androidIdFromUrl);
+      }, 0);
+    }
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', e => {
+        if (!e.data) return;
+        if (e.data.type === 'open-chat' && e.data.chatId) {
+          if (e.data.chatId.indexOf('android:') === 0) {
+            switchTab('android');
+            startAndroidPolling();
+            openAndroidChat(e.data.chatId);
+          } else {
+            openChat(e.data.chatId);
+          }
+        }
+        else if (e.data.type === 'open-latest') openLatestChat();
+      });
+    }
+    const renderedIds = new Set();
+    const chatLabels = {};
+    const chatMeta = {};
+    const onlineIds = new Set();
+    const presenceLabels = {};
+    let firstChatSnapshot = true;
+    let typingUnsub = null;
+    let msgUnsub = null;
+    let typingHideTimer = null;
+    function playPing() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const note = (freq, start, dur) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'square';
+          const s = ctx.currentTime + start;
+          o.frequency.setValueAtTime(freq, s);
+          g.gain.setValueAtTime(0.001, s);
+          g.gain.exponentialRampToValueAtTime(0.15, s + 0.015);
+          g.gain.exponentialRampToValueAtTime(0.001, s + dur);
+          o.start(s); o.stop(s + dur + 0.02);
+        };
+        note(523, 0, 0.08);
+        note(659, 0.07, 0.08);
+        note(784, 0.14, 0.08);
+        note(1047, 0.21, 0.3);
+      } catch (e) {}
+    }
+         document.getElementById('back-btn').onclick = () => {
+      document.body.classList.remove('chat-open');
+      activeChatId = null;
+      androidActiveCustomerId = null;
+      if (androidHistoryTimer) { clearInterval(androidHistoryTimer); androidHistoryTimer = null; }
+      document.getElementById('client-card').style.display = 'none';
+      if (currentMode === 'android' && androidChatOpenedFrom === 'installs') {
+        androidChatOpenedFrom = 'android';
+        switchTab('installs');
+      }
+    };
+
+    const $list = document.getElementById('chat-list');
+    const $header = document.getElementById('chat-header');
+    const $body = document.getElementById('chat-body');
+    const $replyRow = document.getElementById('reply-row');
+    const $replyInput = document.getElementById('reply-input');
+    const $quick = document.getElementById('quick-replies');
+    const QUICK_REPLIES = [
+      { label: '👋 Привет', text: 'Здравствуйте! Чем могу помочь?' },
+      { label: '✅ В наличии', text: 'Да, этот товар есть в наличии.' },
+      { label: '🚚 Доставка', text: 'Отправляем Почтой России и СДЭК по всей России: срок от 2 дней, стоимость от 350 ₽. Оплата — перевод на карту или по QR-коду, наложенным платежом не отправляем.' },
+      { label: '📷 Фото', text: 'Пришлите, пожалуйста, фото — так будет проще подобрать.' },
+      { label: '⏳ Уточню', text: 'Секунду, уточню информацию и вернусь с ответом.' },
+      { label: '🙌 Спасибо', text: 'Спасибо за обращение! Будут вопросы — пишите, всегда на связи.' }
+    ];
+    QUICK_REPLIES.forEach(q => {
+      const b = document.createElement('button');
+      b.textContent = q.label;
+      b.title = q.text;
+      b.onclick = () => {
+        $replyInput.value = $replyInput.value ? $replyInput.value + ' ' + q.text : q.text;
+        $replyInput.focus();
+      };
+      $quick.appendChild(b);
+    });
+
+    // Список чатов, обновляется в реальном времени
+       function relTime(d) {
+      if (!d) return '';
+      const diff = (Date.now() - d.getTime()) / 1000;
+      if (diff < 60) return 'только что';
+      if (diff < 3600) return Math.floor(diff / 60) + ' мин назад';
+      if (diff < 86400) return Math.floor(diff / 3600) + ' ч назад';
+      if (diff < 172800) return 'вчера';
+      return d.toLocaleDateString('ru-RU');
+    }
+
+    // Длительность сессии в формате "5 мин" / "1 ч 20 мин" / "3 ч" —
+    // ms — разница в миллисекундах между сейчас и onlineSince.
+    function formatDuration(ms) {
+      const totalMinutes = Math.max(0, Math.floor(ms / 60000));
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      if (hours === 0) return minutes + ' мин';
+      if (minutes === 0) return hours + ' ч';
+      return hours + ' ч ' + minutes + ' мин';
+    }
+    function readKey(id) { return 'cb_read_' + id; }
+    function markRead(id) {
+      try { localStorage.setItem(readKey(id), String(Date.now())); } catch (e) {}
+    }
+    function isUnread(id, data) {
+      if (data.lastMessageRole !== 'client') return false;
+      const ts = data.lastActivity && data.lastActivity.toDate ? data.lastActivity.toDate().getTime() : 0;
+      let last = 0;
+      try { last = parseInt(localStorage.getItem(readKey(id)) || '0', 10); } catch (e) {}
+      return ts > last;
+    }
+    const EVENT_LABELS = {
+      operator_requested: '🔔 Клиент позвал оператора',
+      dialog_ended: '🔚 Клиент завершил диалог',
+      waiting_1min: '⏰ Клиент ждёт ответа больше минуты',
+      waiting_2min: '⏰⏰ Клиент ждёт ответа больше двух минут',
+      contact_left: '📞 Клиент оставил контакт для связи',
+      callback_request: '📞 Клиент оставил контакт для связи',
+      welcome_click: '💡 Клиент откликнулся на подсказку',
+           messenger_click: '➡️ Клиент перешёл в мессенджер',
+      rating: '⭐ Клиент оценил общение',
+      client_message: ''
+    };
+    function deviceIcon(label) {
+      const s = label || '';
+      if (s.indexOf('Android') >= 0) return '🤖';
+      if (s.indexOf('iPhone') >= 0) return '📱';
+      if (s.indexOf('Mac') >= 0) return '🍎';
+      if (s.indexOf('Windows') >= 0) return '🖥';
+      return '👤';
+    }
+
+    const msgEls = {};
+    function buildMsg(div, m, chatId, msgId) {
+      div.innerHTML = '';
+      if (m.fileUrl) {
+        div.className = 'msg ' + (m.role === 'client' ? 'client' : 'operator');
+        const isImage = (m.fileType || '').startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(m.fileName || '');
+        div.innerHTML = (m.text ? m.text + '<br>' : '') + (isImage
+          ? '<img class="file-img" src="' + m.fileUrl + '" />'
+          : '<a class="file-link" href="' + m.fileUrl + '" target="_blank">📎 ' + (m.fileName || 'Файл') + '</a>');
+      } else if (m.event === 'callback_request') {
+        div.className = 'msg event';
+        div.textContent = '📞 Клиент оставил контакт — ' + (m.text || '');
+      } else if (m.role === 'client' && m.text) {
+        div.className = 'msg client';
+        div.textContent = m.text;
+      } else if (m.role === 'operator' && m.text) {
+        div.className = 'msg operator';
+        div.textContent = m.text;
+      } else {
+        div.className = 'msg event';
+        const lbl = EVENT_LABELS[m.event];
+        const base = lbl !== undefined ? lbl : (m.event || '');
+        div.textContent = m.text ? (base ? base + ' — ' + m.text : m.text) : base;
+      }
+      if (m.editedAt) {
+        const ed = document.createElement('span');
+        ed.className = 'edited';
+        ed.textContent = '(изм.)';
+        div.appendChild(ed);
+      }
+      if (m.role === 'operator') {
+        const tick = document.createElement('span');
+        tick.className = 'ticks';
+        tick.dataset.ts = String(m.createdAt && m.createdAt.toDate ? m.createdAt.toDate().getTime() : Date.now());
+        const isRead = Number(tick.dataset.ts) <= lastReadMs;
+        tick.textContent = isRead ? '✓✓' : '✓';
+        if (isRead) tick.classList.add('read');
+        div.appendChild(tick);
+        div.dataset.text = m.text || '';
+        if (div.dataset.bound === '1') return;
+        div.dataset.bound = '1';
+        const showActions = () => {
+          const old = div.querySelector('.msg-act');
+          if (old) { old.remove(); return; }
+          const bar = document.createElement('div');
+          bar.className = 'msg-act';
+          const be = document.createElement('button');
+          be.textContent = '✏️ Изменить';
+          be.onclick = () => {
+            const val = prompt('Изменить сообщение', div.dataset.text || '');
+            if (val === null) return;
+            db.collection('chats').doc(chatId).collection('messages').doc(msgId)
+              .set({ text: val, editedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
+              .catch(err => console.error('edit error', err));
+          };
+          const bd = document.createElement('button');
+          bd.textContent = '🗑 Удалить';
+          bd.onclick = () => {
+            if (!confirm('Удалить сообщение? Оно исчезнет и у клиента.')) return;
+            db.collection('chats').doc(chatId).collection('messages').doc(msgId).delete()
+              .catch(err => console.error('delete error', err));
+          };
+          const bc = document.createElement('button');
+          bc.textContent = '✕';
+          bc.onclick = () => bar.remove();
+          bar.appendChild(be);
+          bar.appendChild(bd);
+          bar.appendChild(bc);
+          div.appendChild(bar);
+        };
+        let holdTimer = null;
+        let holdFired = false;
+        let startX = 0, startY = 0;
+        div.addEventListener('pointerdown', (e) => {
+          if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A') return;
+          startX = e.clientX; startY = e.clientY;
+          holdFired = false;
+          clearTimeout(holdTimer);
+          holdTimer = setTimeout(() => { holdFired = true; showActions(); }, 450);
+        });
+        div.addEventListener('pointermove', (e) => {
+          if (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10) clearTimeout(holdTimer);
+        });
+        div.addEventListener('pointerup', () => clearTimeout(holdTimer));
+        div.addEventListener('pointercancel', () => clearTimeout(holdTimer));
+        div.addEventListener('pointerleave', () => clearTimeout(holdTimer));
+        div.addEventListener('contextmenu', (e) => { e.preventDefault(); showActions(); });
+        div.addEventListener('click', (e) => {
+          if (holdFired) { e.preventDefault(); e.stopPropagation(); holdFired = false; }
+        });
+      }
+    }
+    let lastChatsSnap = null;
+    let onlyUnread = false;
+    document.getElementById('filter-unread').onclick = () => {
+      onlyUnread = !onlyUnread;
+      document.getElementById('filter-unread').classList.toggle('on', onlyUnread);
+      if (lastChatsSnap) renderChatList(lastChatsSnap);
+    };
+    function renderChatList(snap) {
+      lastChatsSnap = snap;
+      if (!firstChatSnapshot) {
+        snap.docChanges().forEach(ch => {
+          if (ch.type === 'removed') return;
+          const d = ch.doc.data();
+          if (d.lastMessageRole === 'client' && ch.doc.id !== activeChatId) playPing();
+        });
+      }
+      firstChatSnapshot = false;
+      $list.innerHTML = '';
+      let unreadTotal = 0;
+      let newestClient = null;
+      snap.forEach(doc => {
+        const data = doc.data();
+        chatLabels[doc.id] = presenceLabels[doc.id] || data.visitorLabel || doc.id;
+        chatMeta[doc.id] = {
+          text: (data.lastMessageRole === 'operator' ? 'Вы: ' : '') + (data.lastMessageText || data.lastEvent || ''),
+          at: data.lastActivity && data.lastActivity.toDate ? data.lastActivity.toDate().getTime() : 0,
+                    device: data.visitorLabel || '',
+          note: data.operatorNote || '',
+                   contact: data.contact || '',
+          contactChannel: data.contactChannel || '',
+          rating: data.rating || 0
+        };
+        const unread = isUnread(doc.id, data);
+        if (unread) unreadTotal++;
+        if (!newestClient && data.lastMessageRole === 'client') newestClient = doc.id;
+        if (onlyUnread && !unread) return;
+
+        const item = document.createElement('div');
+        item.className = 'chat-item' + (doc.id === activeChatId ? ' active' : '') + (unread ? ' unread' : '');
+
+        const av = document.createElement('div');
+        av.className = 'avatar';
+        av.textContent = deviceIcon(chatLabels[doc.id] || data.visitorLabel);
+        if (onlineIds.has(doc.id)) av.classList.add('is-online');
+
+        const col = document.createElement('div');
+        col.className = 'col';
+
+        const row1 = document.createElement('div');
+        row1.className = 'row1';
+        const nm = document.createElement('div');
+        nm.className = 'name';
+        nm.textContent = chatLabels[doc.id];
+        const tm = document.createElement('div');
+        tm.className = 'time';
+        tm.textContent = relTime(data.lastActivity && data.lastActivity.toDate ? data.lastActivity.toDate() : null);
+        row1.appendChild(nm);
+        row1.appendChild(tm);
+
+        const pv = document.createElement('div');
+        pv.className = 'preview';
+        const prefix = data.lastMessageRole === 'operator' ? 'Вы: ' : '';
+        pv.textContent = prefix + (data.lastMessageText || data.lastEvent || '');
+
+        col.appendChild(row1);
+        col.appendChild(pv);
+        item.appendChild(av);
+        item.appendChild(col);
+        item.onclick = () => openChat(doc.id);
+        $list.appendChild(item);
+      });
+      if (!$list.children.length) {
+        const em = document.createElement('div');
+        em.id = 'chat-empty';
+        em.textContent = onlyUnread ? 'Непрочитанных нет' : 'Чатов пока нет';
+        $list.appendChild(em);
+      }
+      document.getElementById('tab-chats').textContent = unreadTotal
+        ? '💬 Чаты (' + unreadTotal + ')'
+        : '💬 Чаты';
+      if (navigator.setAppBadge) {
+        if (unreadTotal > 0) navigator.setAppBadge(unreadTotal).catch(() => {});
+        else navigator.clearAppBadge().catch(() => {});
+      }
+      latestClientChatId = newestClient;
+      if (pendingOpenChatId) {
+        const id = pendingOpenChatId;
+        pendingOpenChatId = null;
+        openChat(id);
+      } else if (pendingOpenLatest && latestClientChatId) {
+        pendingOpenLatest = false;
+        openChat(latestClientChatId);
+      }
+    }
+    db.collection('chats').orderBy('lastActivity', 'desc').limit(30).onSnapshot(renderChatList);
+
+      function openChat(chatId) {
+      currentMode = 'site';
+      androidActiveCustomerId = null;
+      if (androidHistoryTimer) { clearInterval(androidHistoryTimer); androidHistoryTimer = null; }
+      activeChatId = chatId;
+      markRead(chatId);
+      clearNotifications();
+      if (lastChatsSnap) renderChatList(lastChatsSnap);
+      renderedIds.clear();
+      Object.keys(msgEls).forEach(k => delete msgEls[k]);
+      $body.innerHTML = '';
+      $header.style.display = 'flex';
+      document.getElementById('chat-title').textContent = chatLabels[chatId] || chatId;
+      $replyRow.style.display = 'flex';
+      $quick.style.display = 'flex';
+      document.body.classList.add('chat-open');
+
+      const $cc = document.getElementById('client-card');
+      const label = chatLabels[chatId] || chatId;
+      $cc.style.display = 'block';
+      $cc.innerHTML = '<div class="cc-row"><span class="cc-label">Клиент</span><span>' + label + '</span></div>';
+      db.collection('presence').doc(chatId).get().then(s => {
+        if (activeChatId !== chatId) return;
+        const p = s.exists ? s.data() : {};
+        const ls = p.lastSeen && p.lastSeen.toDate ? p.lastSeen.toDate() : null;
+                const online = ls && (Date.now() - ls.getTime()) < 150000;
+        const meta = chatMeta[chatId] || {};
+        const ct = meta.contact || '';
+        let contactHtml = 'нет';
+        if (ct) {
+          const digits = ct.replace(/[^0-9]/g, '');
+          const acts = [];
+          if (digits.length >= 10) {
+            acts.push('<a class="cc-act" href="tel:+' + digits + '">Позвонить</a>');
+            acts.push('<a class="cc-act" href="https://wa.me/' + digits + '" target="_blank">WhatsApp</a>');
+          }
+                    if (ct.charAt(0) === '@') {
+            acts.push('<a class="cc-act" href="https://t.me/' + ct.slice(1) + '" target="_blank">Telegram</a>');
+          } else if (digits.length >= 10) {
+            acts.push('<a class="cc-act" href="tg://resolve?phone=' + digits + '">Telegram</a>');
+          }
+          contactHtml = ct + (acts.length ? ' &nbsp;' + acts.join(' ') : '');
+        }
+        $cc.innerHTML =
+          '<div class="cc-row"><span class="cc-label">Клиент</span><span>' + (p.visitorLabel || label) + '</span></div>' +
+          '<div class="cc-row"><span class="cc-label">Статус</span><span>' +
+            '<span class="cc-dot ' + (online ? 'cc-on' : 'cc-off') + '"></span>' +
+            (online ? 'на сайте' : 'офлайн' + (ls ? ', ' + relTime(ls) : '')) + '</span></div>' +
+          '<div class="cc-row"><span class="cc-label">Устройство</span><span>' + deviceIcon(p.deviceType || label) + ' ' + (p.deviceType || label) + '</span></div>' +
+          '<div class="cc-row"><span class="cc-label">Страница</span><span>' + (p.page || '—') + '</span></div>' +
+                              '<div class="cc-row"><span class="cc-label">Контакт</span><span class="cc-note">' + contactHtml + '</span></div>' +
+          '<div class="cc-row"><span class="cc-label">Оценка</span><span>' + (meta.rating > 0 ? '👍 доволен' : (meta.rating < 0 ? '👎 недоволен' : '—')) + '</span></div>' +
+          '<div class="cc-row"><span class="cc-label">Заметка</span><span id="cc-note" class="cc-note"></span><button id="cc-note-btn" class="cc-btn">✏️</button></div>' +
+          '<div class="cc-row"><span class="cc-label">ID</span><span class="cc-id">' + chatId + '</span></div>' +
+          '<div class="cc-row"><span class="cc-label">Путь</span><span><button id="cc-path" class="cc-btn">показать</button></span></div>' +
+          '<div id="cc-path-body"></div>';
+          const noteEl = document.getElementById('cc-note');
+        noteEl.textContent = (chatMeta[chatId] || {}).note || 'нет';
+        document.getElementById('cc-note-btn').onclick = () => {
+          const cur = (chatMeta[chatId] || {}).note || '';
+          const val = prompt('Заметка о клиенте', cur);
+          if (val === null) return;
+          const note = val.trim();
+          db.collection('chats').doc(chatId).set({ operatorNote: note || null }, { merge: true })
+            .catch(err => console.error('note error', err));
+          if (chatMeta[chatId]) chatMeta[chatId].note = note;
+          noteEl.textContent = note || 'нет';
+        };
+        document.getElementById('cc-path').onclick = async () => {
+          const $pb = document.getElementById('cc-path-body');
+          const $pbtn = document.getElementById('cc-path');
+          if ($pb.dataset.loaded === '1') {
+            const hidden = $pb.style.display === 'none';
+            $pb.style.display = hidden ? 'block' : 'none';
+            $pbtn.textContent = hidden ? 'скрыть' : 'показать';
+            return;
+          }
+          $pb.style.display = 'block';
+          $pbtn.textContent = 'скрыть';
+          $pb.textContent = 'Загружаю…';
+          try {
+            const asnap = await db.collection('analytics')
+              .where('visitorId', '==', chatId)
+              .orderBy('createdAt', 'desc')
+              .limit(15).get();
+            const rows = [];
+            asnap.forEach(d => {
+              const a = d.data();
+              const t = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate() : null;
+              let what = '';
+              if (a.type === 'site_visit') what = '👣 ' + (a.page || '/');
+              else if (a.type === 'menu_click') what = '📂 ' + (a.section || '');
+              else if (a.type === 'category_click') what = '🛍 ' + (a.category || '');
+              else if (a.type === 'chat_opened') what = '💬 открыл чат';
+              else if (a.type === 'operator_requested') what = '🔔 позвал оператора';
+              else if (a.type === 'operator_answered') what = '✅ получил ответ';
+              else if (a.type === 'contact_left') what = '📞 оставил контакт';
+              else return;
+              rows.push({ what: what, t: t });
+            });
+            $pb.innerHTML = rows.length
+              ? rows.map(r => '<div class="cc-path-row"><span>' + r.what + '</span><span class="cc-path-t">' + (r.t ? relTime(r.t) : '') + '</span></div>').join('')
+              : '<div class="cc-path-row"><span>событий не найдено</span></div>';
+            $pb.dataset.loaded = '1';
+          } catch (e) {
+            $pb.innerHTML = '<div class="cc-path-row"><span>Ошибка: ' + (e && e.message ? e.message : e) + '</span></div>';
+          }
+        };
+      }).catch(e => console.error('client card error', e));
+      if (typingUnsub) typingUnsub();
+      const $typing = document.getElementById('typing-ind');
+      $typing.style.display = 'none';
+      lastReadMs = 0;
+      typingUnsub = db.collection('chats').doc(chatId).onSnapshot(d => {
+        const data = d.data() || {};
+        const ts = data.clientTypingAt && data.clientTypingAt.toDate
+          ? data.clientTypingAt.toDate().getTime() : 0;
+        const fresh = Date.now() - ts < 5000;
+        $typing.style.display = fresh ? 'block' : 'none';
+        lastReadMs = data.clientReadAt && data.clientReadAt.toDate ? data.clientReadAt.toDate().getTime() : 0;
+        refreshTicks();
+        clearTimeout(typingHideTimer);
+        if (fresh) typingHideTimer = setTimeout(() => { $typing.style.display = 'none'; }, 4500);
+      });
+
+      if (msgUnsub) msgUnsub();
+      msgUnsub = db.collection('chats').doc(chatId).collection('messages')
+        .orderBy('createdAt')
+        .onSnapshot(snap => {
+          snap.docChanges().forEach(change => {
+            const id = change.doc.id;
+            const m = change.doc.data();
+
+            if (change.type === 'removed') {
+              if (msgEls[id]) { msgEls[id].remove(); delete msgEls[id]; }
+              renderedIds.delete(id);
+              return;
+            }
+            if (change.type === 'modified') {
+              if (msgEls[id]) buildMsg(msgEls[id], m, chatId, id);
+              return;
+            }
+            if (renderedIds.has(id)) return;
+            renderedIds.add(id);
+            const div = document.createElement('div');
+            buildMsg(div, m, chatId, id);
+            msgEls[id] = div;
+            $body.appendChild(div);
+            $body.scrollTop = $body.scrollHeight;
+          });
+        });
+    }
+
+         let androidLastReadMs = 0;
+    let androidJustOpened = false;
+    let androidRenderedKeys = [];
+    async function openAndroidChat(customerId) {
+      currentMode = 'android';
+      activeChatId = null;
+      if (typingUnsub) { typingUnsub(); typingUnsub = null; }
+      if (msgUnsub) { msgUnsub(); msgUnsub = null; }
+         androidActiveCustomerId = customerId;
+      androidRenderedKeys = [];
+      if (androidHistoryTimer) { clearInterval(androidHistoryTimer); androidHistoryTimer = null; }
+      clearNotifications();
+
+      renderedIds.clear();
+      Object.keys(msgEls).forEach(k => delete msgEls[k]);
+      $body.innerHTML = '';
+      $header.style.display = 'flex';
+      const phone = customerId.indexOf('android:') === 0 ? customerId.slice('android:'.length) : customerId;
+      document.getElementById('chat-title').textContent = phone + ' (Android)';
+      $replyRow.style.display = 'flex';
+      $quick.style.display = 'flex';
+      document.body.classList.add('chat-open');
+      document.getElementById('typing-ind').style.display = 'none';
+
+      const $cc = document.getElementById('client-card');
+      $cc.style.display = 'block';
+      $cc.innerHTML =
+        '<div class="cc-row"><span class="cc-label">Клиент</span><span>' + phone + '</span></div>' +
+        '<div class="cc-row"><span class="cc-label">Платформа</span><span>🤖 Android-приложение</span></div>' +
+        '<div class="cc-row"><span class="cc-label">ID</span><span class="cc-id">' + customerId + '</span></div>';
+
+         renderAndroidList();
+
+      androidJustOpened = true;
+      await pollAndroidHistory();
+      $body.scrollTop = $body.scrollHeight; // гарантированно вниз при первом открытии
+      // Держим флаг ещё секунду-полторы — этого достаточно, чтобы успели
+      // подгрузиться все картинки в истории и доскроллить после них тоже.
+      setTimeout(() => { androidJustOpened = false; }, 1500);
+      androidHistoryTimer = setInterval(pollAndroidHistory, 4000);
+      const chatEntry = androidChats.find(c => c.customerId === customerId);
+      if (chatEntry) { chatEntry.unread = false; renderAndroidList(); }
+    }
+
+       function buildAndroidMsg(m) {
+      const div = document.createElement('div');
+      const side = m.from === 'customer' ? 'client' : 'operator';
+      if (m.internal) {
+        // Служебное сообщение для админа (текст заказа и т.п.) — видно
+        // только в панели, отдельным стилем от обычной переписки.
+        div.className = 'msg event';
+        div.style.alignSelf = 'flex-start';
+        div.style.maxWidth = '90%';
+        div.style.textAlign = 'left';
+        div.style.background = 'rgba(127,174,99,0.08)';
+        div.style.border = '1px solid rgba(127,174,99,0.25)';
+        div.style.borderRadius = '10px';
+        div.style.padding = '10px 13px';
+        div.textContent = m.text || '';
+      } else if (m.imageUrl) {
+        div.className = 'msg ' + side;
+        div.innerHTML = (m.text ? m.text + '<br>' : '') + '<img class="file-img" src="' + m.imageUrl + '" />';
+                const imgEl = div.querySelector('img.file-img');
+        if (imgEl) {
+          imgEl.onload = () => {
+            // Форсируем скролл вниз ТОЛЬКО в окне сразу после открытия чата —
+            // во всё остальное время это уже корректно решает сам поллинг
+            // (pollAndroidHistory сохраняет/восстанавливает позицию сам),
+            // а независимая проверка "у низа" здесь конфликтовала с ним и
+            // вызывала бесконечные качели каждые 4 секунды.
+            if (androidJustOpened) $body.scrollTop = $body.scrollHeight;
+          };
+        }
+      } else if (m.audioUrl) {
+        div.className = 'msg ' + side;
+        div.innerHTML = (m.text ? m.text + '<br>' : '') + '<a class="file-link" href="' + m.audioUrl + '" target="_blank">🎤 Голосовое</a>';
+      } else {
+        div.className = 'msg ' + side;
+        div.textContent = m.text || '';
+      }
+           if (m.buttons && m.buttons.length) {
+        const bar = document.createElement('div');
+        bar.className = 'msg-act';
+        m.buttons.forEach(row => (row || []).forEach(btn => {
+          const b = document.createElement('button');
+          b.textContent = btn.text || '';
+          const cbData = String(btn.callback_data || '');
+          // order_* — кнопки сценария заказа (админские действия:
+          // принять/оплачен/отправлен/изменить/отменить), формат
+          // "action:orderId" или "order_method:code:orderId" (последнее —
+          // кнопка КЛИЕНТА выбора доставки, её не обрабатываем из панели —
+          // клиент жмёт сам).
+          const parts = cbData.split(':');
+                          const isAdminOrderAction = ['order_accept','order_paid','order_shipped','order_ready','order_delivered','order_complete','order_edit','order_cancel','order_calc'].includes(parts[0]);
+          const isBankAction = parts[0] === 'order_bank';
+          if (isAdminOrderAction) {
+            b.onclick = () => handleOrderActionClick(parts[0], parts[1]);
+          } else if (isBankAction) {
+            // order_bank:sber:orderId или order_bank:raif:orderId
+            b.onclick = () => handleBankActionClick(parts[1], parts[2]);
+          } else {
+            b.disabled = true;
+            b.style.opacity = '0.6';
+            b.title = 'Кнопка нажимается клиентом в приложении';
+          }
+          bar.appendChild(b);
+        }));
+        div.appendChild(bar);
+      }
+      if (m.edited) {
+        const ed = document.createElement('span');
+        ed.className = 'edited';
+        ed.textContent = '(изм.)';
+        div.appendChild(ed);
+      }
+           if (m.from === 'admin') {
+        const tick = document.createElement('span');
+        tick.className = 'ticks';
+        const isRead = m.createdAt <= androidLastReadMs;
+        tick.textContent = isRead ? '✓✓' : '✓';
+        if (isRead) tick.classList.add('read');
+        div.appendChild(tick);
+      }
+          if (!m.internal && m.createdAt) {
+        const time = document.createElement('span');
+        time.className = 'msg-time';
+        const d = new Date(m.createdAt);
+        time.textContent = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        div.appendChild(time);
+      }
+
+      // Долгое нажатие / правый клик по СВОИМ сообщениям (от админа) —
+      // показать "Изменить"/"Удалить", как в обычном чате (см. buildMsg).
+      // Кнопки заказа (internal-карточки, сообщения с buttons) не трогаем —
+      // их редактирование сломало бы сценарий заказа.
+      if (m.from === 'admin' && !m.internal && !m.buttons && m.createdAt) {
+
+        const showAndroidActions = () => {
+          const old = div.querySelector('.msg-act');
+          if (old) { old.remove(); return; }
+          const bar = document.createElement('div');
+          bar.className = 'msg-act';
+          const be = document.createElement('button');
+          be.textContent = '✏️ Изменить';
+          be.onclick = async () => {
+            const val = prompt('Изменить сообщение', m.text || '');
+            if (val === null) return;
+            try {
+              const result = await panelPost('/api/panel-chat/edit', {
+                customerId: androidActiveCustomerId,
+                createdAt: m.createdAt,
+                text: val
+              });
+              if (!result.success) { alert('Не удалось изменить сообщение'); return; }
+              await pollAndroidHistory();
+            } catch (e) {
+              console.error('android edit error', e);
+              alert('Ошибка при изменении сообщения');
+            }
+          };
+          const bd = document.createElement('button');
+          bd.textContent = '🗑 Удалить';
+          bd.onclick = async () => {
+            if (!confirm('Удалить сообщение? Оно исчезнет и у клиента.')) return;
+            try {
+              const result = await panelPost('/api/panel-chat/delete', {
+                customerId: androidActiveCustomerId,
+                createdAt: m.createdAt
+              });
+              if (!result.success) { alert('Не удалось удалить сообщение'); return; }
+              await pollAndroidHistory();
+            } catch (e) {
+              console.error('android delete error', e);
+              alert('Ошибка при удалении сообщения');
+            }
+          };
+          const bc = document.createElement('button');
+          bc.textContent = '✕';
+          bc.onclick = () => bar.remove();
+          bar.appendChild(be);
+          bar.appendChild(bd);
+          bar.appendChild(bc);
+          div.appendChild(bar);
+        };
+
+        let holdTimer = null;
+        let holdFired = false;
+        let startX = 0, startY = 0;
+        div.addEventListener('pointerdown', (e) => {
+          if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A') return;
+          startX = e.clientX; startY = e.clientY;
+          holdFired = false;
+          clearTimeout(holdTimer);
+          holdTimer = setTimeout(() => { holdFired = true; showAndroidActions(); }, 450);
+        });
+        div.addEventListener('pointermove', (e) => {
+          if (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10) clearTimeout(holdTimer);
+        });
+        div.addEventListener('pointerup', () => clearTimeout(holdTimer));
+        div.addEventListener('pointercancel', () => clearTimeout(holdTimer));
+        div.addEventListener('pointerleave', () => clearTimeout(holdTimer));
+        div.addEventListener('contextmenu', (e) => { e.preventDefault(); showAndroidActions(); });
+      }
+
+      return div;
+    }
+
+        async function pollAndroidHistory() {
+      if (currentMode !== 'android' || !androidActiveCustomerId) return;
+      const cid = androidActiveCustomerId;
+      try {
+        const data = await panelFetch('/api/panel-chat/history?customerId=' + encodeURIComponent(cid));
+        if (currentMode !== 'android' || androidActiveCustomerId !== cid) return;
+        androidLastReadMs = data.lastReadByCustomerAt || 0;
+        const messages = data.messages || [];
+                    const keyOf = (m) => m.createdAt + ':' + m.from + ':' + JSON.stringify(m.buttons || '') + ':' + (m.text || '') + ':' + (m.edited ? 1 : 0);
+
+        // Сравниваем с уже отрисованным: если новые сообщения просто
+        // добавились в конец (обычный случай), дорисовываем только их,
+        // не трогая старые — это и убирает "дёрганье" скролла и повторную
+        // загрузку уже показанных картинок/аудио при каждом опросе.
+        // Если состав изменился иначе (первое открытие, редактирование,
+        // удаление) — перерисовываем всё целиком.
+        const isSimpleAppend = messages.length >= androidRenderedKeys.length &&
+          androidRenderedKeys.length > 0 &&
+          androidRenderedKeys.every((k, i) => k === keyOf(messages[i]));
+
+        if (isSimpleAppend) {
+          const newOnes = messages.slice(androidRenderedKeys.length);
+          if (newOnes.length) {
+            const wasNearBottom = $body.scrollHeight - $body.scrollTop - $body.clientHeight < 80;
+            newOnes.forEach(m => {
+              $body.appendChild(buildAndroidMsg(m));
+              androidRenderedKeys.push(keyOf(m));
+            });
+            if (wasNearBottom) $body.scrollTop = $body.scrollHeight;
+          }
+        } else {
+          $body.innerHTML = '';
+          androidRenderedKeys = [];
+          messages.forEach(m => {
+            $body.appendChild(buildAndroidMsg(m));
+            androidRenderedKeys.push(keyOf(m));
+          });
+          $body.scrollTop = $body.scrollHeight;
+        }
+      } catch (e) {
+        console.error('android history error', e);
+      }
+    }
+
+        async function handleOrderActionClick(actionRaw, orderId) {
+      // order_accept -> accept, order_paid -> paid, order_shipped -> shipped
+      // (сервер сам решает shipped/ready по deliveryMethod заказа),
+      // order_ready -> shipped (тот же action, сервер разберётся),
+      // order_edit -> edit, order_cancel -> cancel
+             const actionMap = {
+        order_accept: 'accept',
+        order_paid: 'paid',
+        order_shipped: 'shipped',
+        order_ready: 'shipped',
+        order_delivered: 'shipped',
+        order_complete: 'complete',
+        order_edit: 'edit',
+        order_cancel: 'cancel',
+        order_calc: 'calc'
+      };
+           const action = actionMap[actionRaw];
+      if (!action || !orderId) return;
+
+      let extra;
+
+      if (action === 'shipped' && actionRaw === 'order_shipped') {
+        extra = prompt('Введите трек-номер отправления:');
+        if (extra === null) return;
+        if (!extra.trim()) { alert('Трек-номер не может быть пустым'); return; }
+      }
+
+      if (action === 'edit') {
+        extra = prompt(
+          'Новый состав и сумма заказа (последней строкой — "Сумма: 1234"):',
+          ''
+        );
+        if (extra === null) return;
+      }
+
+           if (action === 'cancel' && !confirm('Точно отменить заказ?')) return;
+
+      try {
+        const result = await panelPost('/api/panel-chat/order-action', { orderId, action, extra });
+        if (!result.success) {
+          alert('Не удалось выполнить действие' + (result.reason ? ' (' + result.reason + ')' : ''));
+        }
+        await pollAndroidHistory();
+      } catch (e) {
+        console.error('order action error', e);
+        alert('Ошибка при выполнении действия');
+      }
+    }
+
+    async function handleBankActionClick(bank, orderId) {
+      if (!bank || !orderId) return;
+      const priceDaysText = prompt('Стоимость и срок доставки через запятую (например: 450, 4):');
+      if (priceDaysText === null) return;
+      if (!priceDaysText.trim()) { alert('Нужно ввести оба значения'); return; }
+
+      try {
+        const result = await panelPost('/api/panel-chat/order-action', {
+          orderId,
+          action: 'bank',
+          extra: bank + '|' + priceDaysText
+        });
+        if (!result.success) {
+          alert('Не удалось выполнить действие' + (result.reason ? ' (' + result.reason + ')' : ''));
+        }
+        await pollAndroidHistory();
+      } catch (e) {
+        console.error('bank action error', e);
+        alert('Ошибка при выполнении действия');
+      }
+    }
+
+    function panelPost(path, body) {
+      return fetch(PANEL_BACKEND_URL + path, {
+        method: 'POST',
+        headers: { 'x-panel-secret': PANEL_SECRET, 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      }).then(r => r.json());
+    }
+
+    async function sendAndroidReply(text) {
+      if (!androidActiveCustomerId) return;
+      try {
+        await panelPost('/api/panel-chat/send', { customerId: androidActiveCustomerId, text: text });
+        await pollAndroidHistory();
+      } catch (e) {
+        console.error('android send error', e);
+        alert('Не удалось отправить сообщение');
+      }
+    }
+
+    async function sendProductCard(link) {
+      const chatId = activeChatId;
+      try {
+        const res = await fetch('/api/preview?url=' + encodeURIComponent(link));
+        const p = await res.json();
+        if (!p || p.error || !p.title) throw new Error(p && p.error ? p.error : 'no data');
+        const clean = (s) => String(s || '').replace(/[<>"]/g, '');
+        const title = clean(p.title);
+        const price = clean(p.price);
+        const priceLine = price ? '<br>' + price + ' ₽' : '';
+        const msg = {
+          role: 'operator',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        if (p.image) {
+          msg.text = '<a href="' + link + '" target="_blank"><b>' + title + '</b></a>' + priceLine;
+          msg.fileUrl = p.image;
+          msg.fileName = title;
+          msg.fileType = 'image/jpeg';
+        } else {
+          msg.text = title + (price ? ' — ' + price + ' ₽' : '') + '\n' + link;
+        }
+        await db.collection('chats').doc(chatId).collection('messages').add(msg);
+        db.collection('chats').doc(chatId).set({
+          operatorTypingAt: null,
+          lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
+          lastMessageRole: 'operator',
+          lastMessageText: '🛍 ' + title
+        }, { merge: true }).catch(() => {});
+      } catch (e) {
+        console.error('preview error', e);
+        db.collection('chats').doc(chatId).collection('messages').add({
+          role: 'operator',
+          text: link,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+    }
+
+        function sendReply() {
+      const val = $replyInput.value.trim();
+      if (!val) return;
+      if (currentMode === 'android') {
+        if (!androidActiveCustomerId) return;
+        $replyInput.value = '';
+        $replyInput.style.height = 'auto';
+        sendAndroidReply(val);
+        return;
+      }
+      if (!activeChatId) return;
+      if (/^https?:\/\/(www\.)?cosmo-bong\.ru\/(goods|catalog)\//i.test(val)) {
+        $replyInput.value = '';
+        sendProductCard(val);
+        return;
+      }
+      db.collection('chats').doc(activeChatId).collection('messages').add({
+        role: 'operator',
+        text: val,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      db.collection('chats').doc(activeChatId).set({
+        operatorTypingAt: null,
+        lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
+        lastMessageRole: 'operator',
+        lastMessageText: val
+      }, { merge: true }).catch(() => {});
+      $replyInput.value = '';
+      $replyInput.style.height = 'auto';
+    }
+
+    // Индикатор "печатает" — пишем метку времени, пока оператор вводит текст
+    let lastTypingWrite = 0;
+    $replyInput.addEventListener('input', () => {
+      if (!activeChatId) return;
+      const now = Date.now();
+      if (now - lastTypingWrite < 1500) return;
+      lastTypingWrite = now;
+      db.collection('chats').doc(activeChatId).set({
+        operatorTypingAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true }).catch(() => {});
+    });
+
+     async function sendFileReply(file) {
+      if (currentMode !== 'android' && !activeChatId) return;
+      if (currentMode === 'android' && !androidActiveCustomerId) return;
+      if (!file.type.startsWith('image/')) {
+        alert('Можно прикреплять только изображения');
+        return;
+      }
+      try {
+        const formData = new FormData();
+        formData.append('image', file);
+        const uploadRes = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+          method: 'POST',
+          body: formData
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadData.success) throw new Error('imgbb error: ' + JSON.stringify(uploadData));
+
+        if (currentMode === 'android') {
+          await panelPost('/api/panel-chat/send-image', {
+            customerId: androidActiveCustomerId,
+            imageUrl: uploadData.data.url
+          });
+          await pollAndroidHistory();
+          return;
+        }
+
+        await db.collection('chats').doc(activeChatId).collection('messages').add({
+          role: 'operator',
+          text: null,
+          fileUrl: uploadData.data.url,
+          fileName: file.name,
+          fileType: file.type,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      } catch (e) {
+        console.error('upload error', e);
+        alert('Не удалось загрузить файл');
+      }
+    }
+
+       let mediaRecorder = null;
+    let recordedChunks = [];
+    const $micBtn = document.getElementById('reply-mic');
+
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    async function sendVoiceReply(blob, mimeType) {
+      if (currentMode !== 'android' || !androidActiveCustomerId) return;
+      try {
+        const base64 = await blobToBase64(blob);
+        const result = await panelPost('/api/panel-chat/send-voice', {
+          customerId: androidActiveCustomerId,
+          audioBase64: base64,
+          mimeType
+        });
+        if (!result.success) {
+          alert('Не удалось отправить голосовое' + (result.error ? ' (' + result.error + ')' : ''));
+        }
+        await pollAndroidHistory();
+      } catch (e) {
+        console.error('voice send error', e);
+        alert('Не удалось отправить голосовое сообщение');
+      }
+    }
+
+    async function toggleMicRecording() {
+      if (currentMode !== 'android' || !androidActiveCustomerId) {
+        alert('Голосовые сообщения пока доступны только в Android-чате');
+        return;
+      }
+
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm';
+        mediaRecorder = new MediaRecorder(stream, { mimeType });
+        recordedChunks = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          stream.getTracks().forEach((t) => t.stop());
+          $micBtn.textContent = '🎤';
+          $micBtn.style.background = '';
+          const blob = new Blob(recordedChunks, { type: mimeType });
+          sendVoiceReply(blob, mimeType.split(';')[0]);
+        };
+
+        mediaRecorder.start();
+        $micBtn.textContent = '⏹';
+        $micBtn.style.background = '#e0724a';
+      } catch (e) {
+        console.error('mic error', e);
+        alert('Не удалось получить доступ к микрофону');
+      }
+    }
+
+    $micBtn.onclick = toggleMicRecording;
+
+    document.getElementById('reply-send').onclick = sendReply;
+    function autoGrowReply() {
+      $replyInput.style.height = 'auto';
+      $replyInput.style.height = Math.min($replyInput.scrollHeight, 120) + 'px';
+    }
+    $replyInput.addEventListener('input', autoGrowReply);
+    $replyInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendReply();
+        autoGrowReply();
+      }
+    });
+
+    const $replyAttach = document.getElementById('reply-attach');
+    const $replyFile = document.getElementById('reply-file');
+    $replyAttach.onclick = () => $replyFile.click();
+    $replyFile.addEventListener('change', () => {
+      const file = $replyFile.files[0];
+      if (file) sendFileReply(file);
+      $replyFile.value = '';
+    });
+
+    const $tabChats = document.getElementById('tab-chats');
+    const $tabOnline = document.getElementById('tab-online');
+    const $paneChats = document.getElementById('pane-chats');
+    const $paneOnline = document.getElementById('pane-online');
+    const $paneStats = document.getElementById('pane-stats');
+    const $tabStats = document.getElementById('tab-stats');
+       const $tabAndroid = document.getElementById('tab-android');
+    const $paneAndroid = document.getElementById('pane-android');
+    const $tabInstalls = document.getElementById('tab-installs');
+    const $paneInstalls = document.getElementById('pane-installs');
+    function switchTab(name) {
+      $paneChats.style.display = name === 'chats' ? 'block' : 'none';
+      $paneOnline.style.display = name === 'online' ? 'block' : 'none';
+      $paneStats.style.display = name === 'stats' ? 'block' : 'none';
+      $paneAndroid.style.display = name === 'android' ? 'block' : 'none';
+      $paneInstalls.style.display = name === 'installs' ? 'block' : 'none';
+      $tabChats.classList.toggle('active', name === 'chats');
+      $tabOnline.classList.toggle('active', name === 'online');
+      $tabStats.classList.toggle('active', name === 'stats');
+      $tabAndroid.classList.toggle('active', name === 'android');
+      $tabInstalls.classList.toggle('active', name === 'installs');
+    }
+    $tabChats.onclick = () => switchTab('chats');
+    $tabOnline.onclick = () => { switchTab('online'); refreshOnlineCounter(); };
+    $tabStats.onclick = () => switchTab('stats');
+    $tabAndroid.onclick = () => { switchTab('android'); startAndroidPolling(); };
+    $tabInstalls.onclick = () => { switchTab('installs'); loadInstallsList(); };
+
+    async function loadInstallsList() {
+      const $il = document.getElementById('installs-list');
+      const $empty = document.getElementById('installs-empty');
+      try {
+        const data = await panelFetch('/api/panel-chat/installs');
+        const installs = data.installs || [];
+        $il.innerHTML = '';
+        if (!installs.length) {
+          $empty.style.display = 'block';
+          $empty.textContent = 'Установок пока нет';
+          return;
+        }
+        $empty.style.display = 'none';
+        installs.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'chat-item';
+                  const av = document.createElement('div');
+          av.className = 'avatar';
+          av.textContent = item.platform === 'web' ? '📱' : '🤖';
+          const col = document.createElement('div');
+          col.className = 'col';
+          const row1 = document.createElement('div');
+          row1.className = 'row1';
+          const nm = document.createElement('div');
+          nm.className = 'name';
+          nm.textContent = item.phone;
+          const tm = document.createElement('div');
+          tm.className = 'time';
+          tm.textContent = item.installedAt ? new Date(item.installedAt).toLocaleDateString('ru-RU') : '';
+          row1.appendChild(nm);
+          row1.appendChild(tm);
+          col.appendChild(row1);
+          row.appendChild(av);
+          row.appendChild(col);
+                 row.onclick = () => { androidChatOpenedFrom = 'installs'; switchTab('android'); startAndroidPolling(); openAndroidChat(item.customerId); };
+          $il.appendChild(row);
+        });
+      } catch (e) {
+        console.error('installs list error', e);
+        $empty.style.display = 'block';
+        $empty.textContent = 'Ошибка загрузки';
+      }
+    }
+
+    // === Вкладка Android — поверх Redis-чата cosmo-bong-miniapp, поллингом ===
+    function panelFetch(path) {
+      return fetch(PANEL_BACKEND_URL + path, {
+        headers: { 'x-panel-secret': PANEL_SECRET }
+      }).then(r => r.json());
+    }
+        let androidChats = [];
+    let androidPollTimer = null;
+    let androidActiveCustomerId = null;
+    let androidHistoryTimer = null;
+    let androidChatOpenedFrom = 'android'; // 'android' | 'installs' — куда вернуться по "назад"
+    function renderAndroidList() {
+      const $al = document.getElementById('android-list');
+      const $empty = document.getElementById('android-empty');
+      $al.innerHTML = '';
+      if (!androidChats.length) {
+        $empty.style.display = 'block';
+        $empty.textContent = 'Чатов пока нет';
+        return;
+      }
+      $empty.style.display = 'none';
+      androidChats.forEach(chat => {
+        const item = document.createElement('div');
+        item.className = 'chat-item' + (chat.customerId === androidActiveCustomerId ? ' active' : '') + (chat.unread ? ' unread' : '');
+        const av = document.createElement('div');
+        av.className = 'avatar';
+        av.textContent = '🤖';
+        const col = document.createElement('div');
+        col.className = 'col';
+        const row1 = document.createElement('div');
+        row1.className = 'row1';
+            const nm = document.createElement('div');
+        nm.className = 'name';
+        nm.textContent = chat.phone + (chat.activeOrderNum ? ' (№' + chat.activeOrderNum + ')' : '');
+        const tm = document.createElement('div');
+        tm.className = 'time';
+        tm.textContent = chat.lastMessageAt ? relTime(new Date(chat.lastMessageAt)) : '';
+        row1.appendChild(nm);
+        row1.appendChild(tm);
+        const pv = document.createElement('div');
+        pv.className = 'preview';
+        pv.textContent = (chat.lastMessageFrom === 'admin' ? 'Вы: ' : '') + (chat.lastMessagePreview || '');
+        col.appendChild(row1);
+        col.appendChild(pv);
+        item.appendChild(av);
+        item.appendChild(col);
+        item.onclick = () => { androidChatOpenedFrom = 'android'; openAndroidChat(chat.customerId); };
+        $al.appendChild(item);
+      });
+    }
+    async function refreshAndroidList() {
+      try {
+        const data = await panelFetch('/api/panel-chat/list');
+        androidChats = data.chats || [];
+        renderAndroidList();
+      } catch (e) {
+        console.error('android list error', e);
+      }
+    }
+    function startAndroidPolling() {
+      refreshAndroidList();
+      if (androidPollTimer) return;
+      androidPollTimer = setInterval(refreshAndroidList, 5000);
+    }
+
+    async function loadStats() {
+      const days = parseInt(document.getElementById('stats-period').value, 10) || 7;
+      const $sb = document.getElementById('stats-body');
+      $sb.innerHTML = '<div class="stats-hint">Загружаю…</div>';
+      try {
+        const since = firebase.firestore.Timestamp.fromDate(new Date(Date.now() - days * 86400000));
+        const snap = await db.collection('analytics').where('createdAt', '>=', since).get();
+        const ev = [];
+        snap.forEach(d => ev.push(d.data()));
+        const uniq = (t) => new Set(ev.filter(e => e.type === t).map(e => e.visitorId).filter(Boolean));
+        const visits = uniq('site_visit');
+        const opens = uniq('chat_opened');
+        const req = uniq('operator_requested');
+        const ans = uniq('operator_answered');
+               const contacts = uniq('contact_left');
+        const ratings = ev.filter(e => e.type === 'rating');
+        const good = ratings.filter(e => e.value > 0).length;
+        const bad = ratings.filter(e => e.value < 0).length;
+        let abandoned = 0;
+        req.forEach(id => { if (!ans.has(id) && !contacts.has(id)) abandoned++; });
+        const top = (type, field) => {
+          const m = {};
+          ev.filter(e => e.type === type).forEach(e => {
+            const k = e[field] || 'без названия';
+            m[k] = (m[k] || 0) + 1;
+          });
+          return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        };
+        const refs = {};
+        ev.filter(e => e.type === 'site_visit').forEach(e => {
+          let host = 'прямой заход';
+          if (e.referrer) {
+            try { host = new URL(e.referrer).hostname; } catch (x) { host = e.referrer; }
+          }
+          refs[host] = (refs[host] || 0) + 1;
+        });
+        const topRefs = Object.entries(refs).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        const pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '—';
+        const list = (arr) => arr.length
+          ? arr.map(r => '<div class="st-row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('')
+          : '<div class="st-row"><span>нет данных</span></div>';
+        $sb.innerHTML =
+          '<div class="st-block"><div class="st-title">Воронка</div>' +
+            '<div class="st-row"><span>Заходов на сайт</span><b>' + visits.size + '</b></div>' +
+            '<div class="st-row"><span>Открыли чат</span><b>' + opens.size + ' (' + pct(opens.size, visits.size) + ')</b></div>' +
+            '<div class="st-row"><span>Позвали оператора</span><b>' + req.size + '</b></div>' +
+            '<div class="st-row"><span>Получили ответ</span><b>' + ans.size + '</b></div>' +
+            '<div class="st-row"><span>Оставили контакт</span><b>' + contacts.size + '</b></div>' +
+                        '<div class="st-row"><span>Ушли без ответа</span><b>' + abandoned + '</b></div>' +
+            '<div class="st-row"><span>Оценки</span><b>👍 ' + good + ' · 👎 ' + bad + '</b></div>' +
+          '</div>' +
+          '<div class="st-block"><div class="st-title">Разделы меню</div>' + list(top('menu_click', 'section')) + '</div>' +
+          '<div class="st-block"><div class="st-title">Категории товаров</div>' + list(top('category_click', 'category')) + '</div>' +
+          '<div class="st-block"><div class="st-title">Источники визитов</div>' + list(topRefs) + '</div>' +
+          '<div class="stats-hint">Обработано событий: ' + ev.length + '</div>';
+      } catch (e) {
+        $sb.innerHTML = '<div class="stats-hint">Ошибка: ' + (e && e.message ? e.message : e) + '</div>';
+      }
+    }
+    document.getElementById('stats-refresh').onclick = loadStats;
+
+    const $statusBtn = document.getElementById('status-btn');
+    let operatorOffline = false;
+    function renderStatusBtn() {
+      $statusBtn.textContent = operatorOffline ? '🌙 Офлайн — включить приём' : '🟢 Онлайн — уйти в офлайн';
+      $statusBtn.style.background = operatorOffline ? '#4a3418' : '#1c2e25';
+    }
+    db.collection('settings').doc('status').get().then(s => {
+      operatorOffline = s.exists && s.data().offline === true;
+      renderStatusBtn();
+    }).catch(() => renderStatusBtn());
+    $statusBtn.onclick = () => {
+      operatorOffline = !operatorOffline;
+      renderStatusBtn();
+      db.collection('settings').doc('status').set({
+        offline: operatorOffline,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true }).catch(e => console.error('status error', e));
+    };
+      const VAPID_PUBLIC_KEY = 'BM8xs-klD1NTwl4VGAYH-3yBydPM9T2zy_1014NVoBFyu5HLvtXBmxZAfWdE-CjmnD1PlN8OWu3-USAzob-Nsj4';
+    const $pushBtn = document.getElementById('push-btn');
+
+    // При загрузке страницы проверяем, есть ли УЖЕ активная push-подписка
+    // в этом браузере — раньше кнопка всегда показывала дефолтный текст
+    // "Включить уведомления", даже если подписка была оформлена раньше
+    // (текст "Уведомления включены" ставился только в рамках той же
+    // сессии сразу после нажатия и терялся при следующем открытии панели).
+    async function checkExistingPushSubscription() {
+      try {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        if (Notification.permission !== 'granted') return;
+        const reg = await navigator.serviceWorker.getRegistration('/api/panel/sw.js');
+        if (!reg) return;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          $pushBtn.textContent = '✅ Уведомления включены';
+        }
+      } catch (e) {
+        console.error('push subscription check error', e);
+      }
+    }
+    checkExistingPushSubscription();
+
+    function urlB64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const raw = atob(base64);
+      const arr = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+      return arr;
+    }
+    function bufToB64Url(buf) {
+      let bin = '';
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    function hashStr(s) {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
+      return Math.abs(h).toString(36);
+    }
+
+    async function enablePush() {
+      try {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+          alert('Браузер не поддерживает push-уведомления');
+          return;
+        }
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') { alert('Уведомления запрещены в настройках'); return; }
+        const reg = await navigator.serviceWorker.register('/api/panel/sw.js');
+        await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY)
+          });
+        }
+        
+        const id = 'sub_' + hashStr(sub.endpoint);
+        await db.collection('push_subscriptions').doc(id).set({
+          endpoint: sub.endpoint,
+          p256dh: bufToB64Url(sub.getKey('p256dh')),
+          auth: bufToB64Url(sub.getKey('auth')),
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        $pushBtn.textContent = '✅ Уведомления включены';
+      } catch (e) {
+        console.error('push error', e);
+        alert('Не удалось включить уведомления: ' + e.message);
+      }
+    }
+    $pushBtn.onclick = enablePush;
+    }
+  }
+</script>
+</body>
+</html>

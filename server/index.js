@@ -906,6 +906,66 @@ function loadCache() {
 }
 
 // ==============================
+// ПАНЕЛЬ ОПЕРАТОРА — перенесена сюда с Cloudflare Worker (indexhtml.
+// chooss9.workers.dev), т.к. домены *.workers.dev блокируются в России без
+// VPN. Сам HTML/JS панели не изменился функционально (Firebase/Firestore
+// работает прямо в браузере, как и раньше) — только пути под /api/panel,
+// т.к. правило в vercel.json перехватывает любой путь, кроме /api/*, и
+// отдаёт index.html фронтенда мини-аппа.
+// ==============================
+const PANEL_HTML = fs.readFileSync(path.join(__dirname, "public/panel.html"), "utf8");
+const PANEL_SW_JS = fs.readFileSync(path.join(__dirname, "public/panel-sw.js"), "utf8");
+
+app.get("/api/panel", (req, res) => {
+  res.set("Content-Type", "text/html; charset=UTF-8");
+  res.send(PANEL_HTML);
+});
+
+app.get("/api/panel/sw.js", (req, res) => {
+  res.set("Content-Type", "application/javascript; charset=UTF-8");
+  res.send(PANEL_SW_JS);
+});
+
+// Превью товара по ссылке (для отправки карточки товара прямо из чата
+// панели) — та же логика, что раньше жила в /preview на Cloudflare Worker.
+app.get("/api/preview", async (req, res) => {
+  const cors = { "content-type": "application/json; charset=UTF-8" };
+  const target = req.query.url || "";
+
+  if (!/^https:\/\/(www\.)?cosmo-bong\.ru\//i.test(target)) {
+    return res.status(400).set(cors).send(JSON.stringify({ error: "bad url" }));
+  }
+
+  try {
+    const { data: html } = await axios.get(target, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; CosmoBongBot/1.0)" },
+      timeout: 10000
+    });
+
+    const $ = cheerio.load(html);
+
+    const meta = (prop) =>
+      $(`meta[property="${prop}"]`).attr("content") ||
+      $(`meta[name="${prop}"]`).attr("content") ||
+      "";
+
+    const title = meta("og:title") || $("title").first().text() || "";
+    const image = meta("og:image") || "";
+    const price =
+      meta("product:price:amount") ||
+      meta("og:price:amount") ||
+      $('[itemprop="price"]').attr("content") ||
+      $("[data-price]").attr("data-price") ||
+      "";
+
+    res.set(cors).send(JSON.stringify({ title: title.trim(), image, price, url: target }));
+
+  } catch (error) {
+    res.status(500).set(cors).send(JSON.stringify({ error: String(error.message) }));
+  }
+});
+
+// ==============================
 // ORDERS
 // ==============================
 app.use("/api/order", orderRouter);
