@@ -10,6 +10,7 @@ interface OrderItem {
 
 interface Order {
   id: string;
+  storelandOrderNum?: string;
   total: number;
   items: OrderItem[];
   status: string;
@@ -166,7 +167,7 @@ function Profile() {
                     <div className="flex items-center justify-between">
 
                       <span className="text-xs text-gray-500">
-                        {new Date(order.createdAt).toLocaleDateString("ru-RU")}
+                        Заказ №{order.storelandOrderNum || order.id} · {new Date(order.createdAt).toLocaleDateString("ru-RU")}
                       </span>
 
                       <span
