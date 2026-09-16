@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <title>Космо Бонг — панель ответов</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="apple-touch-icon" href="/panel-icon.png">
+<link rel="icon" href="/panel-icon.png">
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
@@ -464,7 +466,8 @@
    <div id="tabs">
        <button id="tab-chats" class="tab active">💬 Все чаты</button>
     <button id="tab-android" class="tab">🤖 Android</button>
-    <button id="tab-installs" class="tab">📲 Установки</button>
+        <button id="tab-installs" class="tab">📲 Установки</button>
+    <button id="tab-orders" class="tab">📦 Заказы</button>
     <button id="tab-online" class="tab">🟢 Онлайн</button>
     <button id="tab-stats" class="tab">📊 Отчёт</button>
   </div>
@@ -477,9 +480,13 @@
       <div id="android-empty" style="padding:16px 14px;color:#8fa08b;font-size:12px;">Загрузка…</div>
       <div id="android-list"></div>
     </div>
-    <div id="pane-installs" style="display:none;">
+        <div id="pane-installs" style="display:none;">
       <div id="installs-empty" style="padding:16px 14px;color:#8fa08b;font-size:12px;">Загрузка…</div>
       <div id="installs-list"></div>
+    </div>
+    <div id="pane-orders" style="display:none;">
+      <div id="orders-empty" style="padding:16px 14px;color:#8fa08b;font-size:12px;">Загрузка…</div>
+      <div id="orders-list"></div>
     </div>
     <div id="pane-stats" style="display:none;">
       <div id="stats-controls">
@@ -832,6 +839,13 @@
     }
 
     const msgEls = {};
+    function formatMsgTime(date) {
+      if (!date) return '';
+      try {
+        return new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' }).format(date);
+      } catch (e) { return ''; }
+    }
+
     function buildMsg(div, m, chatId, msgId) {
       div.innerHTML = '';
       if (m.fileUrl) {
@@ -843,7 +857,7 @@
       } else if (m.event === 'callback_request') {
         div.className = 'msg event';
         div.textContent = '📞 Клиент оставил контакт — ' + (m.text || '');
-      } else if (m.role === 'client' && m.text) {
+           } else if (m.role === 'client' && m.text) {
         div.className = 'msg client';
         div.textContent = m.text;
       } else if (m.role === 'operator' && m.text) {
@@ -855,11 +869,19 @@
         const base = lbl !== undefined ? lbl : (m.event || '');
         div.textContent = m.text ? (base ? base + ' — ' + m.text : m.text) : base;
       }
-      if (m.editedAt) {
+            if (m.editedAt) {
         const ed = document.createElement('span');
         ed.className = 'edited';
         ed.textContent = '(изм.)';
         div.appendChild(ed);
+      }
+      const msgDateForTime = m.createdAt && m.createdAt.toDate ? m.createdAt.toDate() : null;
+      const timeStr = formatMsgTime(msgDateForTime);
+      if (timeStr && div.className.indexOf('event') === -1) {
+        const timeEl = document.createElement('span');
+        timeEl.className = 'msg-time';
+        timeEl.textContent = timeStr;
+        div.appendChild(timeEl);
       }
       if (m.role === 'operator') {
         const tick = document.createElement('span');
@@ -1200,8 +1222,11 @@
       Object.keys(msgEls).forEach(k => delete msgEls[k]);
       $body.innerHTML = '';
       $header.style.display = 'flex';
-      const phone = customerId.indexOf('android:') === 0 ? customerId.slice('android:'.length) : customerId;
-      document.getElementById('chat-title').textContent = phone + ' (Android)';
+           const isTg = customerId.indexOf('tg:') === 0;
+      const phone = customerId.indexOf('android:') === 0 ? customerId.slice('android:'.length)
+        : isTg ? customerId.slice('tg:'.length)
+        : customerId;
+      document.getElementById('chat-title').textContent = phone + (isTg ? ' (Telegram)' : ' (Android)');
       $replyRow.style.display = 'flex';
       $quick.style.display = 'flex';
       document.body.classList.add('chat-open');
@@ -1209,9 +1234,9 @@
 
       const $cc = document.getElementById('client-card');
       $cc.style.display = 'block';
-      $cc.innerHTML =
+            $cc.innerHTML =
         '<div class="cc-row"><span class="cc-label">Клиент</span><span>' + phone + '</span></div>' +
-        '<div class="cc-row"><span class="cc-label">Платформа</span><span>🤖 Android-приложение</span></div>' +
+        '<div class="cc-row"><span class="cc-label">Платформа</span><span>' + (isTg ? '✈️ Telegram' : '🤖 Android-приложение') + '</span></div>' +
         '<div class="cc-row"><span class="cc-label">ID</span><span class="cc-id">' + customerId + '</span></div>';
 
          renderAndroidList();
@@ -1298,12 +1323,17 @@
         ed.textContent = '(изм.)';
         div.appendChild(ed);
       }
-           if (m.from === 'admin') {
+               if (m.from === 'admin') {
         const tick = document.createElement('span');
         tick.className = 'ticks';
-        const isRead = m.createdAt <= androidLastReadMs;
-        tick.textContent = isRead ? '✓✓' : '✓';
-        if (isRead) tick.classList.add('read');
+        if (m.deliveryFailed) {
+          tick.textContent = '⚠️ не доставлено';
+          tick.style.color = '#ef5350';
+        } else {
+          const isRead = m.createdAt <= androidLastReadMs;
+          tick.textContent = isRead ? '✓✓' : '✓';
+          if (isRead) tick.classList.add('read');
+        }
         div.appendChild(tick);
       }
           if (!m.internal && m.createdAt) {
@@ -1450,7 +1480,7 @@
       }
     }
 
-        async function handleOrderActionClick(actionRaw, orderId) {
+            async function handleOrderActionClick(actionRaw, orderId, fromOrdersTab) {
       // order_accept -> accept, order_paid -> paid, order_shipped -> shipped
       // (сервер сам решает shipped/ready по deliveryMethod заказа),
       // order_ready -> shipped (тот же action, сервер разберётся),
@@ -1487,12 +1517,16 @@
 
            if (action === 'cancel' && !confirm('Точно отменить заказ?')) return;
 
-      try {
+           try {
         const result = await panelPost('/api/panel-chat/order-action', { orderId, action, extra });
         if (!result.success) {
           alert('Не удалось выполнить действие' + (result.reason ? ' (' + result.reason + ')' : ''));
         }
-        await pollAndroidHistory();
+        if (fromOrdersTab) {
+          await loadOrdersList();
+        } else {
+          await pollAndroidHistory();
+        }
       } catch (e) {
         console.error('order action error', e);
         alert('Ошибка при выполнении действия');
@@ -1767,25 +1801,164 @@
     const $tabStats = document.getElementById('tab-stats');
        const $tabAndroid = document.getElementById('tab-android');
     const $paneAndroid = document.getElementById('pane-android');
-    const $tabInstalls = document.getElementById('tab-installs');
+       const $tabInstalls = document.getElementById('tab-installs');
     const $paneInstalls = document.getElementById('pane-installs');
+    const $tabOrders = document.getElementById('tab-orders');
+    const $paneOrders = document.getElementById('pane-orders');
     function switchTab(name) {
       $paneChats.style.display = name === 'chats' ? 'block' : 'none';
       $paneOnline.style.display = name === 'online' ? 'block' : 'none';
       $paneStats.style.display = name === 'stats' ? 'block' : 'none';
       $paneAndroid.style.display = name === 'android' ? 'block' : 'none';
-      $paneInstalls.style.display = name === 'installs' ? 'block' : 'none';
+            $paneInstalls.style.display = name === 'installs' ? 'block' : 'none';
+      $paneOrders.style.display = name === 'orders' ? 'block' : 'none';
       $tabChats.classList.toggle('active', name === 'chats');
       $tabOnline.classList.toggle('active', name === 'online');
       $tabStats.classList.toggle('active', name === 'stats');
       $tabAndroid.classList.toggle('active', name === 'android');
       $tabInstalls.classList.toggle('active', name === 'installs');
+      $tabOrders.classList.toggle('active', name === 'orders');
     }
     $tabChats.onclick = () => switchTab('chats');
     $tabOnline.onclick = () => { switchTab('online'); refreshOnlineCounter(); };
     $tabStats.onclick = () => switchTab('stats');
     $tabAndroid.onclick = () => { switchTab('android'); startAndroidPolling(); };
-    $tabInstalls.onclick = () => { switchTab('installs'); loadInstallsList(); };
+        $tabInstalls.onclick = () => { switchTab('installs'); loadInstallsList(); };
+    $tabOrders.onclick = () => { switchTab('orders'); loadOrdersList(); };
+
+        function buildOrderActionButtonsClient(order, orderId) {
+      if (["cancelled", "shipped", "delivered", "completed"].includes(order.status)) {
+        return [];
+      }
+      if (order.status === "ready") {
+        return [[
+          { text: "✅ Выполнен", callback_data: `order_complete:${orderId}` },
+          { text: "❌ Отменить", callback_data: `order_cancel:${orderId}` }
+        ]];
+      }
+      const secondButton =
+        order.deliveryMethod === "pickup_yar"
+          ? { text: "✅ Собран", callback_data: `order_ready:${orderId}` }
+          : order.deliveryMethod === "delivery_yar"
+          ? { text: "🚗 Доставлено", callback_data: `order_delivered:${orderId}` }
+          : { text: "📦 Отправлен", callback_data: `order_shipped:${orderId}` };
+      if (order.status === "paid") {
+        return [[secondButton]];
+      }
+      const rows = [];
+      if (order.status === "accepted" && !order.confirmRequestedAt) {
+        rows.push([{ text: "✅ Принять заказ", callback_data: `order_accept:${orderId}` }]);
+      }
+      rows.push([
+        { text: "💰 Оплачен", callback_data: `order_paid:${orderId}` },
+        secondButton
+      ]);
+      rows.push([
+        { text: "✏️ Изменить заказ", callback_data: `order_edit:${orderId}` },
+        { text: "❌ Отменить", callback_data: `order_cancel:${orderId}` }
+      ]);
+      return rows;
+    }
+
+        const ORDER_STATUS_LABELS_CLIENT = {
+      accepted: { label: "Заказ принят", emoji: "🆕" },
+      confirmed: { label: "Подтверждён", emoji: "✅" },
+      paid: { label: "Оплачен", emoji: "💰" },
+      shipped: { label: "Отправлен", emoji: "📦" },
+      ready: { label: "Готов к самовывозу", emoji: "📍" },
+      delivered: { label: "Доставлен", emoji: "🚗" },
+      completed: { label: "Выполнен", emoji: "🎉" },
+      cancelled: { label: "Отменён", emoji: "❌" }
+    };
+
+    async function loadOrdersList() {
+      const $ol = document.getElementById('orders-list');
+      const $empty = document.getElementById('orders-empty');
+      try {
+        const data = await panelFetch('/api/panel-chat/orders');
+        const orders = data.orders || [];
+        $ol.innerHTML = '';
+        if (!orders.length) {
+          $empty.style.display = 'block';
+          $empty.textContent = 'Заказов пока нет';
+          return;
+        }
+        $empty.style.display = 'none';
+        orders.forEach(order => {
+                          const card = document.createElement('div');
+          card.className = 'chat-item';
+          card.style.alignItems = 'center';
+          card.style.cursor = 'default';
+          card.style.paddingTop = '8px';
+          card.style.paddingBottom = '8px';
+
+          const statusInfo = ORDER_STATUS_LABELS_CLIENT[order.status] || { label: order.status, emoji: '📦' };
+          const platformLabel = order.platform === 'android' ? '🤖 Android' : '✈️ Telegram';
+          const who = order.username || order.telegramUsername || order.telegramUserId || '';
+          const dateStr = order.createdAt ? new Date(order.createdAt).toLocaleString('ru-RU') : '';
+
+          const STATUS_DOT_COLORS = {
+            accepted: '#ffb300',
+            confirmed: '#42a5f5',
+            paid: '#66bb6a',
+            shipped: '#29b6f6',
+            ready: '#ab47bc',
+            delivered: '#26a69a',
+            completed: '#7cb342',
+            cancelled: '#ef5350'
+          };
+          const av = document.createElement('div');
+          av.className = 'avatar';
+          av.style.background = STATUS_DOT_COLORS[order.status] || '#555';
+          av.textContent = statusInfo.emoji;
+
+          const col = document.createElement('div');
+          col.style.flex = '1';
+          col.style.minWidth = '0';
+
+                  const head = document.createElement('div');
+          head.style.display = 'flex';
+          head.style.justifyContent = 'space-between';
+          head.style.fontSize = '10.5px';
+          head.style.color = '#8fa08b';
+          head.style.margin = '0 0 3px';
+          head.style.lineHeight = '1.2';
+          head.innerHTML = `<span>${platformLabel} · ${who}</span><span>${dateStr}</span>`;
+
+          const body = document.createElement('div');
+          body.style.margin = '0';
+          body.style.lineHeight = '1.2';
+          body.innerHTML = `${statusInfo.emoji} ${statusInfo.label} — <b>${order.total || 0}₽</b>` +
+            (order.storelandOrderNum ? ` (заказ №${order.storelandOrderNum})` : '');
+
+                    col.appendChild(head);
+          col.appendChild(body);
+
+                   const buttonRows = buildOrderActionButtonsClient(order, order.id);
+          if (buttonRows.length) {
+            const bar = document.createElement('div');
+            bar.className = 'msg-act';
+                       bar.style.marginTop = '5px';
+            buttonRows.forEach(row => row.forEach(btn => {
+              const b = document.createElement('button');
+              b.textContent = btn.text;
+              const parts = String(btn.callback_data).split(':');
+              b.onclick = () => handleOrderActionClick(parts[0], parts[1], true);
+              bar.appendChild(b);
+            }));
+                     col.appendChild(bar);
+          }
+
+          card.appendChild(av);
+          card.appendChild(col);
+          $ol.appendChild(card);
+        });
+      } catch (e) {
+        console.error('orders list error', e);
+        $empty.style.display = 'block';
+        $empty.textContent = 'Ошибка загрузки';
+      }
+    }
 
     async function loadInstallsList() {
       const $il = document.getElementById('installs-list');
@@ -1852,19 +2025,21 @@
         return;
       }
       $empty.style.display = 'none';
-      androidChats.forEach(chat => {
+            androidChats.forEach(chat => {
+        const isTg = chat.customerId.startsWith('tg:');
         const item = document.createElement('div');
         item.className = 'chat-item' + (chat.customerId === androidActiveCustomerId ? ' active' : '') + (chat.unread ? ' unread' : '');
         const av = document.createElement('div');
         av.className = 'avatar';
-        av.textContent = '🤖';
+        av.textContent = isTg ? '✈️' : '🤖';
         const col = document.createElement('div');
         col.className = 'col';
         const row1 = document.createElement('div');
         row1.className = 'row1';
             const nm = document.createElement('div');
         nm.className = 'name';
-        nm.textContent = chat.phone + (chat.activeOrderNum ? ' (№' + chat.activeOrderNum + ')' : '');
+        const displayLabel = isTg ? chat.customerId.slice(3) : chat.phone;
+        nm.textContent = displayLabel + (chat.activeOrderNum ? ' (№' + chat.activeOrderNum + ')' : '');
         const tm = document.createElement('div');
         tm.className = 'time';
         tm.textContent = chat.lastMessageAt ? relTime(new Date(chat.lastMessageAt)) : '';

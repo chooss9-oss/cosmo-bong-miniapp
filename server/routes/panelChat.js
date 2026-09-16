@@ -2,6 +2,8 @@ const express = require("express");
 
 const {
   isAndroidCustomerId,
+  isKnownChatCustomerId,
+  isTelegramChatCustomerId,
   appendChatMessage,
   getChatMessages,
   getAndroidChatList,
@@ -22,7 +24,7 @@ const {
   panelCalcOrder,
   panelChooseBankAndInvoice
 } = require("../orderFlow");
-const { getOrder } = require("../orderStore");
+const { getOrder, getRecentOrders } = require("../orderStore");
 const { saveReplyMapping, telegramApi, telegramApiFile, buildTelegramFileProxyUrl } = require("../replyMapping");
 const { getPushToken, sendExpoPush, sendWebPush, listAndroidInstalls } = require("../pushStore");
 
@@ -53,7 +55,7 @@ router.get("/list", async (req, res) => {
 router.get("/history", async (req, res) => {
   const customerId = req.query.customerId;
 
-  if (!customerId || !isAndroidCustomerId(String(customerId))) {
+  if (!customerId || !isKnownChatCustomerId(String(customerId))) {
     return res.status(400).json({ error: "customerId обязателен" });
   }
 
@@ -74,11 +76,21 @@ router.post("/send", async (req, res) => {
   try {
     const { customerId, text } = req.body;
 
-    if (!customerId || !isAndroidCustomerId(String(customerId)) || !text) {
+    if (!customerId || !isKnownChatCustomerId(String(customerId)) || !text) {
       return res.status(400).json({ success: false, error: "customerId и text обязательны" });
     }
 
     await appendChatMessage(customerId, { from: "admin", text });
+
+    // Telegram-клиент — отправляем прямо в его чат с ботом, без пушей
+    // и без мирроринга (мирроринг нужен был только чтобы не терять историю
+    // в самом Telegram, а тут переписка уже целиком в панели).
+    if (isTelegramChatCustomerId(String(customerId))) {
+      const tgChatId = String(customerId).slice("tg:".length);
+      const sendResult = await telegramApi("sendMessage", { chat_id: tgChatId, text })
+        .catch((err) => ({ ok: false, description: err.message }));
+      return res.json({ success: !!sendResult.ok });
+    }
 
     const phone = String(customerId).startsWith("android:")
       ? String(customerId).slice("android:".length)
@@ -217,6 +229,13 @@ router.post("/order-action", async (req, res) => {
     console.error("❌ PANEL ORDER ACTION ERROR:", error.message);
     res.status(500).json({ success: false });
   }
+});
+
+// Единый список заказов (с историей, обе платформы — Android и
+// Telegram) для вкладки "📦 Заказы" в панели.
+router.get("/orders", async (req, res) => {
+  const orders = await getRecentOrders(500);
+  res.json({ orders });
 });
 
 // Список клиентов, установивших Android-приложение (есть push-токен) —

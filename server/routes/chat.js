@@ -8,6 +8,7 @@ const {
 } = require("../replyMapping");
 const {
   isAndroidCustomerId,
+  normalizeAndroidCustomerId,
   appendChatMessage,
   getChatMessages,
   editChatMessage,
@@ -26,6 +27,22 @@ const {
 } = require("../orderFlow");
 
 const router = express.Router();
+
+// Нормализуем customerId ДО того, как он попадёт в любой из хендлеров
+// ниже — если с фронтенда (например, со старой версии приложения без
+// строгой проверки номера) пришёл customerId вида "android:9958465870"
+// (10 цифр, без "7"), приводим его к "android:79958465870". Так один и
+// тот же клиент не превращается в двух разных на сервере из-за того, что
+// в какой-то момент ввёл или сохранил номер по-другому.
+router.use((req, res, next) => {
+  if (req.body && req.body.customerId) {
+    req.body.customerId = normalizeAndroidCustomerId(String(req.body.customerId));
+  }
+  if (req.query && req.query.customerId) {
+    req.query.customerId = normalizeAndroidCustomerId(String(req.query.customerId));
+  }
+  next();
+});
 
 // История переписки клиента с админом — подгружается при открытии чата
 // в приложении и периодически (поллингом) для новых сообщений. Сообщения

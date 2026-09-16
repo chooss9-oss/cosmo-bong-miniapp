@@ -3,6 +3,7 @@ const axios = require("axios");
 
 const { saveReplyMapping, telegramApi } = require("../replyMapping");
 const { createOrder, updateOrder, getOrdersForUser } = require("../orderStore");
+const { normalizeAndroidCustomerId } = require("../chatStore");
 const { getBonusBalance, getMaxRedeemable, deductBonusPoints } = require("../bonusStore");
 const { notifyCustomer, buildOrderActionButtons } = require("../orderFlow");
 const { appendChatMessage } = require("../chatStore");
@@ -101,7 +102,7 @@ username,
 
 telegramUsername,
 
-telegramUserId,
+telegramUserId: rawTelegramUserId,
 
 notificationsAllowed,
 
@@ -119,6 +120,15 @@ platform
 
 
 }=req.body;
+
+// Для Android telegramUserId — это customerId вида "android:<телефон>",
+// присланный приложением. Нормализуем на случай, если пришёл кривой
+// вариант без "7" в начале (старая версия приложения без строгой
+// проверки, см. normalizeAndroidCustomerId в chatStore.js) — иначе один
+// и тот же клиент задвоится под разными ID. Дальше по файлу везде
+// используется уже это нормализованное значение.
+const telegramUserId =
+  platform === "android" ? normalizeAndroidCustomerId(String(rawTelegramUserId)) : rawTelegramUserId;
 
 // Всё, что не явно "android", считаем Telegram Mini App — так старые
 // клиенты (не присылающие platform вообще) продолжают работать как раньше.

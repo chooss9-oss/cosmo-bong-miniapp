@@ -29,7 +29,35 @@ function isAndroidCustomerId(customerId) {
   return typeof customerId === "string" && customerId.startsWith("android:");
 }
 
-async function appendChatMessage(customerId, { from, text, buttons, imageUrl, audioUrl, internal }) {
+// Приводит customerId вида "android:<телефон>" к единому формату — если
+// после "android:" идёт 10 цифр без "7" в начале (например, кто-то ввёл
+// номер без неё, или сохранилось со старой версии приложения без строгой
+// проверки на фронтенде), добавляем "7" сами. Так два разных клиента с
+// одним и тем же номером ("android:9958465870" и "android:79958465870")
+// не будут считаться на сервере разными людьми.
+function normalizeAndroidCustomerId(customerId) {
+  if (typeof customerId !== "string" || !customerId.startsWith("android:")) {
+    return customerId;
+  }
+
+  const digits = customerId.slice("android:".length).replace(/\D/g, "");
+
+  if (digits.length === 10) {
+    return `android:7${digits}`;
+  }
+
+  return `android:${digits}`;
+}
+
+function isTelegramChatCustomerId(customerId) {
+  return typeof customerId === "string" && customerId.startsWith("tg:");
+}
+
+function isKnownChatCustomerId(customerId) {
+  return isAndroidCustomerId(customerId) || isTelegramChatCustomerId(customerId);
+}
+
+async function appendChatMessage(customerId, { from, text, buttons, imageUrl, audioUrl, internal, deliveryFailed }) {
   if (!customerId || (!text && !imageUrl && !audioUrl)) return null;
 
   const message = {
@@ -37,6 +65,10 @@ async function appendChatMessage(customerId, { from, text, buttons, imageUrl, au
     text: text ? String(text) : "",
     createdAt: Date.now()
   };
+
+  if (deliveryFailed) {
+    message.deliveryFailed = true;
+  }
 
   // Кнопки сценария заказа (подтвердить / выбор доставки) — тот же формат,
   // что inline_keyboard в Telegram: массив строк, в строке массив кнопок
@@ -198,9 +230,10 @@ async function getAndroidChatList() {
 
       // Активный номер заказа этого клиента — самый свежий заказ, который
       // ещё не отменён/отправлен/готов.
-      let activeOrderNum = null;
+            let activeOrderNum = null;
       try {
-        const orders = await getOrdersForUser(customerId);
+        const orderLookupId = customerId.startsWith("tg:") ? customerId.slice(3) : customerId;
+        const orders = await getOrdersForUser(orderLookupId);
         const active = orders.find((o) => !ACTIVE_STATUSES_EXCLUDED.includes(o.status));
         if (active) activeOrderNum = active.storelandOrderNum || active.id;
       } catch {
@@ -478,6 +511,9 @@ async function clearButtonsInChat(customerId, orderId, actions) {
 
 module.exports = {
   isAndroidCustomerId,
+  normalizeAndroidCustomerId,
+  isTelegramChatCustomerId,
+  isKnownChatCustomerId,
   appendChatMessage,
   getChatMessages,
   getAndroidChatList,

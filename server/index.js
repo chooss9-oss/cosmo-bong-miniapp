@@ -2308,7 +2308,7 @@ app.post("/api/telegram-webhook", async (req, res) => {
             });
           }
 
-        } else if (customerChatId) {
+                    } else if (customerChatId) {
 
           const t1 = Date.now();
 
@@ -2332,6 +2332,12 @@ app.post("/api/telegram-webhook", async (req, res) => {
               });
 
           console.log(`TELEGRAM WEBHOOK: sendMessage to customer took ${Date.now() - t1}ms`);
+
+          await appendChatMessage("tg:" + customerChatId, {
+            from: "admin",
+            text: message.text || message.caption || "",
+            deliveryFailed: !sendResult.ok
+          });
 
           if (!sendResult.ok) {
 
@@ -2422,6 +2428,9 @@ app.post("/api/telegram-webhook", async (req, res) => {
       user.username
       ? `@${user.username}`
       : [user.first_name, user.last_name].filter(Boolean).join(" ") || "клиент";
+
+       const tgCustomerId = "tg:" + chatId;
+    await appendChatMessage(tgCustomerId, { from: "customer", text: message.text || message.caption || "" });
 
     const [forwarded, info] = await Promise.all([
       telegramApi("forwardMessage", {
