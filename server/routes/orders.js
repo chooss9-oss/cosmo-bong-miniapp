@@ -442,7 +442,7 @@ const order = await createOrder({
     quantity: item.quantity,
     price: item.price
   })),
-  total,
+  total: amountToPay,
   storelandOrderNum,
   pointsUsed: appliedPoints,
   platform

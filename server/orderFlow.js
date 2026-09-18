@@ -344,10 +344,16 @@ async function notifyCustomer(order, text, replyMarkup, pushType = "chat") {
 
   }
 
-  const result = await telegramApi("sendMessage", {
+   const result = await telegramApi("sendMessage", {
     chat_id: order.telegramUserId,
     text,
     reply_markup: replyMarkup
+  });
+
+  await appendChatMessage("tg:" + order.telegramUserId, {
+    from: "admin",
+    text,
+    deliveryFailed: !result.ok
   });
 
   if (!result.ok) {
@@ -432,10 +438,17 @@ async function notifyCustomerPhoto(order, photoUrl, caption) {
 
   }
 
-  const result = await telegramApi("sendPhoto", {
+    const result = await telegramApi("sendPhoto", {
     chat_id: order.telegramUserId,
     photo: photoUrl,
     caption
+  });
+
+  await appendChatMessage("tg:" + order.telegramUserId, {
+    from: "admin",
+    text: caption || "",
+    imageUrl: photoUrl,
+    deliveryFailed: !result.ok
   });
 
   if (!result.ok) {
@@ -859,10 +872,23 @@ async function handleOrderCallback(callbackQuery) {
   const adminId = String(process.env.ADMIN_ID || "").replace(/\D/g, "");
   const clickerId = String(callbackQuery.from?.id || "").replace(/\D/g, "");
 
-  async function ack(text) {
+   async function ack(text) {
     await telegramApi("answerCallbackQuery", {
       callback_query_id: callbackQuery.id,
       text
+    });
+  }
+
+  // Клиент нажал кнопку сценария заказа (не админ) — сохраняем в историю
+  // чата панели, чтобы было видно его выбор (подтвердил заказ, выбрал
+  // способ доставки и т.д.), а не только автосообщения бота.
+  if (clickerId !== adminId) {
+    const buttonLabel = (callbackQuery.message?.reply_markup?.inline_keyboard || [])
+      .flat()
+      .find((btn) => btn.callback_data === data)?.text;
+    await appendChatMessage("tg:" + fromChatId, {
+      from: "customer",
+      text: buttonLabel || `[нажата кнопка: ${action}]`
     });
   }
 

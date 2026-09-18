@@ -22,7 +22,8 @@ const {
   panelEditOrder,
   panelCancelOrder,
   panelCalcOrder,
-  panelChooseBankAndInvoice
+  panelChooseBankAndInvoice,
+  buildOrderCardText
 } = require("../orderFlow");
 const { getOrder, getRecentOrders } = require("../orderStore");
 const { saveReplyMapping, telegramApi, telegramApiFile, buildTelegramFileProxyUrl } = require("../replyMapping");
@@ -235,7 +236,11 @@ router.post("/order-action", async (req, res) => {
 // Telegram) для вкладки "📦 Заказы" в панели.
 router.get("/orders", async (req, res) => {
   const orders = await getRecentOrders(500);
-  res.json({ orders });
+  const withText = orders.map(order => ({
+    ...order,
+    cardText: buildOrderCardText(order)
+  }));
+  res.json({ orders: withText });
 });
 
 // Список клиентов, установивших Android-приложение (есть push-токен) —

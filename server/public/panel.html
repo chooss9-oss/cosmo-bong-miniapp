@@ -12,44 +12,44 @@
 <style>
   #client-card {
     padding: 8px 12px;
-    border-bottom: 1px solid #24382c;
+    border-bottom: 1px solid #242e3a;
     font-size: 12px;
     line-height: 1.6;
-    color: #b9c9be;
-    background: #16241c;
+    color: #8891a0;
+    background: #131922;
   }
   #client-card .cc-row { display: flex; gap: 6px; }
-  #client-card .cc-label { color: #7d9186; min-width: 78px; }
+  #client-card .cc-label { color: #565f6e; min-width: 78px; }
   #client-card .cc-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; }
-  #client-card .cc-id { user-select: all; word-break: break-all; font-size: 11px; color: #8fa08b; }
+  #client-card .cc-id { user-select: all; word-break: break-all; font-size: 11px; color: #565f6e; }
   #client-card .cc-note { flex: 1; word-break: break-word; }
     #client-card .cc-act {
-    color: #7fae63;
+    color: #3b82f6;
     text-decoration: underline;
     margin-right: 8px;
     white-space: nowrap;
   }
   #client-card .cc-btn {
     background: none; border: none; cursor: pointer;
-    color: #7fae63; font-size: 11.5px; padding: 0; text-decoration: underline;
+    color: #3b82f6; font-size: 11.5px; padding: 0; text-decoration: underline;
     font-family: inherit;
   }
   #cc-path-body { margin-top: 4px; }
   .cc-path-row {
     display: flex; justify-content: space-between; gap: 8px;
-    padding: 2px 0; font-size: 11.5px; color: #b9c9be;
+    padding: 2px 0; font-size: 11.5px; color: #8891a0;
   }
   .cc-path-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cc-path-t { color: #7d9186; flex-shrink: 0; }
+  .cc-path-t { color: #565f6e; flex-shrink: 0; }
   #client-card .cc-on { background: #22c55e; }
-  #client-card .cc-off { background: #7d9186; }
+  #client-card .cc-off { background: #565f6e; }
 
   * { box-sizing: border-box; }
-  body {
+    body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-    background: #0f1a14;
-    color: #eef2ea;
+    background: #0a0e14;
+    color: #f5f7fa;
     height: 100vh;
     height: 100dvh;
     display: flex;
@@ -57,7 +57,7 @@
   }
   #sidebar {
     width: 280px;
-    background: #14231c;
+    background: #10151d;
     border-right: 1px solid rgba(255,255,255,0.08);
     flex-shrink: 0;
     display: flex;
@@ -74,14 +74,14 @@
     flex: 1;
     background: none;
     border: none;
-    color: #b7c4b3;
+    color: #8891a0;
     padding: 12px 6px;
     font-size: 12.5px;
     font-weight: 600;
     cursor: pointer;
     font-family: inherit;
   }
-  #tabs .tab.active { color: #eef2ea; background: #1c2e25; }
+  #tabs .tab.active { color: #f5f7fa; background: #1a222d; }
   #sidebar h1 {
     font-size: 15px;
     padding: 16px;
@@ -91,7 +91,7 @@
   #online-counter {
     padding: 10px 16px;
     font-size: 12.5px;
-    color: #b7c4b3;
+    color: #8891a0;
     border-bottom: 1px solid rgba(255,255,255,0.08);
     display: flex;
     align-items: center;
@@ -100,30 +100,30 @@
   #online-counter .dot {
     width: 8px; height: 8px;
     border-radius: 50%;
-    background: #7fae63;
+    background: #3b82f6;
   }
-  #online-counter b { color: #eef2ea; }
+  #online-counter b { color: #f5f7fa; }
   .online-item {
     padding: 9px 16px;
     border-bottom: 1px solid rgba(255,255,255,0.05);
     font-size: 12.5px;
     cursor: pointer;
   }
-  .online-item:hover { background: #1c2e25; }
-  .online-item .dev { color: #eef2ea; font-weight: 600; }
-  .online-item .pg { color: #b7c4b3; font-size: 11.5px; margin-top: 2px; word-break: break-all; }
+  .online-item:hover { background: #1a222d; }
+  .online-item .dev { color: #f5f7fa; font-weight: 600; }
+  .online-item .pg { color: #8891a0; font-size: 11.5px; margin-top: 2px; word-break: break-all; }
   .online-item { display: flex; gap: 10px; align-items: flex-start; }
   .online-item .avatar {
     width: 30px; height: 30px;
     border-radius: 50%;
-    background: #24382d;
+    background: #242e3a;
     display: flex; align-items: center; justify-content: center;
     font-size: 15px;
     flex-shrink: 0;
   }
   .online-item .col { flex: 1; min-width: 0; }
   .online-item .last {
-    color: #8fa08b;
+    color: #565f6e;
     font-size: 11.5px;
     margin-top: 3px;
     overflow: hidden;
@@ -135,35 +135,35 @@
     border-bottom: 1px solid rgba(255,255,255,0.08);
   }
   #stats-controls select, #stats-controls button {
-    background: #1c2e25; color: #eef2ea;
+    background: #1a222d; color: #f5f7fa;
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 8px; padding: 6px 10px; font-size: 12.5px;
     font-family: inherit; cursor: pointer;
   }
-  #stats-controls button { background: #7fae63; color: #0d160f; border: none; font-weight: 600; }
-  .stats-hint { padding: 12px 14px; color: #8fa08b; font-size: 12px; }
+  #stats-controls button { background: #3b82f6; color: #f5f7fa; border: none; font-weight: 600; }
+  .stats-hint { padding: 12px 14px; color: #565f6e; font-size: 12px; }
   .st-block { padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.06); }
   .st-title {
     font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
-    color: #8fa08b; margin-bottom: 6px;
+    color: #565f6e; margin-bottom: 6px;
   }
   .st-row {
     display: flex; justify-content: space-between; gap: 10px;
-    font-size: 12.5px; padding: 3px 0; color: #b7c4b3;
+    font-size: 12.5px; padding: 3px 0; color: #8891a0;
   }
-  .st-row b { color: #eef2ea; }
+  .st-row b { color: #f5f7fa; }
   .list-title {
     padding: 10px 16px 6px;
     font-size: 11.5px;
-    color: #b7c4b3;
+    color: #8891a0;
     text-transform: uppercase;
     letter-spacing: .04em;
     border-top: 1px solid rgba(255,255,255,0.08);
   }
     #chat-filter { padding: 8px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); }
   #chat-filter button {
-    background: #1c2e25;
-    color: #b7c4b3;
+    background: #1a222d;
+    color: #8891a0;
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 999px;
     padding: 5px 12px;
@@ -171,8 +171,20 @@
     font-family: inherit;
     cursor: pointer;
   }
-  #chat-filter button.on { background: #7fae63; color: #0d160f; border-color: #7fae63; font-weight: 600; }
-  #chat-empty { padding: 16px 14px; color: #8fa08b; font-size: 12px; }
+  #chat-filter button.on { background: #3b82f6; color: #f5f7fa; border-color: #3b82f6; font-weight: 600; }
+  .orders-filter-btn {
+    background: #1a222d;
+    color: #8891a0;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px;
+    padding: 4px 8px;
+    font-size: 10.5px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .orders-filter-btn.on { background: #3b82f6; color: #f5f7fa; border-color: #3b82f6; font-weight: 600; }
+  #chat-empty { padding: 16px 14px; color: #565f6e; font-size: 12px; }
   .chat-item {
     padding: 11px 14px;
     border-bottom: 1px solid rgba(255,255,255,0.05);
@@ -182,11 +194,11 @@
     gap: 10px;
     align-items: flex-start;
   }
-  .chat-item:hover, .chat-item.active { background: #1c2e25; }
+  .chat-item:hover, .chat-item.active { background: #1a222d; }
   .chat-item .avatar {
     width: 34px; height: 34px;
     border-radius: 50%;
-    background: #24382d;
+    background: #242e3a;
     display: flex; align-items: center; justify-content: center;
     font-size: 16px;
     flex-shrink: 0;
@@ -201,16 +213,16 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .chat-item .time { color: #8fa08b; font-size: 10.5px; flex-shrink: 0; }
+  .chat-item .time { color: #565f6e; font-size: 10.5px; flex-shrink: 0; }
   .chat-item .preview {
-    color: #b7c4b3;
+    color: #8891a0;
     font-size: 12px;
     margin-top: 2px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .chat-item.unread .avatar { box-shadow: 0 0 0 2px #7fae63; }
+  .chat-item.unread .avatar { box-shadow: 0 0 0 2px #3b82f6; }
   .chat-item .avatar { position: relative; }
   .chat-item .avatar.is-online::after {
     content: '';
@@ -219,18 +231,18 @@
     width: 10px; height: 10px;
     border-radius: 50%;
     background: #22c55e;
-    border: 2px solid #14231c;
+    border: 2px solid #10151d;
   }
   .chat-item.unread {
-    background: rgba(127,174,99,0.10);
-    border-left: 3px solid #7fae63;
+    background: rgba(59,130,246,0.10);
+    border-left: 3px solid #3b82f6;
     padding-left: 11px;
   }
-  .chat-item.unread .name { color: #cdf0b6; }
-  .chat-item.unread .preview { color: #dff3d2; font-weight: 600; }
+  .chat-item.unread .name { color: #bfdbfe; }
+  .chat-item.unread .preview { color: #dbeafe; font-weight: 600; }
   .chat-item .badge {
     display: inline-block;
-    background: #e0724a;
+    background: #ff3b5c;
     color: #fff;
     font-size: 10px;
     padding: 1px 6px;
@@ -261,19 +273,19 @@
     line-height: 1.5;
     white-space: pre-wrap;
   }
-  .msg.client { background: #1c2e25; align-self: flex-start; border-radius: 12px 12px 12px 2px; }
+  .msg.client { background: #1a222d; align-self: flex-start; border-radius: 12px 12px 12px 2px; }
   .msg.operator {
-    background: #4f7a4a;
+    background: #3b82f6;
     align-self: flex-end;
     border-radius: 12px 12px 2px 12px;
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
   }
-    .msg.event { background: none; color: #b7c4b3; font-size: 12px; align-self: center; }
+    .msg.event { background: none; color: #8891a0; font-size: 12px; align-self: center; }
   .date-sep {
     align-self: center;
-    color: #8fa08b;
+    color: #565f6e;
     font-size: 11.5px;
     background: rgba(255,255,255,0.06);
     padding: 3px 10px;
@@ -281,9 +293,9 @@
     margin: 4px 0;
   }
   .msg-act { display: flex; gap: 6px; margin-top: 6px; }
-  .msg-act button {
+    .msg-act button {
     background: rgba(0,0,0,0.25);
-    color: #eef2ea;
+    color: #f5f7fa;
     border: none;
     border-radius: 8px;
     padding: 4px 8px;
@@ -291,9 +303,20 @@
     cursor: pointer;
     font-family: inherit;
   }
+  .order-act { display: flex; gap: 8px; flex-wrap: wrap; }
+  .order-act button {
+    color: #f5f7fa;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
   .msg .edited { font-size: 11px; opacity: .6; margin-left: 4px; }
     .msg .ticks { font-size: 11px; margin-left: 6px; opacity: .65; white-space: nowrap; }
-  .msg .ticks.read { color: #cdf0b6; opacity: 1; }
+  .msg .ticks.read { color: #bfdbfe; opacity: 1; }
   .msg .msg-time { font-size: 10.5px; margin-left: 6px; opacity: .55; white-space: nowrap; display: inline-block; }
   #quick-replies {
     gap: 6px;
@@ -309,8 +332,8 @@
   }
   #quick-replies::-webkit-scrollbar { display: none; }
   #quick-replies button {
-    background: #1c2e25;
-    color: #cdf0b6;
+    background: #1a222d;
+    color: #bfdbfe;
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 999px;
     padding: 6px 12px;
@@ -320,7 +343,7 @@
     cursor: pointer;
     flex: 0 0 auto;
   }
-  #quick-replies button:active { background: #24382d; }
+  #quick-replies button:active { background: #242e3a; }
   #reply-row {
     display: flex;
     align-items: flex-end;
@@ -331,11 +354,11 @@
   #reply-input {
     flex: 1;
     min-width: 0;
-    background: #1c2e25;
+    background: #1a222d;
     border: 1px solid rgba(255,255,255,0.1);
     border-radius: 10px;
     padding: 10px 12px;
-    color: #eef2ea;
+    color: #f5f7fa;
     font-size: 16px;
     font-family: inherit;
     line-height: 1.35;
@@ -347,8 +370,8 @@
   #reply-input::-webkit-scrollbar { display: none; }
     #reply-send, #reply-attach, #reply-mic { height: 40px; }
   #reply-send {
-    background: #7fae63;
-    color: #0d160f;
+    background: #3b82f6;
+    color: #f5f7fa;
     border: none;
     border-radius: 10px;
     padding: 0 18px;
@@ -356,8 +379,8 @@
     cursor: pointer;
   }
    #reply-attach {
-    background: #1c2e25;
-    color: #eef2ea;
+    background: #1a222d;
+    color: #f5f7fa;
     border: 1px solid rgba(255,255,255,0.1);
     border-radius: 10px;
     width: 40px;
@@ -366,8 +389,8 @@
     font-size: 16px;
   }
   #reply-mic {
-    background: #1c2e25;
-    color: #eef2ea;
+    background: #1a222d;
+    color: #f5f7fa;
     border: 1px solid rgba(255,255,255,0.1);
     border-radius: 10px;
     width: 40px;
@@ -381,7 +404,7 @@
   #login-overlay {
     position: fixed;
     inset: 0;
-    background: #0f1a14;
+    background: #0a0e14;
     z-index: 1000;
     display: none;
     align-items: center;
@@ -397,17 +420,17 @@
   }
   .login-box h2 { font-size: 16px; margin: 0 0 6px; }
   .login-box input {
-    background: #1c2e25;
+    background: #1a222d;
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 10px;
     padding: 11px 12px;
-    color: #eef2ea;
+    color: #f5f7fa;
     font-size: 16px;
     font-family: inherit;
   }
   .login-box button {
-    background: #7fae63;
-    color: #0d160f;
+    background: #3b82f6;
+    color: #f5f7fa;
     border: none;
     border-radius: 10px;
     padding: 11px;
@@ -416,11 +439,11 @@
     font-family: inherit;
     cursor: pointer;
   }
-  #login-err { color: #e0724a; font-size: 12px; }
+  #login-err { color: #ff3b5c; font-size: 12px; }
   #empty-state, #config-warning {
     margin: auto;
     text-align: center;
-    color: #b7c4b3;
+    color: #8891a0;
     max-width: 400px;
     padding: 20px;
   }
@@ -430,7 +453,7 @@
     display: none;
     background: none;
     border: none;
-    color: #eef2ea;
+    color: #f5f7fa;
     font-size: 22px;
     line-height: 1;
     padding: 0 4px;
@@ -485,6 +508,15 @@
       <div id="installs-list"></div>
     </div>
     <div id="pane-orders" style="display:none;">
+      <div id="orders-filter" style="padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="orders-filter-btn on" data-filter="all">Все</button>
+        <button class="orders-filter-btn" data-filter="accepted">Принятые</button>
+        <button class="orders-filter-btn" data-filter="confirmed">Согласованные</button>
+        <button class="orders-filter-btn" data-filter="paid">Оплаченные</button>
+        <button class="orders-filter-btn" data-filter="ready">Готовы к выдаче</button>
+        <button class="orders-filter-btn" data-filter="shipped">Отправленные</button>
+        <button class="orders-filter-btn" data-filter="cancelled">Отменённые</button>
+      </div>
       <div id="orders-empty" style="padding:16px 14px;color:#8fa08b;font-size:12px;">Загрузка…</div>
       <div id="orders-list"></div>
     </div>
@@ -746,6 +778,10 @@
       if (currentMode === 'android' && androidChatOpenedFrom === 'installs') {
         androidChatOpenedFrom = 'android';
         switchTab('installs');
+      } else if (currentMode === 'android' && androidChatOpenedFrom === 'orders') {
+        androidChatOpenedFrom = 'android';
+        switchTab('orders');
+        loadOrdersList();
       }
     };
 
@@ -1234,9 +1270,12 @@
 
       const $cc = document.getElementById('client-card');
       $cc.style.display = 'block';
+      const activeChatEntry = androidChats.find(c => c.customerId === customerId);
+      const activeOrderNum = activeChatEntry ? activeChatEntry.activeOrderNum : null;
             $cc.innerHTML =
         '<div class="cc-row"><span class="cc-label">Клиент</span><span>' + phone + '</span></div>' +
         '<div class="cc-row"><span class="cc-label">Платформа</span><span>' + (isTg ? '✈️ Telegram' : '🤖 Android-приложение') + '</span></div>' +
+        '<div class="cc-row"><span class="cc-label">Заказ</span><span>' + (activeOrderNum ? '№' + activeOrderNum : 'нет активного') + '</span></div>' +
         '<div class="cc-row"><span class="cc-label">ID</span><span class="cc-id">' + customerId + '</span></div>';
 
          renderAndroidList();
@@ -1826,6 +1865,24 @@
         $tabInstalls.onclick = () => { switchTab('installs'); loadInstallsList(); };
     $tabOrders.onclick = () => { switchTab('orders'); loadOrdersList(); };
 
+    let ordersFilter = 'all';
+    const ORDERS_FILTER_STATUS_MAP = {
+      all: null,
+      accepted: ['accepted'],
+      confirmed: ['confirmed'],
+      paid: ['paid'],
+      ready: ['ready'],
+      shipped: ['shipped', 'delivered', 'completed'],
+      cancelled: ['cancelled']
+    };
+    document.querySelectorAll('.orders-filter-btn').forEach(btn => {
+      btn.onclick = () => {
+        ordersFilter = btn.dataset.filter;
+        document.querySelectorAll('.orders-filter-btn').forEach(b => b.classList.toggle('on', b === btn));
+        loadOrdersList();
+      };
+    });
+
         function buildOrderActionButtonsClient(order, orderId) {
       if (["cancelled", "shipped", "delivered", "completed"].includes(order.status)) {
         return [];
@@ -1843,7 +1900,7 @@
           ? { text: "🚗 Доставлено", callback_data: `order_delivered:${orderId}` }
           : { text: "📦 Отправлен", callback_data: `order_shipped:${orderId}` };
       if (order.status === "paid") {
-        return [[secondButton]];
+        return [[secondButton, { text: "❌ Отменить", callback_data: `order_cancel:${orderId}` }]];
       }
       const rows = [];
       if (order.status === "accepted" && !order.confirmRequestedAt) {
@@ -1876,21 +1933,41 @@
       const $empty = document.getElementById('orders-empty');
       try {
         const data = await panelFetch('/api/panel-chat/orders');
-        const orders = data.orders || [];
+        const allOrders = data.orders || [];
+
+        const BADGE_FILTERS = ['accepted', 'confirmed', 'paid', 'ready'];
+        BADGE_FILTERS.forEach(key => {
+          const statusesForKey = ORDERS_FILTER_STATUS_MAP[key];
+          const count = allOrders.filter(o => statusesForKey.includes(o.status)).length;
+          const btn = document.querySelector('.orders-filter-btn[data-filter="' + key + '"]');
+          if (btn) {
+            const baseLabel = { accepted: 'Принятые', confirmed: 'Согласованные', paid: 'Оплаченные', ready: 'Готовы к выдаче' }[key];
+            btn.textContent = count >= 1 ? baseLabel + ' (' + count + ')' : baseLabel;
+          }
+        });
+
+        const statuses = ORDERS_FILTER_STATUS_MAP[ordersFilter];
+        const orders = statuses ? allOrders.filter(o => statuses.includes(o.status)) : allOrders;
         $ol.innerHTML = '';
         if (!orders.length) {
           $empty.style.display = 'block';
-          $empty.textContent = 'Заказов пока нет';
+          $empty.textContent = ordersFilter === 'all' ? 'Заказов пока нет' : 'Нет заказов с этим статусом';
           return;
         }
         $empty.style.display = 'none';
         orders.forEach(order => {
-                          const card = document.createElement('div');
+          if (ordersFilter !== 'all' && !ORDERS_FILTER_STATUS_MAP[ordersFilter]?.includes(order.status)) {
+            return;
+          }
+                                    const card = document.createElement('div');
           card.className = 'chat-item';
-          card.style.alignItems = 'center';
+          card.style.alignItems = 'flex-start';
           card.style.cursor = 'default';
-          card.style.paddingTop = '8px';
-          card.style.paddingBottom = '8px';
+          card.style.padding = '12px 14px';
+          card.style.marginBottom = '10px';
+          card.style.background = '#131922';
+          card.style.borderRadius = '12px';
+          card.style.border = '1px solid rgba(255,255,255,0.06)';
 
           const statusInfo = ORDER_STATUS_LABELS_CLIENT[order.status] || { label: order.status, emoji: '📦' };
           const platformLabel = order.platform === 'android' ? '🤖 Android' : '✈️ Telegram';
@@ -1934,19 +2011,59 @@
                     col.appendChild(head);
           col.appendChild(body);
 
-                   const buttonRows = buildOrderActionButtonsClient(order, order.id);
+                    const details = document.createElement('div');
+          details.style.display = 'none';
+          details.style.whiteSpace = 'pre-wrap';
+          details.style.fontSize = '12px';
+          details.style.margin = '6px 0';
+          details.style.padding = '8px 10px';
+          details.style.background = 'rgba(0,0,0,0.2)';
+          details.style.borderRadius = '8px';
+          details.textContent = order.cardText || '';
+          col.appendChild(details);
+
+          body.style.cursor = 'pointer';
+          body.onclick = () => {
+            details.style.display = details.style.display === 'none' ? 'block' : 'none';
+          };
+
+                   const ORDER_BTN_COLORS = {
+            order_accept: '#3b82f6',
+            order_paid: '#22c55e',
+            order_shipped: '#0ea5e9',
+            order_ready: '#0ea5e9',
+            order_delivered: '#0ea5e9',
+            order_complete: '#22c55e',
+            order_edit: '#f59e0b',
+            order_cancel: '#ff3b5c'
+          };
+          const buttonRows = buildOrderActionButtonsClient(order, order.id);
           if (buttonRows.length) {
             const bar = document.createElement('div');
-            bar.className = 'msg-act';
-                       bar.style.marginTop = '5px';
+            bar.className = 'order-act';
+            bar.style.marginTop = '8px';
             buttonRows.forEach(row => row.forEach(btn => {
               const b = document.createElement('button');
               b.textContent = btn.text;
               const parts = String(btn.callback_data).split(':');
+              b.style.background = ORDER_BTN_COLORS[parts[0]] || '#1a222d';
               b.onclick = () => handleOrderActionClick(parts[0], parts[1], true);
               bar.appendChild(b);
             }));
-                     col.appendChild(bar);
+            const writeBtn = document.createElement('button');
+            writeBtn.textContent = '✉️ Написать клиенту';
+            writeBtn.style.background = '#242e3a';
+                        writeBtn.onclick = () => {
+              const custId = order.platform === 'android'
+                ? order.telegramUserId
+                : 'tg:' + order.telegramUserId;
+              androidChatOpenedFrom = 'orders';
+              switchTab('android');
+              startAndroidPolling();
+              openAndroidChat(custId);
+            };
+            bar.appendChild(writeBtn);
+            col.appendChild(bar);
           }
 
           card.appendChild(av);
