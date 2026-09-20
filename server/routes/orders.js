@@ -143,6 +143,8 @@ const subtotal = cart
   ? cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0)
   : 0;
 
+console.log("DEBUG CART:", JSON.stringify(cart));
+
 // Промокод перепроверяется на сервере: код должен совпасть, а если у
 // платформы промокод только на первый заказ (firstOrderOnly) — ещё и не
 // должно быть предыдущих оплаченных заказов. У Android промокод постоянный
