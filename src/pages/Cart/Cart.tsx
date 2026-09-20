@@ -64,23 +64,33 @@ const [promoMessage,setPromoMessage]=useState("");
 
 const [promoChecking,setPromoChecking]=useState(false);
 
+const [promoProductIds,setPromoProductIds]=useState<string[]>([]);
+
+const [promoRate,setPromoRate]=useState(0.10);
 
 
 
 
 
+
+
+// Пустой список = скидка на всю корзину (старые промокоды).
+// Иначе считаем только от товаров из списка промокода.
+const eligibleTotal =
+  promoProductIds.length === 0
+    ? total
+    : cart.reduce(
+        (sum, item) =>
+          promoProductIds.includes(String(item.id))
+            ? sum + item.price * item.quantity
+            : sum,
+        0
+      );
 
 const discount =
-
-promoApplied
-
-?
-
-Math.floor(total * 0.10)
-
-:
-
-0;
+  promoApplied
+    ? Math.floor(eligibleTotal * promoRate)
+    : 0;
 
 
 
@@ -146,23 +156,34 @@ try{
 
 
 
+        const newRate = data.discountRate ?? 0.10;
+    const newIds: string[] = (data.productIds || []).map(String);
+
+    const newEligible =
+      newIds.length === 0
+        ? total
+        : cart.reduce(
+            (sum, item) =>
+              newIds.includes(String(item.id))
+                ? sum + item.price * item.quantity
+                : sum,
+            0
+          );
+
+    const newDiscount = Math.floor(newEligible * newRate);
+
+    setPromoRate(newRate);
+    setPromoProductIds(newIds);
     setPromoApplied(true);
 
     setPromoMessage(
-      "✅ Промокод применен: скидка 10%"
+      `✅ Промокод применен: скидка ${Math.round(newRate * 100)}%` +
+      (newIds.length ? " на выбранные товары" : "")
     );
 
     localStorage.setItem("promoCode", code);
-
-    localStorage.setItem(
-      "discount",
-      String(Math.floor(total * 0.10))
-    );
-
-    localStorage.setItem(
-      "finalTotal",
-      String(total - Math.floor(total * 0.10))
-    );
+    localStorage.setItem("discount", String(newDiscount));
+    localStorage.setItem("finalTotal", String(total - newDiscount));
 
 
 
@@ -172,9 +193,14 @@ try{
 
     setPromoApplied(false);
 
+        setPromoProductIds([]);
+    setPromoRate(0.10);
+
     setPromoMessage(
       data.reason === "not_first_order"
       ? "❌ Промокод действует только на первый заказ"
+      : data.reason === "expired"
+      ? "❌ Срок действия промокода закончился или ещё не начался"
       : "❌ Промокод не найден"
     );
 
