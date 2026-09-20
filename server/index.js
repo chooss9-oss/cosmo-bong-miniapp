@@ -47,6 +47,7 @@ const {
 } = require("./bonusStore");
 
 const { saveCart, clearCart, checkAbandonedCarts } = require("./cartStore");
+const { findPromo, isPromoActive, savePromo } = require("./promoStore");
 
 const {
   isAndroidCustomerId,
@@ -1630,8 +1631,32 @@ app.get("/api/promo-check", async (req, res) => {
   const telegramUserId = req.query.telegramUserId;
   const promoConfig = req.query.platform === "android" ? PROMO_CONFIGS.android : PROMO_CONFIGS.telegram;
 
-  if (code !== promoConfig.code) {
-    return res.json({ valid: false, reason: "not_found" });
+    if (code !== promoConfig.code) {
+
+    // Не старый промокод — ищем среди новых, в базе
+    const redisPromo = await findPromo(code);
+    const platformKey = req.query.platform === "android" ? "android" : "telegram";
+
+    const platformOk =
+      redisPromo &&
+      (!redisPromo.platform ||
+        redisPromo.platform === "all" ||
+        redisPromo.platform === platformKey);
+
+    if (!redisPromo || !platformOk) {
+      return res.json({ valid: false, reason: "not_found" });
+    }
+
+    if (!isPromoActive(redisPromo)) {
+      return res.json({ valid: false, reason: "expired" });
+    }
+
+    return res.json({
+      valid: true,
+      discountRate: redisPromo.rate,
+      productIds: redisPromo.productIds || []
+    });
+
   }
 
   if (!promoConfig.firstOrderOnly) {
@@ -2083,6 +2108,142 @@ app.post("/api/telegram-webhook", async (req, res) => {
           }
 
         }
+
+        res.sendStatus(200);
+        return;
+
+      }
+
+            // Команда /promo — создать промокод (см. формат в сообщении с подсказкой)
+      if (message.text && message.text.trim().startsWith("/promo")) {
+
+        const match = message.text.trim().match(
+          /^\/promo\s+(\S+)\s+(\d+)\s+(\d{1,2})\.(\d{1,2})-(\d{1,2})\.(\d{1,2})\s+(категория|товары|все)\s*([\s\S]*)$/i
+        );
+
+        if (!match) {
+
+          await telegramApi("sendMessage", {
+            chat_id: adminId,
+            text:
+              "Формат команды:\n\n" +
+              "/promo КОД ПРОЦЕНТ ДАТЫ категория НАЗВАНИЕ\n" +
+              "/promo КОД ПРОЦЕНТ ДАТЫ товары ССЫЛКА1 ССЫЛКА2\n" +
+              "/promo КОД ПРОЦЕНТ ДАТЫ все\n\n" +
+              "Примеры:\n" +
+              "/promo 1111 10 21.09-27.09 категория Сувенирные трубки\n" +
+              "/promo NEWWEEK 10 28.09-04.10 товары https://cosmo-bong.ru/goods/... https://cosmo-bong.ru/goods/...\n" +
+              "/promo SALE 5 21.09-27.09 все"
+          });
+
+          res.sendStatus(200);
+          return;
+
+        }
+
+        const [, code, percentRaw, d1, m1, d2, m2, kind, rest] = match;
+        const percent = Number(percentRaw);
+
+        if (percent < 1 || percent > 90) {
+          await telegramApi("sendMessage", { chat_id: adminId, text: "⚠️ Процент должен быть от 1 до 90." });
+          res.sendStatus(200);
+          return;
+        }
+
+        // Даты — по московскому времени (UTC+3): с начала первого дня
+        // до конца последнего
+        const year = new Date().getFullYear();
+        const startsAt = Date.UTC(year, Number(m1) - 1, Number(d1), -3, 0, 0);
+        let endsAt = Date.UTC(year, Number(m2) - 1, Number(d2), 20, 59, 59);
+
+        if (endsAt < startsAt) {
+          endsAt = Date.UTC(year + 1, Number(m2) - 1, Number(d2), 20, 59, 59);
+        }
+
+        const newProductsForPromo = await readNewProductsFromRedis();
+        const allKnownForPromo = products.concat(newProductsForPromo);
+
+        let productIds = [];
+        let target = "вся корзина";
+
+        if (kind.toLowerCase() === "категория") {
+
+          const wanted = rest.trim().toLowerCase();
+          const cat = categories.find(c => String(c["#text"] || "").trim().toLowerCase() === wanted);
+
+          if (!cat) {
+            await telegramApi("sendMessage", {
+              chat_id: adminId,
+              text: `⚠️ Категория «${rest.trim()}» не найдена. Проверьте название — оно должно совпадать с названием в каталоге.`
+            });
+            res.sendStatus(200);
+            return;
+          }
+
+          const catId = String(cat["@_id"]);
+          const subData = await readSubcategoryCacheFromRedis();
+
+          productIds = allKnownForPromo
+            .filter(p => {
+              const ids = (p.categoryIds || []).map(String).concat((subData[p.id] || []).map(String));
+              return ids.includes(catId);
+            })
+            .map(p => String(p.id));
+
+          target = `категория «${rest.trim()}»`;
+
+        } else if (kind.toLowerCase() === "товары") {
+
+          const urls = rest.split(/\s+/).filter(Boolean).map(u => u.split("?")[0]);
+
+          const notFound = urls.filter(u =>
+            !allKnownForPromo.some(p => p.url && p.url.split("?")[0] === u)
+          );
+
+          if (urls.length === 0 || notFound.length > 0) {
+            await telegramApi("sendMessage", {
+              chat_id: adminId,
+              text: urls.length === 0
+                ? "⚠️ Не указаны ссылки на товары."
+                : "⚠️ Не нашёл в каталоге эти ссылки:\n" + notFound.join("\n")
+            });
+            res.sendStatus(200);
+            return;
+          }
+
+          productIds = allKnownForPromo
+            .filter(p => p.url && urls.includes(p.url.split("?")[0]))
+            .map(p => String(p.id));
+
+          target = `товары по ссылкам: ${urls.length} шт.`;
+
+        }
+
+        if (kind.toLowerCase() !== "все" && productIds.length === 0) {
+          await telegramApi("sendMessage", { chat_id: adminId, text: "⚠️ Не нашлось ни одного подходящего товара." });
+          res.sendStatus(200);
+          return;
+        }
+
+        await savePromo({
+          code,
+          rate: percent / 100,
+          startsAt,
+          endsAt,
+          productIds,
+          platform: "all"
+        });
+
+        await telegramApi("sendMessage", {
+          chat_id: adminId,
+          text:
+            `✅ Промокод создан\n\n` +
+            `Код: ${code.toLowerCase()}\n` +
+            `Скидка: ${percent}%\n` +
+            `Срок: ${d1}.${m1} — ${d2}.${m2}\n` +
+            `На что: ${target}\n` +
+            `Найдено вариантов товаров: ${productIds.length || "все"}`
+        });
 
         res.sendStatus(200);
         return;

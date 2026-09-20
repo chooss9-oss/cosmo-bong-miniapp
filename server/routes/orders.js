@@ -5,6 +5,7 @@ const { saveReplyMapping, telegramApi } = require("../replyMapping");
 const { createOrder, updateOrder, getOrdersForUser } = require("../orderStore");
 const { normalizeAndroidCustomerId } = require("../chatStore");
 const { getBonusBalance, getMaxRedeemable, deductBonusPoints } = require("../bonusStore");
+const { findPromo, isPromoActive } = require("../promoStore");
 const { notifyCustomer, buildOrderActionButtons } = require("../orderFlow");
 const { appendChatMessage } = require("../chatStore");
 
@@ -143,7 +144,7 @@ const subtotal = cart
   ? cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0)
   : 0;
 
-console.log("DEBUG CART:", JSON.stringify(cart));
+
 
 // Промокод перепроверяется на сервере: код должен совпасть, а если у
 // платформы промокод только на первый заказ (firstOrderOnly) — ещё и не
@@ -180,9 +181,39 @@ if (
 
 }
 
+// Новые промокоды из базы: скидка считается только от подходящих товаров
+let redisPromoDiscount = 0;
+
+if (!promoApplied && promoCode) {
+
+  const redisPromo = await findPromo(promoCode);
+
+  const platformOk =
+    redisPromo &&
+    (!redisPromo.platform ||
+      redisPromo.platform === "all" ||
+      redisPromo.platform === (platform === "android" ? "android" : "telegram"));
+
+  if (redisPromo && platformOk && isPromoActive(redisPromo)) {
+
+    const promoProductIds = (redisPromo.productIds || []).map(String);
+
+    // Пустой список товаров = скидка на всю корзину
+    const eligibleSum = (cart || []).reduce((sum, item) => {
+      const isEligible =
+        promoProductIds.length === 0 || promoProductIds.includes(String(item.id));
+      return isEligible ? sum + Number(item.price) * item.quantity : sum;
+    }, 0);
+
+    redisPromoDiscount = Math.floor(eligibleSum * redisPromo.rate);
+
+  }
+
+}
+
 const promoDiscount = promoApplied
   ? Math.floor(subtotal * promoConfig.rate)
-  : 0;
+  : redisPromoDiscount;
 
 const total = subtotal - promoDiscount;
 
@@ -357,11 +388,11 @@ ${index + 1}. ${item.name}
 
 
 
-if (promoApplied) {
+if (promoDiscount > 0) {
 
   message +=
 
-  `🎟 Промокод${promoConfig.firstOrderOnly ? " (первый заказ)" : ""}: -${promoDiscount.toLocaleString()} ₽\n`;
+  `🎟 Промокод${promoApplied && promoConfig.firstOrderOnly ? " (первый заказ)" : ""}: -${promoDiscount.toLocaleString()} ₽\n`;
 
 }
 
