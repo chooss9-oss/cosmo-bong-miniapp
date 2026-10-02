@@ -5,9 +5,9 @@
     }
   },
   "rewrites": [
-    {
+       {
       "source": "/api/(.*)",
-      "destination": "/api/index.js"
+      "destination": "https://app.cosmo-bong.ru/api/$1"
     },
     {
       "source": "/(.*)",
